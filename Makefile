@@ -53,6 +53,39 @@ bump-glazed:
 	go get github.com/go-go-golems/clay@latest
 	go mod tidy
 
+# Example rendering helpers
+EX_OUT=./dist/examples
+EX_SIZE=600px,800px
+
+.PHONY: examples examples-clean
+examples:
+	@mkdir -p $(EX_OUT)
+	# Two inputs on one page (from examples/layouts)
+	go run ./cmd/zine-layout render \
+		--spec ./examples/layouts/two_pages_two_inputs.yaml \
+		--output-dir $(EX_OUT)/two-pages \
+		--test --test-dimensions $(EX_SIZE)
+	# Selected specs from examples/tests
+	go run ./cmd/zine-layout render \
+		--spec ./examples/tests/01_single_input_single_output.yaml \
+		--output-dir $(EX_OUT)/01 \
+		--test --test-dimensions $(EX_SIZE)
+	go run ./cmd/zine-layout render \
+		--spec ./examples/tests/04_two_input_single_output_rotation.yaml \
+		--output-dir $(EX_OUT)/04 \
+		--test --test-dimensions $(EX_SIZE)
+	go run ./cmd/zine-layout render \
+		--spec ./examples/tests/06_eight_inputs_two_outputs.yaml \
+		--output-dir $(EX_OUT)/06 \
+		--test --test-dimensions $(EX_SIZE)
+	go run ./cmd/zine-layout render \
+		--spec ./examples/tests/10_8_sheet_zine.yaml \
+		--output-dir $(EX_OUT)/10 \
+		--test --test-dimensions $(EX_SIZE)
+
+examples-clean:
+	rm -rf $(EX_OUT)
+
 ZINE_LAYOUT_BINARY=$(shell which zine-layout || echo /usr/local/bin/zine-layout)
 install:
     go build -o ./dist/zine-layout ./cmd/zine-layout && \

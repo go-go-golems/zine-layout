@@ -18,6 +18,18 @@ Quick Start
 - Use an example layout: `zine-layout --spec examples/layouts/two_pages_two_inputs.yaml --output-dir out/ img1.png img2.png`
 - Or try a test spec: see `examples/tests/*.yaml` for more patterns.
 
+Examples
+- Generate images with built‑in test pages (no input files needed):
+  - Two inputs on one page: `zine-layout render --spec examples/layouts/two_pages_two_inputs.yaml --output-dir dist/examples/two-pages --test --test-dimensions 600px,800px`
+  - Single input: `zine-layout render --spec examples/tests/01_single_input_single_output.yaml --output-dir dist/examples/01 --test --test-dimensions 600px,800px`
+  - Two inputs + rotation: `zine-layout render --spec examples/tests/04_two_input_single_output_rotation.yaml --output-dir dist/examples/04 --test --test-dimensions 600px,800px`
+  - Eight inputs, two outputs: `zine-layout render --spec examples/tests/06_eight_inputs_two_outputs.yaml --output-dir dist/examples/06 --test --test-dimensions 600px,800px`
+  - 8‑sheet zine: `zine-layout render --spec examples/tests/10_8_sheet_zine.yaml --output-dir dist/examples/10 --test --test-dimensions 600px,800px`
+
+- Use Makefile to run a small suite:
+  - `make examples` writes results under `dist/examples/`
+  - Customize size: `make examples EX_SIZE=800px,800px`
+
 CLI Flags
 - `--spec` Path to YAML spec (default `layout.yaml`)
 - `--output-dir` Output directory for generated pages
