@@ -65,9 +65,15 @@ export const ImageTray: React.FC<{ id: string }> = ({ id }) => {
     refetch();
   };
 
-  const onItemDragStart = (idx: number) => (e: React.DragEvent) => {
+  const onItemDragStart = (idx: number, imageId: string) => (e: React.DragEvent) => {
     setDragIndex(idx);
     e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('application/x-zine-image-id', imageId);
+      e.dataTransfer.setData('text/plain', imageId);
+    } catch {
+      // ignore
+    }
   };
   const onItemDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -143,7 +149,7 @@ export const ImageTray: React.FC<{ id: string }> = ({ id }) => {
                 <div>{String(i + 1).padStart(2, '0')}</div>
                 <div
                   draggable
-                  onDragStart={onItemDragStart(i)}
+                  onDragStart={onItemDragStart(i, im.id)}
                   onDragOver={onItemDragOver}
                   onDrop={onItemDrop(i)}
                   style={{ padding: 6, border: '1px solid #eee' }}

@@ -657,16 +657,24 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
     - `--data-root` path to data directories
 
 - Frontend (prototype)
-  - Stack: React + Vite + minimal Redux wiring
-  - Views: Home with header + health indicator; Projects list page; Project detail with ImageTray (upload/list/reorder/delete)
+  - Stack: React + Vite + Redux/RTK Query; Biome for lint/format; TypeScript strict checks
+  - Views: Home; Projects list; Project detail with:
+    - Preset selector (apply at creation and later)
+    - ImageTray (upload/list/reorder/delete; drag-and-drop upload; drag ID export)
+    - Validation panel (runs POST /validate; shows issues and details)
+    - Layout editor (Grid) with drag assignments from tray, YAML preview, Save Layout (writes spec.yaml)
+    - Render panel (trigger renders; list, preview thumbnails, ZIP download)
+    - YAML editor (load/edit/save spec.yaml)
   - Build output: `web/dist` (exported into `cmd/zine-layout/dist` via Dagger)
   - Files and symbols:
-    - `web/src/api.ts`: RTK Query API (getProjects, createProject, deleteProject)
-    - `web/src/api.ts`: also `getImages`, `uploadImages`, `deleteImage`, `reorderImages`
-    - `web/src/store.ts`: integrates `api.reducer` and `api.middleware`
-    - `web/src/views/Projects.tsx`: list/create/delete UI (uses React Router `Link`)
-    - `web/src/views/ProjectDetail.tsx`: ImageTray with upload/reorder/delete
-    - `web/src/routes/App.tsx`: routes `/projects` and `/projects/:id`
+    - `web/src/api.ts`: endpoints for projects, images, presets, yaml, validation, render, specFromUI
+    - `web/src/components/ImageTray.tsx`: exposes draggable images with ID in dataTransfer
+    - `web/src/components/ProjectValidationPanel.tsx`
+    - `web/src/components/ProjectLayoutEditor.tsx`: grid rows/cols, drop cells to set `input_index`, YAML gen via js-yaml
+    - `web/src/components/ProjectRenderPanel.tsx`: render options + listing
+    - `web/src/components/ProjectYamlEditor.tsx`
+    - `web/src/views/Projects.tsx` and `web/src/views/ProjectDetail.tsx`
+  - Tooling: Biome config (`web/biome.json`), scripts (`lint`, `check`, `format`, `typecheck`), Make targets (`web-*`)
 
 ### Building the Web UI (Dagger + Vite)
 

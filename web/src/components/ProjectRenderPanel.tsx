@@ -47,7 +47,7 @@ export const ProjectRenderPanel: React.FC<{ id: string }> = ({ id }) => {
                   <a href={`/api/projects/${id}/renders/${r.id}/download.zip`}>Download ZIP</a>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, overflowX: 'auto' }}>
-                  {r.files.map((f) => (
+                  {(r.files ?? []).map((f) => (
                     <img
                       key={f}
                       src={`/api/projects/${id}/renders/${r.id}/files/${encodeURIComponent(f)}`}

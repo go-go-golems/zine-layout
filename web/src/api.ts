@@ -108,6 +108,13 @@ export const api = createApi({
         headers: { 'Content-Type': 'text/plain' },
       }),
     }),
+    specFromUI: b.mutation<{ yaml: string }, { id: string; yaml: string }>({
+      query: ({ id, yaml }) => ({
+        url: `/projects/${id}/spec/from-ui`,
+        method: 'POST',
+        body: { yaml },
+      }),
+    }),
     getPresets: b.query<{ presets: PresetInfo[] }, void>({
       query: () => '/presets',
       providesTags: ['Preset'],
@@ -174,6 +181,7 @@ export const {
   useApplyPresetMutation,
   useGetYamlQuery,
   usePutYamlMutation,
+  useSpecFromUIMutation,
   useValidateProjectQuery,
   useLazyValidateProjectQuery,
   useRenderProjectMutation,
