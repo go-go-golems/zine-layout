@@ -1,4 +1,5 @@
 import { configureStore, createSlice } from '@reduxjs/toolkit'
+import { api } from './api'
 
 const uiSlice = createSlice({
   name: 'ui',
@@ -11,10 +12,11 @@ const uiSlice = createSlice({
 
 export const store = configureStore({
   reducer: {
-    ui: uiSlice.reducer
-  }
+    ui: uiSlice.reducer,
+    [api.reducerPath]: api.reducer
+  },
+  middleware: (gDM) => gDM().concat(api.middleware)
 })
 
 export type RootState = ReturnType<typeof store.getState>
 export type AppDispatch = typeof store.dispatch
-

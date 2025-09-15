@@ -4,12 +4,18 @@ import (
     "context"
     "encoding/json"
     "fmt"
+    "image"
+    _ "image/png"
+    "io"
     "log"
     "math/rand"
     "net/http"
+    "mime/multipart"
     "os"
+    "os/signal"
     "path/filepath"
     "strings"
+    "syscall"
     "time"
 
     "github.com/go-go-golems/glazed/pkg/cmds"
@@ -95,64 +101,151 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
         }
     })
 
-    // Project item
+    // Project subtree router
     mux.HandleFunc("/api/projects/", func(w http.ResponseWriter, r *http.Request) {
-        // path: /api/projects/{id}
+        // path: /api/projects/{id}[...]
         rest := strings.TrimPrefix(r.URL.Path, "/api/projects/")
-        if rest == "" || strings.Contains(rest, "/") {
+        if rest == "" {
             http.NotFound(w, r)
             return
         }
-        id := rest
-        switch r.Method {
-        case http.MethodGet:
-            p, err := readProject(projectsRoot, id)
-            if err != nil {
-                status := http.StatusInternalServerError
-                if os.IsNotExist(err) {
-                    status = http.StatusNotFound
-                }
-                http.Error(w, err.Error(), status)
-                return
-            }
-            writeJSON(w, http.StatusOK, map[string]any{"project": p})
-        case http.MethodPut:
-            var req struct{ Name string `json:"name"` }
-            if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-                http.Error(w, "invalid json", http.StatusBadRequest)
-                return
-            }
-            p, err := readProject(projectsRoot, id)
-            if err != nil {
-                status := http.StatusInternalServerError
-                if os.IsNotExist(err) {
-                    status = http.StatusNotFound
-                }
-                http.Error(w, err.Error(), status)
-                return
-            }
-            if req.Name != "" {
-                p.Name = req.Name
-            }
-            p.UpdatedAt = time.Now().UTC()
-            if err := writeProject(projectsRoot, p); err != nil {
-                http.Error(w, err.Error(), http.StatusInternalServerError)
-                return
-            }
-            writeJSON(w, http.StatusOK, map[string]any{"project": p})
-        case http.MethodDelete:
-            if err := deleteProject(projectsRoot, id); err != nil {
-                status := http.StatusInternalServerError
-                if os.IsNotExist(err) {
-                    status = http.StatusNotFound
-                }
-                http.Error(w, err.Error(), status)
-                return
-            }
-            writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-        default:
-            http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+        parts := strings.Split(rest, "/")
+        id := parts[0]
+        if id == "" {
+            http.NotFound(w, r)
+            return
         }
+
+        // /api/projects/{id}
+        if len(parts) == 1 {
+            switch r.Method {
+            case http.MethodGet:
+                p, err := readProject(projectsRoot, id)
+                if err != nil {
+                    status := http.StatusInternalServerError
+                    if os.IsNotExist(err) {
+                        status = http.StatusNotFound
+                    }
+                    http.Error(w, err.Error(), status)
+                    return
+                }
+                writeJSON(w, http.StatusOK, map[string]any{"project": p})
+                return
+            case http.MethodPut:
+                var req struct{ Name string `json:"name"` }
+                if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+                    http.Error(w, "invalid json", http.StatusBadRequest)
+                    return
+                }
+                p, err := readProject(projectsRoot, id)
+                if err != nil {
+                    status := http.StatusInternalServerError
+                    if os.IsNotExist(err) {
+                        status = http.StatusNotFound
+                    }
+                    http.Error(w, err.Error(), status)
+                    return
+                }
+                if req.Name != "" {
+                    p.Name = req.Name
+                }
+                p.UpdatedAt = time.Now().UTC()
+                if err := writeProject(projectsRoot, p); err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                writeJSON(w, http.StatusOK, map[string]any{"project": p})
+                return
+            case http.MethodDelete:
+                if err := deleteProject(projectsRoot, id); err != nil {
+                    status := http.StatusInternalServerError
+                    if os.IsNotExist(err) {
+                        status = http.StatusNotFound
+                    }
+                    http.Error(w, err.Error(), status)
+                    return
+                }
+                writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+                return
+            default:
+                http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+                return
+            }
+        }
+
+        // /api/projects/{id}/images[...]
+        if len(parts) >= 2 && parts[1] == "images" {
+            switch {
+            // List images
+            case len(parts) == 2 && r.Method == http.MethodGet:
+                imgs, order, err := listProjectImages(projectsRoot, id)
+                if err != nil {
+                    status := http.StatusInternalServerError
+                    if os.IsNotExist(err) {
+                        status = http.StatusNotFound
+                    }
+                    http.Error(w, err.Error(), status)
+                    return
+                }
+                writeJSON(w, http.StatusOK, map[string]any{"images": imgs, "order": order})
+                return
+            // Upload images (multipart form)
+            case len(parts) == 2 && r.Method == http.MethodPost:
+                if err := r.ParseMultipartForm(64 << 20); err != nil { // 64MB
+                    http.Error(w, "invalid multipart form", http.StatusBadRequest)
+                    return
+                }
+                files := r.MultipartForm.File["images[]"]
+                if len(files) == 0 {
+                    http.Error(w, "no images[] files provided", http.StatusBadRequest)
+                    return
+                }
+                saved := make([]ImageItem, 0, len(files))
+                for _, fh := range files {
+                    it, err := savePngImage(projectsRoot, id, fh)
+                    if err != nil {
+                        http.Error(w, err.Error(), http.StatusBadRequest)
+                        return
+                    }
+                    saved = append(saved, *it)
+                }
+                writeJSON(w, http.StatusCreated, map[string]any{"images": saved})
+                return
+            // Reorder images
+            case len(parts) == 3 && parts[2] == "reorder" && r.Method == http.MethodPost:
+                var req struct{ Order []string `json:"order"` }
+                if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Order) == 0 {
+                    http.Error(w, "invalid order", http.StatusBadRequest)
+                    return
+                }
+                if err := setProjectOrder(projectsRoot, id, req.Order); err != nil {
+                    http.Error(w, err.Error(), http.StatusBadRequest)
+                    return
+                }
+                writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+                return
+            // Serve or delete single image
+            case len(parts) == 3 && r.Method == http.MethodGet:
+                imageID := parts[2]
+                fn := filepath.Join(projectImagesDir(projectsRoot, id), filepath.Base(imageID))
+                http.ServeFile(w, r, fn)
+                return
+            case len(parts) == 3 && r.Method == http.MethodDelete:
+                imageID := parts[2]
+                if err := deleteProjectImage(projectsRoot, id, imageID); err != nil {
+                    status := http.StatusInternalServerError
+                    if os.IsNotExist(err) {
+                        status = http.StatusNotFound
+                    }
+                    http.Error(w, err.Error(), status)
+                    return
+                }
+                writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+                return
+            }
+        }
+
+        http.NotFound(w, r)
     })
 
     abs, err := filepath.Abs(s.Root)
@@ -164,8 +257,31 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
     }
     mux.Handle("/", http.FileServer(http.Dir(abs)))
 
-    log.Printf("serving on %s (web from %s)", s.Addr, abs)
-    return http.ListenAndServe(s.Addr, mux)
+    srv := &http.Server{ Addr: s.Addr, Handler: mux }
+
+    // Start server
+    errCh := make(chan error, 1)
+    go func() {
+        log.Printf("serving on %s (web from %s)", s.Addr, abs)
+        if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+            errCh <- err
+        }
+        close(errCh)
+    }()
+
+    // Wait for Ctrl-C (SIGINT) or SIGTERM
+    sigCh := make(chan os.Signal, 1)
+    signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+    select {
+    case sig := <-sigCh:
+        log.Printf("received signal %s, shutting down...", sig)
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+        _ = srv.Shutdown(ctx)
+        return nil
+    case err := <-errCh:
+        return err
+    }
 }
 
 // ===== Helpers and data model =====
@@ -270,3 +386,139 @@ func newProjectID() string {
     }
     return fmt.Sprintf("prj-%s-%s", ts, string(b))
 }
+
+// ===== Images helpers =====
+
+type ImageItem struct {
+    ID     string `json:"id"`
+    Name   string `json:"name"`
+    Width  int    `json:"width"`
+    Height int    `json:"height"`
+}
+
+func projectDir(projectsRoot, id string) string {
+    return filepath.Join(projectsRoot, id)
+}
+
+func projectImagesDir(projectsRoot, id string) string {
+    return filepath.Join(projectDir(projectsRoot, id), "images")
+}
+
+func listProjectImages(projectsRoot, id string) ([]ImageItem, []string, error) {
+    p, err := readProject(projectsRoot, id)
+    if err != nil {
+        return nil, nil, err
+    }
+    dir := projectImagesDir(projectsRoot, id)
+    entries, err := os.ReadDir(dir)
+    if err != nil {
+        return nil, nil, err
+    }
+    images := make([]ImageItem, 0, len(entries))
+    for _, e := range entries {
+        if e.IsDir() { continue }
+        name := e.Name()
+        fp := filepath.Join(dir, name)
+        w, h, err := readImageSize(fp)
+        if err != nil { continue }
+        images = append(images, ImageItem{ID: name, Name: name, Width: w, Height: h})
+    }
+    return images, p.Order, nil
+}
+
+func readImageSize(fp string) (int, int, error) {
+    f, err := os.Open(fp)
+    if err != nil { return 0, 0, err }
+    defer f.Close()
+    cfg, _, err := image.DecodeConfig(f)
+    if err != nil { return 0, 0, err }
+    return cfg.Width, cfg.Height, nil
+}
+
+func savePngImage(projectsRoot, id string, fh *multipart.FileHeader) (*ImageItem, error) {
+    if fh.Size == 0 { return nil, fmt.Errorf("empty file") }
+    // Simple extension check
+    name := fh.Filename
+    lower := strings.ToLower(name)
+    if !strings.HasSuffix(lower, ".png") {
+        return nil, fmt.Errorf("only .png allowed: %s", name)
+    }
+    dir := projectImagesDir(projectsRoot, id)
+    if err := os.MkdirAll(dir, 0o755); err != nil { return nil, err }
+    // Determine next index filename: 0001.png, 0002.png, ...
+    next := nextImageNumber(dir)
+    outName := fmt.Sprintf("%04d.png", next)
+    dstPath := filepath.Join(dir, outName)
+
+    src, err := fh.Open()
+    if err != nil { return nil, err }
+    defer src.Close()
+    dst, err := os.Create(dstPath)
+    if err != nil { return nil, err }
+    if _, err := io.Copy(dst, src); err != nil {
+        _ = dst.Close(); _ = os.Remove(dstPath)
+        return nil, err
+    }
+    if err := dst.Close(); err != nil { return nil, err }
+
+    // Update project metadata
+    p, err := readProject(projectsRoot, id)
+    if err != nil { return nil, err }
+    p.Images = append(p.Images, outName)
+    p.Order = append(p.Order, outName)
+    p.UpdatedAt = time.Now().UTC()
+    if err := writeProject(projectsRoot, p); err != nil { return nil, err }
+
+    w, h, err := readImageSize(dstPath)
+    if err != nil { return nil, err }
+    item := &ImageItem{ID: outName, Name: outName, Width: w, Height: h}
+    return item, nil
+}
+
+func nextImageNumber(dir string) int {
+    max := 0
+    entries, _ := os.ReadDir(dir)
+    for _, e := range entries {
+        if e.IsDir() { continue }
+        name := e.Name()
+        if len(name) != 8 || !strings.HasSuffix(name, ".png") { continue }
+        nStr := name[:4]
+        var n int
+        _, err := fmt.Sscanf(nStr, "%04d", &n)
+        if err == nil && n > max { max = n }
+    }
+    return max + 1
+}
+
+func setProjectOrder(projectsRoot, id string, order []string) error {
+    p, err := readProject(projectsRoot, id)
+    if err != nil { return err }
+    // validate that order is a permutation of p.Images
+    if len(order) != len(p.Images) { return fmt.Errorf("order length mismatch") }
+    seen := map[string]bool{}
+    for _, im := range p.Images { seen[im] = true }
+    for _, o := range order { if !seen[o] { return fmt.Errorf("unknown image in order: %s", o) } }
+    p.Order = order
+    p.UpdatedAt = time.Now().UTC()
+    return writeProject(projectsRoot, p)
+}
+
+func deleteProjectImage(projectsRoot, id, imageID string) error {
+    p, err := readProject(projectsRoot, id)
+    if err != nil { return err }
+    // Remove file
+    fp := filepath.Join(projectImagesDir(projectsRoot, id), filepath.Base(imageID))
+    if err := os.Remove(fp); err != nil { return err }
+    // Filter metadata
+    filter := func(xs []string) []string {
+        out := make([]string, 0, len(xs))
+        for _, x := range xs { if x != imageID { out = append(out, x) } }
+        return out
+    }
+    p.Images = filter(p.Images)
+    p.Order = filter(p.Order)
+    p.UpdatedAt = time.Now().UTC()
+    return writeProject(projectsRoot, p)
+}
+
+// end images helpers

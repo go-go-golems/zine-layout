@@ -90,3 +90,10 @@ ZINE_LAYOUT_BINARY=$(shell which zine-layout || echo /usr/local/bin/zine-layout)
 install:
 	go build -o ./dist/zine-layout ./cmd/zine-layout && \
 		cp ./dist/zine-layout $(ZINE_LAYOUT_BINARY)
+
+.PHONY: web-build serve
+web-build:
+	cd cmd/zine-layout && go generate
+
+serve: web-build
+	go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data --log-level debug --with-caller

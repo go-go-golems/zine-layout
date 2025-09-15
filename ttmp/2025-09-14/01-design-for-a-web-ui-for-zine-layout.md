@@ -493,15 +493,20 @@ This design aligns with the current Go model and constraints observed in `pkg/zi
 
 Below is a step-by-step plan to build and validate the system incrementally. Each step includes backend endpoints, minimal frontend UI, and test instructions.
 
-1) Serve skeleton and health check
+1) Serve skeleton and health check ✅ (done, tested)
    - Backend:
      - Command: `zine-layout serve --root <static-dist> --data-root <data-dir> --addr :8088`
      - Endpoint: `GET /api/health` → `{ ok: true }` (implemented)
      - Initializes data dirs: `<data-root>/projects/` and `<data-root>/presets/` (implemented).
-    - Status (built, untested):
-      - Health endpoint implemented and returns `{ ok: true }`.
-      - Static site server wired; serves files from `--root` (defaults to `./cmd/zine-layout/dist`).
-      - Demo webpage scaffolded in `web/` (React + Vite). Use Dagger builder to produce `dist/`.
+    - Status: Verified via curl and browser.
+      - Health endpoint returns `{ ok: true }`.
+      - Static site server serves files from `--root` (default `./cmd/zine-layout/dist`).
+      - Demo webpage scaffolded in `web/` (React + Vite). Built with Dagger to produce `dist/`.
+    - Files and symbols:
+      - `cmd/zine-layout/cmds/serve.go`: `ServeCommand`, `ServeSettings`, HTTP mux, `writeJSON`
+      - `cmd/build-web/main.go`: Dagger builder (Node image + pnpm + Vite)
+      - `cmd/zine-layout/gen.go`: `//go:generate go run ../build-web`
+      - `web/`: Vite + React app; `web/src/views/Health.tsx` calls `/api/health`
     - Frontend:
       - Boot React app with Router and a simple Health status banner (calls `/api/health`).
     - Test:
@@ -510,8 +515,8 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
      - Verify health: `curl -s localhost:8088/api/health | jq` (should show `{ "ok": true }`).
      - Open `http://localhost:8088/` and confirm the demo page shows “Server OK”.
 
-2) Projects CRUD (directories + project.json)
-   - Backend (implemented):
+2) Projects CRUD (directories + project.json) ✅ (done, tested)
+   - Backend:
      - `GET /api/projects` → list projects from `<data-root>/projects/*/project.json`.
      - `POST /api/projects` `{ name? }` → create dir, write minimal `project.json` with `images:[], order:[]`.
      - `GET /api/projects/:id` → metadata.
@@ -520,14 +525,14 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
    - Frontend (TBD):
      - Dashboard lists projects with Open/Delete; New Project modal posts to API.
      - RTK Query: `getProjects`, `createProject`, `getProject`, `updateProject`, `deleteProject`.
-   - Test now:
+   - Tested with curl:
      - Create: `curl -s -X POST localhost:8088/api/projects -H 'Content-Type: application/json' -d '{"name":"My Zine"}' | jq`
      - List: `curl -s localhost:8088/api/projects | jq`
      - Get: `curl -s localhost:8088/api/projects/<id> | jq`
      - Update: `curl -s -X PUT localhost:8088/api/projects/<id> -H 'Content-Type: application/json' -d '{"name":"Renamed"}' | jq`
      - Delete: `curl -s -X DELETE localhost:8088/api/projects/<id> | jq`
 
-3) Image management (persist images on disk)
+3) Image management (persist images on disk) 🚧 (backend implemented)
    - Backend:
      - `POST /api/projects/:id/images` multipart `images[]` → save as `images/NNNN.png`, update `project.json.images` and `order`.
      - `GET /api/projects/:id/images` → `{ images, order }` (width/height read via decoder).
@@ -535,12 +540,20 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
      - `POST /api/projects/:id/images/reorder` `{ order: string[] }` → persist new order in `project.json`.
      - `GET /api/projects/:id/images/:imageId` → serve image file.
      - Invariants: images are saved on disk together with `project.json` (no in-memory-only).
-   - Frontend:
+   - Frontend (next):
      - `ImageTray` with Upload (input type=file multiple), list, delete, drag-reorder.
      - RTK Query: `getImages`, `uploadImages`, `deleteImage`, `reorderImages`, `getImage`.
-   - Test:
-     - `curl -F images[]=@one.png -F images[]=@two.png localhost:8088/api/projects/<id>/images`
-     - Verify files under `<root>/projects/<id>/images/` and updated `project.json`.
+   - Manual test suggestions:
+     - Upload: `curl -F images[]=@one.png -F images[]=@two.png localhost:8088/api/projects/<id>/images`
+     - List: `curl -s localhost:8088/api/projects/<id>/images | jq`
+     - Serve one: `curl -sI localhost:8088/api/projects/<id>/images/0001.png`
+     - Reorder: `curl -s -X POST localhost:8088/api/projects/<id>/images/reorder -H 'Content-Type: application/json' -d '{"order":["0002.png","0001.png"]}'`
+     - Delete: `curl -s -X DELETE localhost:8088/api/projects/<id>/images/0002.png`
+   - Files and symbols:
+     - `cmd/zine-layout/cmds/serve.go`:
+       - Types: `ImageItem`
+       - Helpers: `projectDir`, `projectImagesDir`, `readImageSize`, `savePngImage`, `listProjectImages`, `setProjectOrder`, `deleteProjectImage`, `nextImageNumber`
+       - Routes under `/api/projects/{id}/images[...]`
 
 4) Presets (read-only)
    - Backend:
@@ -608,6 +621,7 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
   - Static: serves Vite-bundled UI from `--root` (default `./cmd/zine-layout/dist`)
   - API: `GET /api/health` and Projects CRUD under `/api/projects`
   - Data: initializes `<data-root>/{projects,presets}` on startup
+  - Shutdown: handles Ctrl-C (SIGINT) and SIGTERM with graceful shutdown
   - Flags:
     - `--addr` (default `:8088`)
     - `--root` path to static assets
@@ -615,8 +629,13 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
 
 - Frontend (prototype)
   - Stack: React + Vite + minimal Redux wiring
-  - Views: Home with header + health indicator
+  - Views: Home with header + health indicator; Projects list page
   - Build output: `web/dist` (exported into `cmd/zine-layout/dist` via Dagger)
+  - Files and symbols:
+    - `web/src/api.ts`: RTK Query API (getProjects, createProject, deleteProject)
+    - `web/src/store.ts`: integrates `api.reducer` and `api.middleware`
+    - `web/src/views/Projects.tsx`: list/create/delete UI
+    - `web/src/routes/App.tsx`: adds `/projects` route and nav link
 
 ### Building the Web UI (Dagger + Vite)
 
@@ -638,11 +657,29 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
   - Build assets: `cd zine-layout/cmd/zine-layout && go generate`
   - Serve: `go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data`
   - Health: `curl -s localhost:8088/api/health | jq`
+   - Files and symbols:
+     - `cmd/zine-layout/cmds/serve.go`:
+       - Types: `Project`
+       - Helpers: `listProjects`, `createProject`, `readProject`, `writeProject`, `deleteProject`
+       - Routes inside `/api/projects` and `/api/projects/{id}`
 
 ### Running via tmux (for convenience)
 
 - Start/restart:
   - `tmux kill-session -t zineweb || true`
-  - `tmux new-session -d -s zineweb 'cd zine-layout && go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data'`
+  - `tmux new-session -d -s zineweb 'cd zine-layout && go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data --log-level debug --with-caller --log-file /tmp/zine-layout.log'`
 - Inspect logs: `tmux attach -t zineweb` (Ctrl-b d to detach)
 - Stop: `tmux kill-session -t zineweb`
+
+### Logging
+
+- The CLI integrates Glazed logging flags. Useful options:
+  - `--log-level debug` to enable debug-level logs
+  - `--with-caller` to include caller information
+  - `--log-file /tmp/foobar.log` to write logs to a file
+
+- Example (foreground run):
+  - `go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data --log-level debug --with-caller --log-file /tmp/foobar.log`
+
+- Example (tmux):
+  - `tmux new-session -d -s zineweb 'cd zine-layout && go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data --log-level debug --with-caller --log-file /tmp/zine-layout.log'`
