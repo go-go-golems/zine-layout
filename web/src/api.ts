@@ -149,6 +149,15 @@ export const api = createApi({
     >({
       query: ({ id }) => ({ url: `/projects/${id}/validate`, method: 'POST', body: {} }),
     }),
+    renderProject: b.mutation<
+      { renderId: string; files: string[] },
+      { id: string; test?: boolean; test_bw?: boolean; test_dimensions?: string }
+    >({
+      query: ({ id, ...body }) => ({ url: `/projects/${id}/render`, method: 'POST', body }),
+    }),
+    getRenders: b.query<{ renders: { id: string; files: string[] }[] }, { id: string }>({
+      query: ({ id }) => `/projects/${id}/renders`,
+    }),
   }),
 });
 
@@ -167,4 +176,6 @@ export const {
   usePutYamlMutation,
   useValidateProjectQuery,
   useLazyValidateProjectQuery,
+  useRenderProjectMutation,
+  useGetRendersQuery,
 } = api;

@@ -607,14 +607,21 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
     - `curl -s -X POST localhost:8088/api/projects/<id>/validate | jq`
     - Upload mismatched images and confirm issues.
 
-7) Render
-   - Backend:
-     - `POST /api/projects/:id/render` `{ test?, test_bw?, test_dimensions? }` → create `renders/<renderId>/outputX_Y.png`.
-     - `GET /api/projects/:id/renders` → list; `GET /.../files/:name` → serve PNG; `GET /.../download.zip` → zip.
-   - Frontend:
-     - Render page with preview carousel; Download PNG/ZIP.
-   - Test:
-     - `curl -X POST localhost:8088/api/projects/<id>/render -H 'Content-Type: application/json' -d '{}' | jq`
+7) Render — IMPLEMENTED (initial)
+  - Backend:
+    - `POST /api/projects/:id/render` `{ test?, test_bw?, test_dimensions? }` → renders using `spec.yaml` and either test images or the project's ordered images; saves under `projects/<id>/renders/<renderId>/`.
+    - `GET /api/projects/:id/renders` → `{ renders: [{ id, files[] }] }`
+    - `GET /api/projects/:id/renders/:renderId/files/:name` → serves PNG file
+    - `GET /api/projects/:id/renders/:renderId/download.zip` → streams a ZIP of the render files
+    - Internals: uses `pkg/app.LoadLayoutsFromSpec`, `GenerateTestImages`/`ReadInputImages`, and `RenderOutputs`.
+  - Frontend:
+    - ProjectRenderPanel: trigger renders with options, list past renders, show thumbnails, and offer ZIP download.
+    - RTK Query: `renderProject`, `getRenders` endpoints.
+  - Test:
+    - `curl -s -X POST localhost:8088/api/projects/<id>/render -H 'Content-Type: application/json' -d '{}' | jq`
+    - `curl -s localhost:8088/api/projects/<id>/renders | jq`
+    - `curl -sI localhost:8088/api/projects/<id>/renders/<rid>/files/<file>.png`
+    - `curl -sI localhost:8088/api/projects/<id>/renders/<rid>/download.zip`
 
 8) Grid canvas and placement
    - Frontend:

@@ -115,3 +115,19 @@ serve-tmux: web-build
 	- tmux kill-session -t zineweb || true
 	tmux new-session -d -s zineweb 'go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data --log-level debug --with-caller'
 	@echo "tmux session zineweb started. Attach with: tmux attach -t zineweb"
+
+.PHONY: web-lint web-format web-check web-typecheck web-verify
+web-lint:
+	cd web && pnpm run lint
+
+web-format:
+	cd web && pnpm run format
+
+web-check:
+	cd web && pnpm run check
+
+web-typecheck:
+	cd web && pnpm run typecheck
+
+# Run TS typecheck and Biome check together
+web-verify: web-typecheck web-check

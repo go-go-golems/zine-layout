@@ -4,6 +4,7 @@ import (
     "context"
     "encoding/json"
     "fmt"
+    "archive/zip"
     "image"
     _ "image/png"
     "io"
@@ -19,6 +20,7 @@ import (
     "time"
     "io/fs"
     yaml "gopkg.in/yaml.v3"
+    apppkg "github.com/go-go-golems/zine-layout/pkg/app"
 
     "github.com/go-go-golems/glazed/pkg/cmds"
     "github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -325,6 +327,56 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
         if len(parts) == 2 && parts[1] == "validate" && r.Method == http.MethodPost {
             issues, details, ok := validateProject(projectsRoot, id)
             writeJSON(w, http.StatusOK, map[string]any{"ok": ok, "issues": issues, "details": details})
+            return
+        }
+
+        // /api/projects/{id}/renders and render actions
+        if len(parts) >= 2 && parts[1] == "renders" {
+            // GET /api/projects/{id}/renders → list
+            if len(parts) == 2 && r.Method == http.MethodGet {
+                list, err := listProjectRenders(projectsRoot, id)
+                if err != nil {
+                    status := http.StatusInternalServerError
+                    if os.IsNotExist(err) { status = http.StatusNotFound }
+                    http.Error(w, err.Error(), status)
+                    return
+                }
+                writeJSON(w, http.StatusOK, map[string]any{"renders": list})
+                return
+            }
+            // GET /api/projects/{id}/renders/{rid}/files/{name}
+            if len(parts) == 5 && parts[3] == "files" && r.Method == http.MethodGet {
+                rid := parts[2]
+                name := filepath.Base(parts[4])
+                fn := filepath.Join(projectRenderDir(projectsRoot, id, rid), name)
+                http.ServeFile(w, r, fn)
+                return
+            }
+            // GET /api/projects/{id}/renders/{rid}/download.zip
+            if len(parts) == 4 && parts[3] == "download.zip" && r.Method == http.MethodGet {
+                rid := parts[2]
+                dir := projectRenderDir(projectsRoot, id, rid)
+                if err := streamZipDir(w, dir); err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                }
+                return
+            }
+        }
+
+        // POST /api/projects/{id}/render
+        if len(parts) == 2 && parts[1] == "render" && r.Method == http.MethodPost {
+            var req struct{
+                Test bool `json:"test"`
+                TestBW bool `json:"test_bw"`
+                TestDimensions string `json:"test_dimensions"`
+            }
+            _ = json.NewDecoder(r.Body).Decode(&req)
+            out, err := doProjectRender(projectsRoot, id, req.Test, req.TestBW, req.TestDimensions)
+            if err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+            }
+            writeJSON(w, http.StatusOK, out)
             return
         }
 
@@ -825,6 +877,109 @@ func readSpecGridAndPages(dir string) (rows, cols, pages int) {
     if err := yaml.Unmarshal(b, &doc); err != nil { return 0, 0, 0 }
     pages = len(doc.OutputPages)
     return doc.PageSetup.GridSize.Rows, doc.PageSetup.GridSize.Columns, pages
+}
+
+// ===== Render helpers and routes =====
+type RenderResult struct {
+    RenderID string   `json:"renderId"`
+    Files    []string `json:"files"`
+}
+
+type RenderListItem struct {
+    ID    string   `json:"id"`
+    Files []string `json:"files"`
+}
+
+func doProjectRender(projectsRoot, id string, test, testBW bool, testDimensions string) (*RenderResult, error) {
+    projDir := projectDir(projectsRoot, id)
+    specPath := filepath.Join(projDir, "spec.yaml")
+    layouts, err := apppkg.LoadLayoutsFromSpec(specPath, map[string]interface{}{})
+    if err != nil {
+        return nil, fmt.Errorf("load spec: %w", err)
+    }
+    if len(layouts) == 0 {
+        return nil, fmt.Errorf("spec.yaml did not produce any layouts")
+    }
+    zl := layouts[0]
+    // determine inputs
+    var inputs []image.Image
+    if test {
+        // parse dims
+        ppi := zl.Global.PPI
+        if ppi == 0 { ppi = 300 }
+        w, h, err := apppkg.ParseTestDimensions(testDimensions, ppi)
+        if err != nil { return nil, err }
+        n := zl.PageSetup.GridSize.Rows * zl.PageSetup.GridSize.Columns * len(zl.OutputPages)
+        if n <= 0 { n = 1 }
+        inputs, err = apppkg.GenerateTestImages(n, w, h, testBW)
+        if err != nil { return nil, err }
+    } else {
+        // read ordered project images
+        p, err := readProject(projectsRoot, id)
+        if err != nil { return nil, err }
+        order := p.Order
+        if len(order) == 0 { order = p.Images }
+        files := make([]string, 0, len(order))
+        for _, name := range order {
+            files = append(files, filepath.Join(projectImagesDir(projectsRoot, id), name))
+        }
+        inputs, err = apppkg.ReadInputImages(files)
+        if err != nil { return nil, err }
+    }
+    // output dir
+    rid := time.Now().UTC().Format("20060102-150405")
+    outDir := projectRenderDir(projectsRoot, id, rid)
+    files, err := apppkg.RenderOutputs(&zl, inputs, outDir)
+    if err != nil { return nil, err }
+    // return file basenames
+    names := make([]string, len(files))
+    for i, f := range files { names[i] = filepath.Base(f) }
+    return &RenderResult{ RenderID: rid, Files: names }, nil
+}
+
+func projectRendersRoot(projectsRoot, id string) string {
+    return filepath.Join(projectDir(projectsRoot, id), "renders")
+}
+func projectRenderDir(projectsRoot, id, rid string) string {
+    return filepath.Join(projectRendersRoot(projectsRoot, id), rid)
+}
+
+func listProjectRenders(projectsRoot, id string) ([]RenderListItem, error) {
+    root := projectRendersRoot(projectsRoot, id)
+    entries, err := os.ReadDir(root)
+    if err != nil { if os.IsNotExist(err) { return []RenderListItem{}, nil }; return nil, err }
+    var out []RenderListItem
+    for _, e := range entries {
+        if !e.IsDir() { continue }
+        rid := e.Name()
+        files, _ := os.ReadDir(filepath.Join(root, rid))
+        var names []string
+        for _, f := range files { if !f.IsDir() && strings.HasSuffix(strings.ToLower(f.Name()), ".png") { names = append(names, f.Name()) } }
+        out = append(out, RenderListItem{ ID: rid, Files: names })
+    }
+    return out, nil
+}
+
+func streamZipDir(w http.ResponseWriter, dir string) error {
+    w.Header().Set("Content-Type", "application/zip")
+    w.Header().Set("Content-Disposition", "attachment; filename=render.zip")
+    zw := zip.NewWriter(w)
+    defer zw.Close()
+    entries, err := os.ReadDir(dir)
+    if err != nil { return err }
+    for _, e := range entries {
+        if e.IsDir() { continue }
+        name := e.Name()
+        fp := filepath.Join(dir, name)
+        f, err := os.Open(fp)
+        if err != nil { return err }
+        hdr, _ := f.Stat()
+        wtr, err := zw.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Deflate, Modified: time.Now(), UncompressedSize64: uint64(hdr.Size())})
+        if err != nil { _ = f.Close(); return err }
+        if _, err := io.Copy(wtr, f); err != nil { _ = f.Close(); return err }
+        _ = f.Close()
+    }
+    return nil
 }
 
 // spaHandler serves static files from root, and falls back to index.html
