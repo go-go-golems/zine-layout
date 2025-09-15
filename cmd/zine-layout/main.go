@@ -60,6 +60,18 @@ func main() {
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(cobraRenderCmd)
 
+	serveCmd, err := cmds.NewServeCommand()
+	cobra.CheckErr(err)
+	cobraServeCmd, err := cli.BuildCobraCommandFromCommand(
+		serveCmd,
+		cli.WithParserConfig(cli.CobraParserConfig{
+			ShortHelpLayers: []string{layers.DefaultSlug},
+			MiddlewaresFunc: cli.CobraCommandDefaultMiddlewares,
+		}),
+	)
+	cobra.CheckErr(err)
+	rootCmd.AddCommand(cobraServeCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal().Err(err).Msg("Error executing root command")
 	}

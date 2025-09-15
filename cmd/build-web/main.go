@@ -2,6 +2,7 @@ package main
 
 import (
     "context"
+    "errors"
     "fmt"
     "log"
     "os"
@@ -10,6 +11,21 @@ import (
 
     "dagger.io/dagger"
 )
+
+func findRepoRoot(start string) (string, error) {
+    dir := start
+    for i := 0; i < 5; i++ {
+        if _, err := os.Stat(filepath.Join(dir, "web", "package.json")); err == nil {
+            return dir, nil
+        }
+        nd := filepath.Dir(dir)
+        if nd == dir {
+            break
+        }
+        dir = nd
+    }
+    return "", errors.New("could not locate repo root (web/package.json not found)")
+}
 
 func main() {
     pnpmVersion := os.Getenv("WEB_PNPM_VERSION")
@@ -28,9 +44,11 @@ func main() {
     if err != nil {
         log.Fatalf("getwd: %v", err)
     }
-    // go:generate will run from zine-layout/go/cmd/frontend
-    // repo root is three levels up from there
-    repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(wd)))
+
+    repoRoot, err := findRepoRoot(wd)
+    if err != nil {
+        log.Fatalf("%v (start=%s)", err, wd)
+    }
     webPath := filepath.Join(repoRoot, "web")
     outPath := filepath.Join(wd, "dist")
 
@@ -52,7 +70,6 @@ func main() {
     }
 
     base := client.Container().From(baseImage)
-    // Optional GHCR auth
     if strings.HasPrefix(baseImage, "ghcr.io/") {
         user := os.Getenv("REGISTRY_USER")
         if user == "" {
@@ -93,7 +110,6 @@ func main() {
             WithMountedCache("/pnpm/store", pnpmCache)
     }
 
-    // Prepare pnpm, install, build
     if os.Getenv("WEB_BUILDER_IMAGE") == "" || !strings.Contains(os.Getenv("WEB_BUILDER_IMAGE"), ":") {
         ctr = ctr.WithExec([]string{"sh", "-lc", fmt.Sprintf("corepack enable && corepack prepare pnpm@%s --activate", pnpmVersion)})
     }
@@ -108,5 +124,4 @@ func main() {
     }
     log.Printf("exported web dist to %s", outPath)
 }
-
 

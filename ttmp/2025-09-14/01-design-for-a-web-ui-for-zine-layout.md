@@ -310,7 +310,7 @@ Notes:
   - YAML View: editable code editor; save via `usePutYamlMutation`, refresh via `useToUIQuery`.
 
 - **Backend (Go, same binary, new `serve` command)**
-  - Run: `zine-layout serve --root /path/to/data --addr :8080`
+  - Run: `zine-layout serve --root /path/to/data --addr :8088`
   - Storage layout (on disk):
     ```
     <root>/
@@ -495,28 +495,37 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
 
 1) Serve skeleton and health check
    - Backend:
-     - Command: `zine-layout serve --root <path> --addr :8080`
-     - Endpoint: `GET /api/health` → `{ ok: true }`
-     - Creates `<root>/projects/` and `<root>/presets/` if missing.
-   - Frontend:
-     - Boot React app with Router and a simple Health status banner (calls `/api/health`).
-   - Test:
-     - `curl -s localhost:8080/api/health | jq`
-     - Load `/` and confirm “Server OK”.
+     - Command: `zine-layout serve --root <static-dist> --data-root <data-dir> --addr :8088`
+     - Endpoint: `GET /api/health` → `{ ok: true }` (implemented)
+     - Initializes data dirs: `<data-root>/projects/` and `<data-root>/presets/` (implemented).
+    - Status (built, untested):
+      - Health endpoint implemented and returns `{ ok: true }`.
+      - Static site server wired; serves files from `--root` (defaults to `./cmd/zine-layout/dist`).
+      - Demo webpage scaffolded in `web/` (React + Vite). Use Dagger builder to produce `dist/`.
+    - Frontend:
+      - Boot React app with Router and a simple Health status banner (calls `/api/health`).
+    - Test:
+     - Build web assets: `cd zine-layout/cmd/zine-layout && go generate` (runs `cmd/build-web` via Dagger).
+     - Run server: `go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data`.
+     - Verify health: `curl -s localhost:8088/api/health | jq` (should show `{ "ok": true }`).
+     - Open `http://localhost:8088/` and confirm the demo page shows “Server OK”.
 
 2) Projects CRUD (directories + project.json)
-   - Backend:
-     - `GET /api/projects` → list projects from `<root>/projects/*/project.json`.
+   - Backend (implemented):
+     - `GET /api/projects` → list projects from `<data-root>/projects/*/project.json`.
      - `POST /api/projects` `{ name? }` → create dir, write minimal `project.json` with `images:[], order:[]`.
      - `GET /api/projects/:id` → metadata.
-     - `PUT /api/projects/:id` `{ name }` → rename in json (directory name unchanged).
-     - `DELETE /api/projects/:id` → delete directory recursively.
-   - Frontend:
+     - `PUT /api/projects/:id` `{ name }` → update `project.json`.
+     - `DELETE /api/projects/:id` → delete project directory recursively.
+   - Frontend (TBD):
      - Dashboard lists projects with Open/Delete; New Project modal posts to API.
      - RTK Query: `getProjects`, `createProject`, `getProject`, `updateProject`, `deleteProject`.
-   - Test:
-     - `curl -X POST localhost:8080/api/projects -d '{"name":"My Zine"}' -H 'Content-Type: application/json'`
-     - Verify directory and `project.json` on disk.
+   - Test now:
+     - Create: `curl -s -X POST localhost:8088/api/projects -H 'Content-Type: application/json' -d '{"name":"My Zine"}' | jq`
+     - List: `curl -s localhost:8088/api/projects | jq`
+     - Get: `curl -s localhost:8088/api/projects/<id> | jq`
+     - Update: `curl -s -X PUT localhost:8088/api/projects/<id> -H 'Content-Type: application/json' -d '{"name":"Renamed"}' | jq`
+     - Delete: `curl -s -X DELETE localhost:8088/api/projects/<id> | jq`
 
 3) Image management (persist images on disk)
    - Backend:
@@ -530,7 +539,7 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
      - `ImageTray` with Upload (input type=file multiple), list, delete, drag-reorder.
      - RTK Query: `getImages`, `uploadImages`, `deleteImage`, `reorderImages`, `getImage`.
    - Test:
-     - `curl -F images[]=@one.png -F images[]=@two.png localhost:8080/api/projects/<id>/images`
+     - `curl -F images[]=@one.png -F images[]=@two.png localhost:8088/api/projects/<id>/images`
      - Verify files under `<root>/projects/<id>/images/` and updated `project.json`.
 
 4) Presets (read-only)
@@ -541,7 +550,7 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
    - Frontend:
      - Preset chooser to create project from preset (calls `POST /projects` with `presetId`).
    - Test:
-     - `curl localhost:8080/api/presets | jq` and fetch one YAML.
+     - `curl localhost:8088/api/presets | jq` and fetch one YAML.
 
 5) Spec YAML endpoints
    - Backend:
@@ -553,8 +562,8 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
      - YAML page with editor; Save → `putYaml` then refresh.
      - Editor page in Project Editor shows computed read-only YAML from UI state.
    - Test:
-     - `curl -T spec.yaml -H 'Content-Type: text/plain' localhost:8080/api/projects/<id>/yaml`
-     - `curl -X POST localhost:8080/api/projects/<id>/spec/to-ui`
+     - `curl -T spec.yaml -H 'Content-Type: text/plain' localhost:8088/api/projects/<id>/yaml`
+     - `curl -X POST localhost:8088/api/projects/<id>/spec/to-ui`
 
 6) Validation
    - Backend:
@@ -571,7 +580,7 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
    - Frontend:
      - Render page with preview carousel; Download PNG/ZIP.
    - Test:
-     - `curl -X POST localhost:8080/api/projects/<id>/render -H 'Content-Type: application/json' -d '{}' | jq`
+     - `curl -X POST localhost:8088/api/projects/<id>/render -H 'Content-Type: application/json' -d '{}' | jq`
 
 8) Grid canvas and placement
    - Frontend:
@@ -588,3 +597,52 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
      - Error handling, toasts, optimistic updates with RTK Query.
    - Test:
      - Simulate failures and confirm robust UX.
+### Built So Far (as of this commit)
+
+- CLI
+  - Root: `zine-layout`
+  - Subcommands: `render` (existing), `serve` (new; web + API)
+  - Logging: Glazed + Viper; `--log-level` available via logging layer
+
+- Web Server (`serve`)
+  - Static: serves Vite-bundled UI from `--root` (default `./cmd/zine-layout/dist`)
+  - API: `GET /api/health` and Projects CRUD under `/api/projects`
+  - Data: initializes `<data-root>/{projects,presets}` on startup
+  - Flags:
+    - `--addr` (default `:8088`)
+    - `--root` path to static assets
+    - `--data-root` path to data directories
+
+- Frontend (prototype)
+  - Stack: React + Vite + minimal Redux wiring
+  - Views: Home with header + health indicator
+  - Build output: `web/dist` (exported into `cmd/zine-layout/dist` via Dagger)
+
+### Building the Web UI (Dagger + Vite)
+
+- Command invoked by go:generate from `cmd/zine-layout`:
+  - `//go:generate go run ../build-web`
+  - Builder source: `cmd/build-web/main.go`
+
+- What it does
+  - Uses `dagger.io/dagger` and a Node base image to run `pnpm install` and `pnpm build` in `web/`
+  - Exports the `web/dist` folder to `cmd/zine-layout/dist`
+
+- Environment variables
+  - `WEB_PNPM_VERSION` (default `10.15.0`) to control pnpm via Corepack
+  - `WEB_BUILDER_IMAGE` to override the Node image (e.g., `node:22` or a pinned digest)
+  - `PNPM_CACHE_DIR` to mount a host directory as the pnpm store for caching
+  - Optional `REGISTRY_USER`/`REGISTRY_TOKEN` for authenticated base image pulls from `ghcr.io`
+
+- Developer commands
+  - Build assets: `cd zine-layout/cmd/zine-layout && go generate`
+  - Serve: `go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data`
+  - Health: `curl -s localhost:8088/api/health | jq`
+
+### Running via tmux (for convenience)
+
+- Start/restart:
+  - `tmux kill-session -t zineweb || true`
+  - `tmux new-session -d -s zineweb 'cd zine-layout && go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data'`
+- Inspect logs: `tmux attach -t zineweb` (Ctrl-b d to detach)
+- Stop: `tmux kill-session -t zineweb`
