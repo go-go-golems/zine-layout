@@ -135,9 +135,40 @@ Shows how to implement file uploads, list items, and reorder/delete using RTK Qu
 Patterns applied:
 
 - Upload via `<input type="file" multiple accept="image/png">`, building `FormData` for `images[]` fields.
-- Maintain a temporary `order` state for reordering (Up/Down buttons), then persist via `reorderImages` mutation.
+- Drag-and-drop upload via a dropzone that accepts PNGs.
+- Maintain a temporary `order` state for reordering (Up/Down buttons and drag-and-drop), then persist via `reorderImages` mutation.
 - After mutations, `refetch()` to refresh consistent state from server. Later we can optimize with tag invalidation only.
 - Use small, focused presentational subcomponents (`ImgCell`) to render thumbnails and metadata.
+
+Basic drag-and-drop reordering pattern:
+
+```tsx
+const [order, setOrder] = useState<string[] | null>(null)
+const [dragIndex, setDragIndex] = useState<number | null>(null)
+
+const onItemDragStart = (idx: number) => (e: React.DragEvent) => {
+  setDragIndex(idx)
+  e.dataTransfer.effectAllowed = 'move'
+}
+const onItemDragOver = (e: React.DragEvent) => {
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+}
+const onItemDrop = (targetIndex: number) => (e: React.DragEvent) => {
+  e.preventDefault()
+  if (dragIndex === null || dragIndex === targetIndex) return
+  const next = [...(order ?? data.order)]
+  const [moved] = next.splice(dragIndex, 1)
+  next.splice(targetIndex, 0, moved)
+  setOrder(next)
+  setDragIndex(null)
+}
+
+// usage on each image container:
+<div draggable onDragStart={onItemDragStart(i)} onDragOver={onItemDragOver} onDrop={onItemDrop(i)}>
+  ...
+</div>
+```
 
 ### 7) Component style and conventions
 
@@ -174,4 +205,3 @@ Steps you can follow:
 - Grid editor: drag-and-drop images into cells, rotate, and edit margins.
 
 Each new page should follow the steps in section 8: server route → RTK endpoint → component → route.
-

@@ -22,6 +22,8 @@ export const ProjectDetail: React.FC = () => {
   const [reorderImages, { isLoading: isReordering }] = useReorderImagesMutation()
   const fileRef = useRef<HTMLInputElement>(null)
   const [order, setOrder] = useState<string[] | null>(null)
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [isDragOverDropzone, setIsDragOverDropzone] = useState(false)
 
   const currentOrder = order ?? data?.order ?? []
   const imagesById = useMemo(() => {
@@ -62,6 +64,41 @@ export const ProjectDetail: React.FC = () => {
     refetch()
   }
 
+  const onItemDragStart = (idx: number) => (e: React.DragEvent) => {
+    setDragIndex(idx)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const onItemDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+  const onItemDrop = (targetIndex: number) => (e: React.DragEvent) => {
+    e.preventDefault()
+    if (dragIndex === null || dragIndex === targetIndex) return
+    const next = [...currentOrder]
+    const [moved] = next.splice(dragIndex, 1)
+    next.splice(targetIndex, 0, moved)
+    setOrder(next)
+    setDragIndex(null)
+  }
+
+  const onDropzoneDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOverDropzone(true)
+  }
+  const onDropzoneDragLeave = () => setIsDragOverDropzone(false)
+  const onDropzoneDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOverDropzone(false)
+    const files = Array.from(e.dataTransfer.files || [])
+    if (files.length === 0) return
+    const pngs = files.filter((f) => f.type === 'image/png' || f.name.toLowerCase().endsWith('.png'))
+    if (pngs.length === 0) return
+    await uploadImages({ id, files: pngs }).unwrap()
+    setOrder(null)
+    refetch()
+  }
+
   return (
     <main>
       <p><Link to="/projects">← Back to Projects</Link></p>
@@ -72,6 +109,20 @@ export const ProjectDetail: React.FC = () => {
         <button type="submit" disabled={isUploading}>Upload</button>
       </form>
 
+      <div
+        onDragOver={onDropzoneDragOver}
+        onDragLeave={onDropzoneDragLeave}
+        onDrop={onDropzoneDrop}
+        style={{
+          padding: 12,
+          border: '2px dashed ' + (isDragOverDropzone ? '#007acc' : '#ccc'),
+          background: isDragOverDropzone ? '#eef7ff' : 'transparent',
+          marginBottom: 12,
+        }}
+      >
+        Drop PNG files here to upload
+      </div>
+
       {isLoading ? (
         <p>Loading images…</p>
       ) : (
@@ -80,7 +131,16 @@ export const ProjectDetail: React.FC = () => {
             {orderedImages.map((im, i) => (
               <React.Fragment key={im.id}>
                 <div>{String(i + 1).padStart(2, '0')}</div>
-                <ImgCell src={`/api/projects/${id}/images/${encodeURIComponent(im.id)}`} alt={im.name} w={im.width} h={im.height} />
+                <div
+                  draggable
+                  onDragStart={onItemDragStart(i)}
+                  onDragOver={onItemDragOver}
+                  onDrop={onItemDrop(i)}
+                  style={{ padding: 6, border: '1px solid #eee' }}
+                  title="Drag to reorder"
+                >
+                  <ImgCell src={`/api/projects/${id}/images/${encodeURIComponent(im.id)}`} alt={im.name} w={im.width} h={im.height} />
+                </div>
                 <div style={{ display: 'flex', gap: 4 }}>
                   <button onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
                   <button onClick={() => move(i, +1)} disabled={i === orderedImages.length - 1}>↓</button>
@@ -98,4 +158,3 @@ export const ProjectDetail: React.FC = () => {
     </main>
   )
 }
-

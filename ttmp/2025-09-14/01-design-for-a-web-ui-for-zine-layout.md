@@ -532,7 +532,7 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
      - Update: `curl -s -X PUT localhost:8088/api/projects/<id> -H 'Content-Type: application/json' -d '{"name":"Renamed"}' | jq`
      - Delete: `curl -s -X DELETE localhost:8088/api/projects/<id> | jq`
 
-3) Image management (persist images on disk) 🚧 (backend implemented)
+3) Image management (persist images on disk) 🚧 (backend implemented, UI in progress)
    - Backend:
      - `POST /api/projects/:id/images` multipart `images[]` → save as `images/NNNN.png`, update `project.json.images` and `order`.
      - `GET /api/projects/:id/images` → `{ images, order }` (width/height read via decoder).
@@ -540,9 +540,10 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
      - `POST /api/projects/:id/images/reorder` `{ order: string[] }` → persist new order in `project.json`.
      - `GET /api/projects/:id/images/:imageId` → serve image file.
      - Invariants: images are saved on disk together with `project.json` (no in-memory-only).
-   - Frontend (next):
-     - `ImageTray` with Upload (input type=file multiple), list, delete, drag-reorder.
+   - Frontend (partially implemented):
+     - ImageTray: upload (file input + dropzone), list with dimensions, delete, reorder with Up/Down and drag-and-drop; Save Order persists.
      - RTK Query: `getImages`, `uploadImages`, `deleteImage`, `reorderImages`, `getImage`.
+     - Files: `web/src/views/ProjectDetail.tsx` (dropzone + DnD handlers), `web/src/api.ts` (image endpoints)
    - Manual test suggestions:
      - Upload: `curl -F images[]=@one.png -F images[]=@two.png localhost:8088/api/projects/<id>/images`
      - List: `curl -s localhost:8088/api/projects/<id>/images | jq`
