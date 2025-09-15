@@ -47,7 +47,7 @@ func NewRenderCommand() (*RenderCommand, error) {
 				parameters.NewParameterDefinition("layout-border", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Enable layout border")),
 				parameters.NewParameterDefinition("inner-border", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Enable inner layout border")),
 				parameters.NewParameterDefinition("border-color", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("Border color R,G,B,A (0-255) or color name or #hex")),
-				parameters.NewParameterDefinition("border-type", parameters.ParameterTypeChoice, parameters.WithChoices("plain", "dotted", "dashed", "corner"), parameters.WithDefault(""), parameters.WithHelp("Border type")),
+                parameters.NewParameterDefinition("border-type", parameters.ParameterTypeChoice, parameters.WithChoices("plain", "dotted", "dashed", "corner"), parameters.WithHelp("Border type")),
 				parameters.NewParameterDefinition("test", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Generate test images instead of reading inputs")),
 				parameters.NewParameterDefinition("test-bw", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Use black and white test images")),
 				parameters.NewParameterDefinition("test-dimensions", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("Test image size: 'WIDTH,HEIGHT' (e.g. 600px,800px)")),

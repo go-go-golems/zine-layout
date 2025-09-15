@@ -83,9 +83,15 @@ func LoadLayoutsFromSpec(specPath string, env map[string]interface{}) ([]zinelay
 
 // ApplyOverrides applies override settings onto a parsed layout.
 func ApplyOverrides(zl *zinelayout.ZineLayout, ov Overrides) error {
-	if ov.PPI > 0 {
-		zl.Global.PPI = float64(ov.PPI)
-	}
+    if zl.Global == nil {
+        zl.Global = &zinelayout.Global{}
+    }
+    if zl.PageSetup == nil {
+        zl.PageSetup = &zinelayout.PageSetup{}
+    }
+    if ov.PPI > 0 {
+        zl.Global.PPI = float64(ov.PPI)
+    }
 	if ov.GlobalBorder {
 		if zl.Global.Border == nil {
 			zl.Global.Border = &zinelayout.Border{}

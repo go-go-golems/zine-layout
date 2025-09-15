@@ -4,7 +4,7 @@ all: gifs
 
 VERSION=v0.1.14
 
-TAPES=$(shell ls doc/vhs/*tape)
+TAPES := $(wildcard doc/vhs/*.tape)
 gifs: $(TAPES)
 	for i in $(TAPES); do vhs < $$i; done
 
@@ -45,8 +45,8 @@ tag-patch:
 	git tag $(shell svu patch)
 
 release:
-    git push origin --tags
-    GOPROXY=proxy.golang.org go list -m github.com/go-go-golems/zine-layout@$(shell svu current)
+	git push origin --tags
+	GOPROXY=proxy.golang.org go list -m github.com/go-go-golems/zine-layout@$(shell svu current)
 
 bump-glazed:
 	go get github.com/go-go-golems/glazed@latest
@@ -64,29 +64,29 @@ examples:
 	go run ./cmd/zine-layout render \
 		--spec ./examples/layouts/two_pages_two_inputs.yaml \
 		--output-dir $(EX_OUT)/two-pages \
-		--test --test-dimensions $(EX_SIZE)
+		--ppi 300 --test --test-dimensions $(EX_SIZE)
 	# Selected specs from examples/tests
 	go run ./cmd/zine-layout render \
 		--spec ./examples/tests/01_single_input_single_output.yaml \
 		--output-dir $(EX_OUT)/01 \
-		--test --test-dimensions $(EX_SIZE)
+		--ppi 300 --test --test-dimensions $(EX_SIZE)
 	go run ./cmd/zine-layout render \
 		--spec ./examples/tests/04_two_input_single_output_rotation.yaml \
 		--output-dir $(EX_OUT)/04 \
-		--test --test-dimensions $(EX_SIZE)
+		--ppi 300 --test --test-dimensions $(EX_SIZE)
 	go run ./cmd/zine-layout render \
 		--spec ./examples/tests/06_eight_inputs_two_outputs.yaml \
 		--output-dir $(EX_OUT)/06 \
-		--test --test-dimensions $(EX_SIZE)
+		--ppi 300 --test --test-dimensions $(EX_SIZE)
 	go run ./cmd/zine-layout render \
 		--spec ./examples/tests/10_8_sheet_zine.yaml \
 		--output-dir $(EX_OUT)/10 \
-		--test --test-dimensions $(EX_SIZE)
+		--ppi 300 --test --test-dimensions $(EX_SIZE)
 
 examples-clean:
 	rm -rf $(EX_OUT)
 
 ZINE_LAYOUT_BINARY=$(shell which zine-layout || echo /usr/local/bin/zine-layout)
 install:
-    go build -o ./dist/zine-layout ./cmd/zine-layout && \
-        cp ./dist/zine-layout $(ZINE_LAYOUT_BINARY)
+	go build -o ./dist/zine-layout ./cmd/zine-layout && \
+		cp ./dist/zine-layout $(ZINE_LAYOUT_BINARY)
