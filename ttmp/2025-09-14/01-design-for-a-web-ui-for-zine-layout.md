@@ -619,8 +619,9 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
 
 - Web Server (`serve`)
   - Static: serves Vite-bundled UI from `--root` (default `./cmd/zine-layout/dist`)
-  - API: `GET /api/health` and Projects CRUD under `/api/projects`
+  - API: `GET /api/health` and Projects CRUD under `/api/projects`; image endpoints under `/api/projects/{id}/images[...]`
   - Data: initializes `<data-root>/{projects,presets}` on startup
+  - SPA: index.html fallback for non-API routes (direct-load `/projects`, `/projects/:id` works)
   - Shutdown: handles Ctrl-C (SIGINT) and SIGTERM with graceful shutdown
   - Flags:
     - `--addr` (default `:8088`)
@@ -629,13 +630,15 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
 
 - Frontend (prototype)
   - Stack: React + Vite + minimal Redux wiring
-  - Views: Home with header + health indicator; Projects list page
+  - Views: Home with header + health indicator; Projects list page; Project detail with ImageTray (upload/list/reorder/delete)
   - Build output: `web/dist` (exported into `cmd/zine-layout/dist` via Dagger)
   - Files and symbols:
     - `web/src/api.ts`: RTK Query API (getProjects, createProject, deleteProject)
+    - `web/src/api.ts`: also `getImages`, `uploadImages`, `deleteImage`, `reorderImages`
     - `web/src/store.ts`: integrates `api.reducer` and `api.middleware`
-    - `web/src/views/Projects.tsx`: list/create/delete UI
-    - `web/src/routes/App.tsx`: adds `/projects` route and nav link
+    - `web/src/views/Projects.tsx`: list/create/delete UI (uses React Router `Link`)
+    - `web/src/views/ProjectDetail.tsx`: ImageTray with upload/reorder/delete
+    - `web/src/routes/App.tsx`: routes `/projects` and `/projects/:id`
 
 ### Building the Web UI (Dagger + Vite)
 
@@ -657,6 +660,14 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
   - Build assets: `cd zine-layout/cmd/zine-layout && go generate`
   - Serve: `go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data`
   - Health: `curl -s localhost:8088/api/health | jq`
+
+### Makefile Targets
+
+- `make web-build` → builds the web UI via Dagger (go:generate)
+- `make serve` → builds UI, then runs server with `--log-level debug --with-caller`
+- `make serve-kill` → best-effort kill of any process using port 8088 (uses `lsof-who`, `fuser`, or `lsof`)
+- `make serve-bg` → builds UI, then runs server in the background (logs to `/tmp/zine-layout.out`)
+- `make serve-tmux` → builds UI, then runs server in a `tmux` session `zineweb`
    - Files and symbols:
      - `cmd/zine-layout/cmds/serve.go`:
        - Types: `Project`

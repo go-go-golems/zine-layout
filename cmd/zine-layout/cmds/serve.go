@@ -255,7 +255,8 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
     if _, err := os.Stat(abs); err != nil {
         log.Printf("warning: web dist not found at %s", abs)
     }
-    mux.Handle("/", http.FileServer(http.Dir(abs)))
+    // SPA file server with index.html fallback for client-side routes
+    mux.HandleFunc("/", spaHandler(abs))
 
     srv := &http.Server{ Addr: s.Addr, Handler: mux }
 
@@ -522,3 +523,39 @@ func deleteProjectImage(projectsRoot, id, imageID string) error {
 }
 
 // end images helpers
+// spaHandler serves static files from root, and falls back to index.html
+// for any non-API request whose file does not exist. This allows BrowserRouter
+// to handle client-side routes like /projects or /projects/:id when navigated
+// to directly.
+func spaHandler(root string) http.HandlerFunc {
+    indexPath := filepath.Join(root, "index.html")
+    return func(w http.ResponseWriter, r *http.Request) {
+        // Never intercept API
+        if strings.HasPrefix(r.URL.Path, "/api/") {
+            http.NotFound(w, r)
+            return
+        }
+
+        // Sanitize path and check if a static file exists
+        up := pathClean(r.URL.Path)
+        fp := filepath.Join(root, up)
+        if st, err := os.Stat(fp); err == nil && !st.IsDir() {
+            http.ServeFile(w, r, fp)
+            return
+        }
+        // Fallback to index.html for SPA routes
+        http.ServeFile(w, r, indexPath)
+    }
+}
+
+// pathClean keeps leading slash semantics similar to http.FileServer
+func pathClean(p string) string {
+    if p == "" || p == "/" {
+        return "index.html" // let caller join with root/index.html
+    }
+    // trim leading '/'
+    for len(p) > 0 && p[0] == '/' {
+        p = p[1:]
+    }
+    return p
+}

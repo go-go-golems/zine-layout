@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useCreateProjectMutation, useDeleteProjectMutation, useGetProjectsQuery } from '../api'
 
 export const Projects: React.FC = () => {
@@ -35,7 +36,7 @@ export const Projects: React.FC = () => {
           <tbody>
             {data?.projects?.map((p) => (
               <tr key={p.id}>
-                <td>{p.name}</td>
+                <td><Link to={`/projects/${p.id}`}>{p.name}</Link></td>
                 <td>{new Date(p.updatedAt).toLocaleString()}</td>
                 <td>
                   <button onClick={() => deleteProject({ id: p.id }).unwrap().then(() => refetch())}>Delete</button>
@@ -48,4 +49,3 @@ export const Projects: React.FC = () => {
     </main>
   )
 }
-

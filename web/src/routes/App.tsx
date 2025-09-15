@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { Health } from '../views/Health'
 import { Home } from '../views/Home'
 import { Projects } from '../views/Projects'
+import { ProjectDetail } from '../views/ProjectDetail'
 
 export const App: React.FC = () => {
   return (
@@ -18,6 +19,7 @@ export const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/projects" element={<Projects />} />
+          <Route path="/projects/:id" element={<ProjectDetail />} />
         </Routes>
       </div>
     </BrowserRouter>
