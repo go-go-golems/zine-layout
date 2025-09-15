@@ -1,0 +1,19 @@
+page_setup:
+  orientation: landscape
+  grid_size:
+    rows: 1
+    columns: 2
+
+output_pages:
+  - id: output1
+    layout:
+      - input_index: 1
+        position:
+          row: 0
+          column: 0
+        rotation: 0
+      - input_index: 2
+        position:
+          row: 0
+          column: 1
+        rotation: 180

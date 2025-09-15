@@ -45,15 +45,15 @@ tag-patch:
 	git tag $(shell svu patch)
 
 release:
-	git push origin --tags
-	GOPROXY=proxy.golang.org go list -m github.com/go-go-golems/XXX@$(shell svu current)
+    git push origin --tags
+    GOPROXY=proxy.golang.org go list -m github.com/go-go-golems/zine-layout@$(shell svu current)
 
 bump-glazed:
 	go get github.com/go-go-golems/glazed@latest
 	go get github.com/go-go-golems/clay@latest
 	go mod tidy
 
-XXX_BINARY=$(shell which XXX)
+ZINE_LAYOUT_BINARY=$(shell which zine-layout || echo /usr/local/bin/zine-layout)
 install:
-	go build -o ./dist/XXX ./cmd/XXX && \
-		cp ./dist/XXX $(XXX_BINARY)
+    go build -o ./dist/zine-layout ./cmd/zine-layout && \
+        cp ./dist/zine-layout $(ZINE_LAYOUT_BINARY)

@@ -1,7 +1,7 @@
 # Agent Guidelines for go-go-golems go projects
 
 ## Build Commands
-- Run a binary in XXX/YYY/FOOO: `go run ./XXX/YYY/FOOO` . Use this instead of build + ./XXX.
+- Run a binary in zine-layout/YYY/FOOO: `go run ./zine-layout/YYY/FOOO` . Use this instead of build + ./zine-layout.
 - Build: `go build ./...`
 - Test: `go test ./...`
 - Run single test: `go test ./pkg/path/to/package -run TestName`
