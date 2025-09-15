@@ -1,4 +1,4 @@
-import React from 'react'
+import type React from 'react';
 
 export const Home: React.FC = () => {
   return (
@@ -11,6 +11,5 @@ export const Home: React.FC = () => {
         <li>Next steps: projects CRUD, image upload, spec editing</li>
       </ul>
     </main>
-  )
-}
-
+  );
+};

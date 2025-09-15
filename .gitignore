@@ -22,3 +22,5 @@ dist/
 
 zine-layout
 data/projects/
+
+web/node_modules

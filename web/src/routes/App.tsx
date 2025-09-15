@@ -1,9 +1,9 @@
-import React from 'react'
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
-import { Health } from '../views/Health'
-import { Home } from '../views/Home'
-import { Projects } from '../views/Projects'
-import { ProjectDetail } from '../views/ProjectDetail'
+import type React from 'react';
+import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
+import { Health } from '../views/Health';
+import { Home } from '../views/Home';
+import { ProjectDetail } from '../views/ProjectDetail';
+import { Projects } from '../views/Projects';
 
 export const App: React.FC = () => {
   return (
@@ -23,5 +23,5 @@ export const App: React.FC = () => {
         </Routes>
       </div>
     </BrowserRouter>
-  )
-}
+  );
+};
