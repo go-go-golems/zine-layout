@@ -1,160 +1,35 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React from 'react'
 import { Link, useParams } from 'react-router-dom'
-import {
-  useDeleteImageMutation,
-  useGetImagesQuery,
-  useReorderImagesMutation,
-  useUploadImagesMutation
-} from '../api'
-
-const ImgCell: React.FC<{ src: string; alt: string; w: number; h: number }> = ({ src, alt, w, h }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-    <img src={src} alt={alt} style={{ maxWidth: 160, maxHeight: 120, objectFit: 'contain', border: '1px solid #ddd' }} />
-    <small>{w}×{h}</small>
-  </div>
-)
+import { useApplyPresetMutation, useGetPresetsQuery } from '../api'
+import { ImageTray } from '../components/ImageTray'
+import { ProjectYamlEditor } from '../components/ProjectYamlEditor'
+import { ProjectValidationPanel } from '../components/ProjectValidationPanel'
 
 export const ProjectDetail: React.FC = () => {
   const { id = '' } = useParams()
-  const { data, isLoading, refetch } = useGetImagesQuery({ id })
-  const [uploadImages, { isLoading: isUploading }] = useUploadImagesMutation()
-  const [deleteImage] = useDeleteImageMutation()
-  const [reorderImages, { isLoading: isReordering }] = useReorderImagesMutation()
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [order, setOrder] = useState<string[] | null>(null)
-  const [dragIndex, setDragIndex] = useState<number | null>(null)
-  const [isDragOverDropzone, setIsDragOverDropzone] = useState(false)
-
-  const currentOrder = order ?? data?.order ?? []
-  const imagesById = useMemo(() => {
-    const m = new Map<string, { id: string; name: string; width: number; height: number }>()
-    data?.images?.forEach((im) => m.set(im.id, im))
-    return m
-  }, [data])
-  const orderedImages = currentOrder.map((id) => imagesById.get(id)).filter(Boolean) as typeof data.images
-
-  const onUpload = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const files = fileRef.current?.files
-    if (!files || files.length === 0) return
-    await uploadImages({ id, files }).unwrap()
-    fileRef.current!.value = ''
-    setOrder(null)
-    refetch()
-  }
-
-  const onDelete = async (imageId: string) => {
-    await deleteImage({ id, imageId }).unwrap()
-    setOrder(null)
-    refetch()
-  }
-
-  const move = (idx: number, dir: -1 | 1) => {
-    const next = [...currentOrder]
-    const j = idx + dir
-    if (j < 0 || j >= next.length) return
-    ;[next[idx], next[j]] = [next[j], next[idx]]
-    setOrder(next)
-  }
-
-  const saveOrder = async () => {
-    if (!order) return
-    await reorderImages({ id, order }).unwrap()
-    setOrder(null)
-    refetch()
-  }
-
-  const onItemDragStart = (idx: number) => (e: React.DragEvent) => {
-    setDragIndex(idx)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-  const onItemDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }
-  const onItemDrop = (targetIndex: number) => (e: React.DragEvent) => {
-    e.preventDefault()
-    if (dragIndex === null || dragIndex === targetIndex) return
-    const next = [...currentOrder]
-    const [moved] = next.splice(dragIndex, 1)
-    next.splice(targetIndex, 0, moved)
-    setOrder(next)
-    setDragIndex(null)
-  }
-
-  const onDropzoneDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOverDropzone(true)
-  }
-  const onDropzoneDragLeave = () => setIsDragOverDropzone(false)
-  const onDropzoneDrop = async (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOverDropzone(false)
-    const files = Array.from(e.dataTransfer.files || [])
-    if (files.length === 0) return
-    const pngs = files.filter((f) => f.type === 'image/png' || f.name.toLowerCase().endsWith('.png'))
-    if (pngs.length === 0) return
-    await uploadImages({ id, files: pngs }).unwrap()
-    setOrder(null)
-    refetch()
-  }
+  const { data: presets } = useGetPresetsQuery()
+  const [applyPreset, { isLoading: isApplying }] = useApplyPresetMutation()
+  const [sel, setSel] = React.useState('')
 
   return (
     <main>
       <p><Link to="/projects">← Back to Projects</Link></p>
       <h1>Project {id}</h1>
-
-      <form onSubmit={onUpload} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-        <input ref={fileRef} type="file" accept="image/png" multiple />
-        <button type="submit" disabled={isUploading}>Upload</button>
-      </form>
-
-      <div
-        onDragOver={onDropzoneDragOver}
-        onDragLeave={onDropzoneDragLeave}
-        onDrop={onDropzoneDrop}
-        style={{
-          padding: 12,
-          border: '2px dashed ' + (isDragOverDropzone ? '#007acc' : '#ccc'),
-          background: isDragOverDropzone ? '#eef7ff' : 'transparent',
-          marginBottom: 12,
-        }}
-      >
-        Drop PNG files here to upload
-      </div>
-
-      {isLoading ? (
-        <p>Loading images…</p>
-      ) : (
-        <div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 12, alignItems: 'center' }}>
-            {orderedImages.map((im, i) => (
-              <React.Fragment key={im.id}>
-                <div>{String(i + 1).padStart(2, '0')}</div>
-                <div
-                  draggable
-                  onDragStart={onItemDragStart(i)}
-                  onDragOver={onItemDragOver}
-                  onDrop={onItemDrop(i)}
-                  style={{ padding: 6, border: '1px solid #eee' }}
-                  title="Drag to reorder"
-                >
-                  <ImgCell src={`/api/projects/${id}/images/${encodeURIComponent(im.id)}`} alt={im.name} w={im.width} h={im.height} />
-                </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
-                  <button onClick={() => move(i, +1)} disabled={i === orderedImages.length - 1}>↓</button>
-                  <button onClick={() => onDelete(im.id)}>Delete</button>
-                </div>
-              </React.Fragment>
+      <section style={{ margin: '12px 0' }}>
+        <label>
+          Apply preset:
+          <select value={sel} onChange={(e) => setSel(e.target.value)} style={{ marginLeft: 8 }}>
+            <option value="">Select…</option>
+            {presets?.presets?.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-            <button onClick={() => refetch()}>Refresh</button>
-            <button onClick={saveOrder} disabled={!order || isReordering}>Save Order</button>
-          </div>
-        </div>
-      )}
+          </select>
+        </label>
+        <button disabled={!sel || isApplying} onClick={() => applyPreset({ id, presetId: sel }).unwrap().then(() => setSel(''))} style={{ marginLeft: 8 }}>Apply</button>
+      </section>
+      <ImageTray id={id} />
+      <ProjectValidationPanel id={id} />
+      <ProjectYamlEditor id={id} />
     </main>
   )
 }

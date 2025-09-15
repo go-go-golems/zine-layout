@@ -4,7 +4,7 @@ This guide documents the patterns we use to build React components and pages for
 
 ### 1) Project structure and key files
 
-- `web/src/api.ts` — RTK Query API slice. Define endpoints here (projects, images, later presets, YAML, render). Export typed hooks for components.
+- `web/src/api.ts` — RTK Query API slice. Define endpoints here (projects, images, presets, YAML, render). Export typed hooks for components.
 - `web/src/store.ts` — Redux store configuration. Integrates `api.reducer` and `api.middleware`. Add local slices here as needed.
 - `web/src/routes/App.tsx` — Top-level router, header nav, and route definitions.
 - `web/src/views/Projects.tsx` — Projects list and create/delete.
@@ -27,12 +27,15 @@ Example (snippets from `web/src/api.ts`):
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Project', 'Image'],
+  tagTypes: ['Project', 'Image', 'Preset'],
   endpoints: (b) => ({
     getProjects: b.query<{ projects: Project[] }, void>({
       query: () => '/projects',
       providesTags: ['Project']
     }),
+    getPresets: b.query<{ presets: PresetInfo[] }, void>({ query: () => '/presets', providesTags: ['Preset'] }),
+    getPresetYaml: b.query<string, { id: string }>({ query: ({ id }) => ({ url: `/presets/${id}` }), responseHandler: 'text' }),
+    applyPreset: b.mutation<{ ok: boolean }, { id: string; presetId: string }>({ query: ({ id, presetId }) => ({ url: `/projects/${id}/preset`, method: 'POST', body: { presetId } }) }),
     createProject: b.mutation<{ project: Project }, { name?: string }>({
       query: (body) => ({ url: '/projects', method: 'POST', body }),
       invalidatesTags: ['Project']

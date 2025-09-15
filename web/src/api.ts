@@ -5,6 +5,7 @@ export interface Project {
   name: string
   createdAt: string
   updatedAt: string
+  presetId?: string
 }
 
 export interface ImageItem {
@@ -14,16 +15,22 @@ export interface ImageItem {
   height: number
 }
 
+export interface PresetInfo {
+  id: string
+  name: string
+  filename: string
+}
+
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Project', 'Image'],
+  tagTypes: ['Project', 'Image', 'Preset'],
   endpoints: (b) => ({
     getProjects: b.query<{ projects: Project[] }, void>({
       query: () => '/projects',
       providesTags: ['Project']
     }),
-    createProject: b.mutation<{ project: Project }, { name?: string }>({
+    createProject: b.mutation<{ project: Project }, { name?: string; presetId?: string }>({
       query: (body) => ({ url: '/projects', method: 'POST', body }),
       invalidatesTags: ['Project']
     }),
@@ -51,6 +58,29 @@ export const api = createApi({
     reorderImages: b.mutation<{ ok: boolean }, { id: string; order: string[] }>({
       query: ({ id, order }) => ({ url: `/projects/${id}/images/reorder`, method: 'POST', body: { order } }),
       invalidatesTags: ['Image']
+    }),
+    getYaml: b.query<string, { id: string }>({
+      query: ({ id }) => ({ url: `/projects/${id}/yaml` }),
+      responseHandler: 'text'
+    }),
+    putYaml: b.mutation<{ ok: boolean }, { id: string; yaml: string }>({
+      query: ({ id, yaml }) => ({ url: `/projects/${id}/yaml`, method: 'PUT', body: yaml, headers: { 'Content-Type': 'text/plain' } })
+    }),
+    getPresets: b.query<{ presets: PresetInfo[] }, void>({
+      query: () => '/presets',
+      providesTags: ['Preset']
+    }),
+    getPresetYaml: b.query<string, { id: string }>({
+      query: ({ id }) => ({ url: `/presets/${encodeURIComponent(id)}` }),
+      responseHandler: 'text',
+      providesTags: (_r, _e, arg) => [{ type: 'Preset', id: arg.id } as any]
+    }),
+    applyPreset: b.mutation<{ ok: boolean }, { id: string; presetId: string }>({
+      query: ({ id, presetId }) => ({ url: `/projects/${id}/preset`, method: 'POST', body: { presetId } }),
+      invalidatesTags: ['Project']
+    }),
+    validateProject: b.query<{ ok: boolean; issues: string[]; details?: any }, { id: string }>({
+      query: ({ id }) => ({ url: `/projects/${id}/validate`, method: 'POST', body: {} })
     })
   })
 })
@@ -62,5 +92,12 @@ export const {
   useGetImagesQuery,
   useUploadImagesMutation,
   useDeleteImageMutation,
-  useReorderImagesMutation
+  useReorderImagesMutation,
+  useGetPresetsQuery,
+  useGetPresetYamlQuery,
+  useApplyPresetMutation,
+  useGetYamlQuery,
+  usePutYamlMutation,
+  useValidateProjectQuery,
+  useLazyValidateProjectQuery
 } = api

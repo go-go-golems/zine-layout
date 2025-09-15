@@ -17,6 +17,8 @@ import (
     "strings"
     "syscall"
     "time"
+    "io/fs"
+    yaml "gopkg.in/yaml.v3"
 
     "github.com/go-go-golems/glazed/pkg/cmds"
     "github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -71,10 +73,48 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
     if err := os.MkdirAll(presetsRoot, 0o755); err != nil {
         return fmt.Errorf("create presets root: %w", err)
     }
+    // Seed presets from examples if directory is empty
+    if err := seedPresetsIfEmpty(presetsRoot); err != nil {
+        log.Printf("warning: failed to seed presets: %v", err)
+    }
 
     mux := http.NewServeMux()
     mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
         writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+    })
+
+    // Presets
+    mux.HandleFunc("/api/presets", func(w http.ResponseWriter, r *http.Request) {
+        switch r.Method {
+        case http.MethodGet:
+            presets, err := listPresets(presetsRoot)
+            if err != nil {
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+            writeJSON(w, http.StatusOK, map[string]any{"presets": presets})
+        default:
+            http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+        }
+    })
+    mux.HandleFunc("/api/presets/", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodGet {
+            http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        id := strings.TrimPrefix(r.URL.Path, "/api/presets/")
+        if id == "" {
+            http.NotFound(w, r)
+            return
+        }
+        fn := filepath.Join(presetsRoot, filepath.Base(id)+".yaml")
+        if _, err := os.Stat(fn); err != nil {
+            http.Error(w, "not found", http.StatusNotFound)
+            return
+        }
+        // Serve as text/yaml
+        w.Header().Set("Content-Type", "text/yaml")
+        http.ServeFile(w, r, fn)
     })
 
     // Projects collection
@@ -88,12 +128,24 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
             }
             writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
         case http.MethodPost:
-            var req struct{ Name string `json:"name"` }
+            var req struct{
+                Name string `json:"name"`
+                PresetID string `json:"presetId"`
+            }
             _ = json.NewDecoder(r.Body).Decode(&req)
             p, err := createProject(projectsRoot, req.Name)
             if err != nil {
                 http.Error(w, err.Error(), http.StatusInternalServerError)
                 return
+            }
+            if req.PresetID != "" {
+                if err := applyPresetToProject(presetsRoot, projectsRoot, p.ID, req.PresetID); err != nil {
+                    log.Printf("warning: failed to apply preset to new project: %v", err)
+                } else {
+                    // Update project metadata with preset
+                    p.PresetID = req.PresetID
+                    _ = writeProject(projectsRoot, p)
+                }
             }
             writeJSON(w, http.StatusCreated, map[string]any{"project": p})
         default:
@@ -113,6 +165,74 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
         id := parts[0]
         if id == "" {
             http.NotFound(w, r)
+            return
+        }
+
+        // /api/projects/{id}/yaml
+        if len(parts) == 2 && parts[1] == "yaml" {
+            switch r.Method {
+            case http.MethodGet:
+                fn := filepath.Join(projectDir(projectsRoot, id), "spec.yaml")
+                if _, err := os.Stat(fn); err != nil {
+                    http.Error(w, "not found", http.StatusNotFound)
+                    return
+                }
+                w.Header().Set("Content-Type", "text/yaml")
+                http.ServeFile(w, r, fn)
+                return
+            case http.MethodPut:
+                body, err := io.ReadAll(r.Body)
+                if err != nil {
+                    http.Error(w, "read body", http.StatusBadRequest)
+                    return
+                }
+                fn := filepath.Join(projectDir(projectsRoot, id), "spec.yaml")
+                if err := os.MkdirAll(filepath.Dir(fn), 0o755); err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                if err := os.WriteFile(fn, body, 0o644); err != nil {
+                    http.Error(w, err.Error(), http.StatusInternalServerError)
+                    return
+                }
+                writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+                return
+            default:
+                http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+                return
+            }
+        }
+
+        // /api/projects/{id}/spec/to-ui and /from-ui (simple placeholder)
+        if len(parts) == 3 && parts[1] == "spec" && parts[2] == "to-ui" && r.Method == http.MethodPost {
+            fn := filepath.Join(projectDir(projectsRoot, id), "spec.yaml")
+            var raw string
+            if b, err := os.ReadFile(fn); err == nil { raw = string(b) }
+            writeJSON(w, http.StatusOK, map[string]any{"uiState": map[string]any{"yaml": raw}})
+            return
+        }
+        if len(parts) == 3 && parts[1] == "spec" && parts[2] == "from-ui" && r.Method == http.MethodPost {
+            var in map[string]any
+            if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+                http.Error(w, "invalid json", http.StatusBadRequest)
+                return
+            }
+            var yamlStr string
+            if v, ok := in["yaml"].(string); ok {
+                yamlStr = v
+            } else if ui, ok := in["uiState"].(map[string]any); ok {
+                if v, ok := ui["yaml"].(string); ok { yamlStr = v }
+            }
+            if yamlStr == "" {
+                http.Error(w, "missing yaml", http.StatusBadRequest)
+                return
+            }
+            fn := filepath.Join(projectDir(projectsRoot, id), "spec.yaml")
+            if err := os.WriteFile(fn, []byte(yamlStr), 0o644); err != nil {
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+            writeJSON(w, http.StatusOK, map[string]any{"yaml": yamlStr})
             return
         }
 
@@ -171,6 +291,41 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
                 http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
                 return
             }
+        }
+
+        // /api/projects/{id}/preset
+        if len(parts) == 2 && parts[1] == "preset" {
+            switch r.Method {
+            case http.MethodPost:
+                var req struct{ PresetID string `json:"presetId"` }
+                if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PresetID == "" {
+                    http.Error(w, "invalid presetId", http.StatusBadRequest)
+                    return
+                }
+                if err := applyPresetToProject(presetsRoot, projectsRoot, id, req.PresetID); err != nil {
+                    status := http.StatusInternalServerError
+                    if os.IsNotExist(err) { status = http.StatusNotFound }
+                    http.Error(w, err.Error(), status)
+                    return
+                }
+                // Update project metadata with preset
+                if p, err := readProject(projectsRoot, id); err == nil {
+                    p.PresetID = req.PresetID
+                    _ = writeProject(projectsRoot, p)
+                }
+                writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+                return
+            default:
+                http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+                return
+            }
+        }
+
+        // /api/projects/{id}/validate
+        if len(parts) == 2 && parts[1] == "validate" && r.Method == http.MethodPost {
+            issues, details, ok := validateProject(projectsRoot, id)
+            writeJSON(w, http.StatusOK, map[string]any{"ok": ok, "issues": issues, "details": details})
+            return
         }
 
         // /api/projects/{id}/images[...]
@@ -294,6 +449,7 @@ type Project struct {
     UpdatedAt time.Time `json:"updatedAt"`
     Images    []string  `json:"images"`
     Order     []string  `json:"order"`
+    PresetID  string    `json:"presetId,omitempty"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -523,6 +679,154 @@ func deleteProjectImage(projectsRoot, id, imageID string) error {
 }
 
 // end images helpers
+// ===== Presets helpers =====
+
+type PresetInfo struct {
+    ID       string `json:"id"`
+    Name     string `json:"name"`
+    Filename string `json:"filename"`
+}
+
+func seedPresetsIfEmpty(presetsRoot string) error {
+    // if directory has any .yaml, do nothing
+    hasAny := false
+    entries, _ := os.ReadDir(presetsRoot)
+    for _, e := range entries {
+        if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".yaml") {
+            hasAny = true
+            break
+        }
+    }
+    if hasAny { return nil }
+    // Try to copy from known example dirs relative to repo structure
+    candidates := []string{
+        filepath.Join("examples", "tests"),
+        filepath.Join("examples", "layouts"),
+        filepath.Join("zine-layout", "examples", "tests"),
+        filepath.Join("zine-layout", "examples", "layouts"),
+    }
+    for _, cand := range candidates {
+        _ = copyYamlFiles(cand, presetsRoot)
+    }
+    // Best-effort, no error even if none found
+    return nil
+}
+
+func copyYamlFiles(srcDir, dstDir string) error {
+    entries, err := os.ReadDir(srcDir)
+    if err != nil { return err }
+    for _, e := range entries {
+        if e.IsDir() { continue }
+        name := e.Name()
+        lower := strings.ToLower(name)
+        if !strings.HasSuffix(lower, ".yaml") && !strings.HasSuffix(lower, ".yml") { continue }
+        src := filepath.Join(srcDir, name)
+        dst := filepath.Join(dstDir, name)
+        if _, err := os.Stat(dst); err == nil { continue }
+        if err := copyFile(src, dst); err != nil {
+            log.Printf("failed to copy preset %s: %v", name, err)
+        }
+    }
+    return nil
+}
+
+func copyFile(src, dst string) error {
+    in, err := os.Open(src)
+    if err != nil { return err }
+    defer in.Close()
+    if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil { return err }
+    out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+    if err != nil { return err }
+    if _, err := io.Copy(out, in); err != nil { _ = out.Close(); return err }
+    return out.Close()
+}
+
+func listPresets(presetsRoot string) ([]PresetInfo, error) {
+    var out []PresetInfo
+    walkFn := func(path string, d fs.DirEntry, err error) error {
+        if err != nil { return nil }
+        if d.IsDir() { return nil }
+        lower := strings.ToLower(d.Name())
+        if !strings.HasSuffix(lower, ".yaml") && !strings.HasSuffix(lower, ".yml") { return nil }
+        base := d.Name()
+        id := strings.TrimSuffix(strings.TrimSuffix(base, ".yaml"), ".yml")
+        out = append(out, PresetInfo{ID: id, Name: id, Filename: base})
+        return nil
+    }
+    _ = filepath.WalkDir(presetsRoot, walkFn)
+    return out, nil
+}
+
+func applyPresetToProject(presetsRoot, projectsRoot, projectID, presetID string) error {
+    // locate preset file
+    src := filepath.Join(presetsRoot, filepath.Base(presetID)+".yaml")
+    if _, err := os.Stat(src); err != nil {
+        return err
+    }
+    dst := filepath.Join(projectDir(projectsRoot, projectID), "spec.yaml")
+    return copyFile(src, dst)
+}
+
+// ===== Validation =====
+type validationDetails struct {
+    Count    int `json:"count"`
+    Width    int `json:"width"`
+    Height   int `json:"height"`
+    Rows     int `json:"rows"`
+    Columns  int `json:"columns"`
+    Pages    int `json:"pages"`
+    Multiple int `json:"multiple"`
+}
+
+func validateProject(projectsRoot, id string) ([]string, *validationDetails, bool) {
+    issues := []string{}
+    // Check image sizes all equal
+    imgs, _, err := listProjectImages(projectsRoot, id)
+    if err != nil {
+        issues = append(issues, fmt.Sprintf("read images: %v", err))
+        return issues, nil, false
+    }
+    var w0, h0 int
+    for i, im := range imgs {
+        if i == 0 { w0, h0 = im.Width, im.Height }
+        if im.Width != w0 || im.Height != h0 {
+            issues = append(issues, fmt.Sprintf("image %s has size %dx%d, expected %dx%d", im.Name, im.Width, im.Height, w0, h0))
+        }
+    }
+    rows, cols, pages := readSpecGridAndPages(projectDir(projectsRoot, id))
+    mult := 0
+    if rows > 0 && cols > 0 && pages > 0 {
+        mult = rows * cols * pages
+        if len(imgs) > 0 && (len(imgs)%mult != 0) {
+            issues = append(issues, fmt.Sprintf("image count %d is not a multiple of rows*columns*pages=%d", len(imgs), mult))
+        }
+    } else {
+        issues = append(issues, "spec.yaml missing or incomplete grid/pages; skipping multiple check")
+    }
+    ok := len(issues) == 0
+    det := &validationDetails{Count: len(imgs), Width: w0, Height: h0, Rows: rows, Columns: cols, Pages: pages, Multiple: mult}
+    return issues, det, ok
+}
+
+func readSpecGridAndPages(dir string) (rows, cols, pages int) {
+    fn := filepath.Join(dir, "spec.yaml")
+    b, err := os.ReadFile(fn)
+    if err != nil { return 0, 0, 0 }
+    // minimal yaml mapping
+    var doc struct {
+        PageSetup struct {
+            GridSize struct {
+                Rows    int `yaml:"rows"`
+                Columns int `yaml:"columns"`
+            } `yaml:"grid_size"`
+        } `yaml:"page_setup"`
+        OutputPages []any `yaml:"output_pages"`
+    }
+    if err := yaml.Unmarshal(b, &doc); err != nil { return 0, 0, 0 }
+    pages = len(doc.OutputPages)
+    return doc.PageSetup.GridSize.Rows, doc.PageSetup.GridSize.Columns, pages
+}
+
 // spaHandler serves static files from root, and falls back to index.html
 // for any non-API request whose file does not exist. This allows BrowserRouter
 // to handle client-side routes like /projects or /projects/:id when navigated

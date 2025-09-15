@@ -107,11 +107,11 @@ serve-kill:
 
 # Build web and run server in background with nohup
 serve-bg: web-build
-	nohup bash -lc 'cd zine-layout && go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data --log-level debug --with-caller' >/tmp/zine-layout.out 2>&1 &
+	nohup bash -lc 'go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data --log-level debug --with-caller' >/tmp/zine-layout.out 2>&1 &
 	@echo "Server started in background on :8088 (logs: /tmp/zine-layout.out)"
 
 # Run server in a tmux session named zineweb
 serve-tmux: web-build
 	- tmux kill-session -t zineweb || true
-	tmux new-session -d -s zineweb 'cd zine-layout && go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data --log-level debug --with-caller'
+	tmux new-session -d -s zineweb 'go run ./cmd/zine-layout serve --addr :8088 --root ./cmd/zine-layout/dist --data-root ./data --log-level debug --with-caller'
 	@echo "tmux session zineweb started. Attach with: tmux attach -t zineweb"

@@ -556,36 +556,56 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
        - Helpers: `projectDir`, `projectImagesDir`, `readImageSize`, `savePngImage`, `listProjectImages`, `setProjectOrder`, `deleteProjectImage`, `nextImageNumber`
        - Routes under `/api/projects/{id}/images[...]`
 
-4) Presets (read-only)
-   - Backend:
-     - `<root>/presets/*.yaml` shipped from `zine-layout/examples`.
-     - `GET /api/presets` → list names/ids.
-     - `GET /api/presets/:id` → raw YAML.
-   - Frontend:
-     - Preset chooser to create project from preset (calls `POST /projects` with `presetId`).
-   - Test:
-     - `curl localhost:8088/api/presets | jq` and fetch one YAML.
+4) Presets (read-only) — IMPLEMENTED
+  - Backend:
+    - Data: `<data-root>/presets/*.yaml`. On startup, seeds from `zine-layout/examples/{tests,layouts}` if empty (best-effort).
+    - Endpoints:
+      - `GET /api/presets` → `{ presets: { id, name, filename }[] }`
+      - `GET /api/presets/:id` → raw YAML (`text/yaml`)
+      - Projects integration:
+        - `POST /api/projects` now accepts `{ name?, presetId? }`; when `presetId` is provided, saves `spec.yaml` into the new project and records `project.presetId`.
+        - `POST /api/projects/:id/preset` `{ presetId }` → applies preset into `<project>/spec.yaml` and updates `project.presetId`.
+    - Files and symbols:
+      - `cmd/zine-layout/cmds/serve.go`:
+        - Types: `PresetInfo`, updated `Project` with `PresetID`
+        - Helpers: `seedPresetsIfEmpty`, `copyYamlFiles`, `listPresets`, `applyPresetToProject`
+        - Routes: `/api/presets`, `/api/presets/:id`, `/api/projects/:id/preset`, extended `/api/projects` POST
+  - Frontend:
+    - RTK Query endpoints in `web/src/api.ts`:
+      - `getPresets`, `getPresetYaml`, `applyPreset`, and `createProject` now supports `presetId`.
+    - UI changes:
+      - Projects: add preset dropdown to the “Create” form.
+      - Project Detail: add an “Apply preset” dropdown + button.
+  - Test:
+    - List: `curl -s localhost:8088/api/presets | jq` and fetch one: `curl -s localhost:8088/api/presets/10_8_sheet_zine | head`.
+    - Create with preset: `curl -s -X POST localhost:8088/api/projects -H 'Content-Type: application/json' -d '{"name":"From Preset","presetId":"10_8_sheet_zine"}' | jq` and check `<data-root>/projects/<id>/spec.yaml` exists.
+    - Apply preset to existing: `curl -s -X POST localhost:8088/api/projects/<id>/preset -H 'Content-Type: application/json' -d '{"presetId":"11_16_sheet_zine"}' | jq` and inspect updated `spec.yaml`.
 
-5) Spec YAML endpoints
-   - Backend:
-     - `GET /api/projects/:id/yaml` → raw.
-     - `PUT /api/projects/:id/yaml` (text/plain) → write `spec.yaml`.
-     - `POST /api/projects/:id/spec/to-ui` → `{ uiState }` from `spec.yaml`.
-     - `POST /api/projects/:id/spec/from-ui` `{ uiState }` → `{ yaml }` and write `spec.yaml`.
-   - Frontend:
-     - YAML page with editor; Save → `putYaml` then refresh.
-     - Editor page in Project Editor shows computed read-only YAML from UI state.
-   - Test:
-     - `curl -T spec.yaml -H 'Content-Type: text/plain' localhost:8088/api/projects/<id>/yaml`
-     - `curl -X POST localhost:8088/api/projects/<id>/spec/to-ui`
+5) Spec YAML endpoints — IMPLEMENTED (baseline)
+  - Backend:
+    - `GET /api/projects/:id/yaml` → serves raw `spec.yaml` (`text/yaml`) if present; 404 if missing.
+    - `PUT /api/projects/:id/yaml` (text/plain) → writes `spec.yaml`.
+    - `POST /api/projects/:id/spec/to-ui` → returns `{ uiState: { yaml: <raw> } }` (placeholder mapping).
+    - `POST /api/projects/:id/spec/from-ui` accepts `{ yaml }` or `{ uiState: { yaml } }`, writes `spec.yaml`, and returns `{ yaml }`.
+  - Frontend:
+    - Project YAML editor: `web/src/components/ProjectYamlEditor.tsx` with load, edit, and save.
+    - RTK Query endpoints: `getYaml`, `putYaml` in `web/src/api.ts`.
+  - Test:
+    - `curl -T spec.yaml -H 'Content-Type: text/plain' localhost:8088/api/projects/<id>/yaml`
+    - `curl -s localhost:8088/api/projects/<id>/yaml | head`
+    - `curl -s -X POST localhost:8088/api/projects/<id>/spec/to-ui -H 'Content-Type: application/json' -d '{}' | jq`
 
-6) Validation
-   - Backend:
-     - `POST /api/projects/:id/validate` → verifies same image sizes and multiples of `rows*cols*pages`.
-   - Frontend:
-     - Show issues panel in Project Editor; disable render when invalid.
-   - Test:
-     - Upload mismatched images and confirm issues.
+6) Validation — IMPLEMENTED (initial)
+  - Backend:
+    - `POST /api/projects/:id/validate` → runs checks:
+      - All image sizes equal
+      - If `spec.yaml` has `page_setup.grid_size.rows/columns` and `output_pages`, validates image count is multiple of `rows*columns*pages`
+    - Response: `{ ok, issues: string[], details: { count, width, height, rows, columns, pages, multiple } }`
+  - Frontend:
+    - Project Editor shows a Validation panel with a “Run validation” button and issues list. Displays computed details for debugging.
+  - Test:
+    - `curl -s -X POST localhost:8088/api/projects/<id>/validate | jq`
+    - Upload mismatched images and confirm issues.
 
 7) Render
    - Backend:
