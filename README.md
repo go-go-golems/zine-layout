@@ -53,8 +53,11 @@ output_pages:
 
 Examples and DSL
 - Examples: `examples/layouts/` and `examples/tests/`
-- DSL overview: `doc/dsl.md`
-- Units and expressions reference: `pkg/zinelayout/parser/units_doc.md`
+- Help topics (built-in):
+  - `zine-layout help` shows all topics
+  - `zine-layout help render` for the render command guide
+  - `zine-layout help zine-layout-dsl` for the DSL overview
+  - Units reference lives in the source at `pkg/zinelayout/parser/units_doc.md`
 
 Notes
 - Input images are indexed starting at 1 in the layout spec.

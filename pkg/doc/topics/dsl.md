@@ -1,10 +1,22 @@
-# Zine Layout DSL Guide
+---
+Title: Zine Layout DSL
+Slug: zine-layout-dsl
+Short: A unit-aware YAML specification for composing zine pages.
+Topics:
+- zine-layout
+IsTemplate: false
+IsTopLevel: true
+ShowPerDefault: true
+SectionType: GeneralTopic
+---
+
+# Zine Layout DSL
 
 ## Introduction
 
 The **Zine Layout Domain-Specific Language (DSL)** is a powerful and flexible YAML-based language designed to help you create complex layouts for zines, booklets, and other printed materials. It allows you to specify how input pages (content) are arranged on output pages (print sheets), including precise control over positions, rotations, margins, borders, and units of measurement.
 
-This guide will provide an in-depth explanation of how the layout files work, a comprehensive description of the units calculation syntax, and a step-by-step tutorial on writing a layout from scratch. We'll also showcase examples of what's possible with the Zine Layout DSL.
+This guide explains the layout file structure, unit-aware expressions, and how to write layouts from scratch. It also links to examples and the render command.
 
 ---
 
@@ -35,7 +47,7 @@ A Zine Layout DSL file is a YAML document that defines how input images (pages) 
 - **Page Setup**: Configuration for the overall page layout, such as grid size and margins.
 - **Output Pages**: Detailed specifications for each output page, including the placement of input images.
 
-Here's a high-level overview of the YAML structure:
+The high-level YAML structure:
 
 ```yaml
 global:
