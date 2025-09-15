@@ -587,9 +587,11 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
     - `PUT /api/projects/:id/yaml` (text/plain) → writes `spec.yaml`.
     - `POST /api/projects/:id/spec/to-ui` → returns `{ uiState: { yaml: <raw> } }` (placeholder mapping).
     - `POST /api/projects/:id/spec/from-ui` accepts `{ yaml }` or `{ uiState: { yaml } }`, writes `spec.yaml`, and returns `{ yaml }`.
-  - Frontend:
+ - Frontend:
     - Project YAML editor: `web/src/components/ProjectYamlEditor.tsx` with load, edit, and save.
-    - RTK Query endpoints: `getYaml`, `putYaml` in `web/src/api.ts`.
+    - Dedicated page: `web/src/views/ProjectYamlPage.tsx` at route `/projects/:id/yaml`.
+      - Preset loader (select + load into editor), preview controls (`BW`, `Test size`), and live preview using test images.
+    - RTK Query endpoints: `getYaml`, `putYaml`, `getPresets`, `getPresetYaml` in `web/src/api.ts`.
   - Test:
     - `curl -T spec.yaml -H 'Content-Type: text/plain' localhost:8088/api/projects/<id>/yaml`
     - `curl -s localhost:8088/api/projects/<id>/yaml | head`
@@ -614,9 +616,9 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
     - `GET /api/projects/:id/renders/:renderId/files/:name` → serves PNG file
     - `GET /api/projects/:id/renders/:renderId/download.zip` → streams a ZIP of the render files
     - Internals: uses `pkg/app.LoadLayoutsFromSpec`, `GenerateTestImages`/`ReadInputImages`, and `RenderOutputs`.
-  - Frontend:
-    - ProjectRenderPanel: trigger renders with options, list past renders, show thumbnails, and offer ZIP download.
-    - RTK Query: `renderProject`, `getRenders` endpoints.
+ - Frontend:
+    - ProjectRenderPanel (`web/src/components/ProjectRenderPanel.tsx`): trigger renders with options, list past renders, show thumbnails, and offer ZIP download.
+    - RTK Query: `renderProject`, `getRenders` endpoints in `web/src/api.ts`.
   - Test:
     - `curl -s -X POST localhost:8088/api/projects/<id>/render -H 'Content-Type: application/json' -d '{}' | jq`
     - `curl -s localhost:8088/api/projects/<id>/renders | jq`
@@ -624,11 +626,9 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
     - `curl -sI localhost:8088/api/projects/<id>/renders/<rid>/download.zip`
 
 8) Grid canvas and placement
-   - Frontend:
-     - Implement `GridCanvas` and `PropertiesPanel` (DnD from tray assigns `input_index`).
-     - Persist via `fromUI` (write `spec.yaml`), display computed YAML; validate on change.
-   - Test:
-     - Place images, verify `spec.yaml` content and successful render.
+   - Decision:
+     - For now, assignment is done via image order only; no in‑page grid editor. YAML editing lives at `/projects/:id/yaml`.
+     - Future work may include a richer grid editor that round‑trips with the YAML.
 
 9) Polish and robustness
    - Backend:
@@ -657,24 +657,79 @@ Below is a step-by-step plan to build and validate the system incrementally. Eac
     - `--data-root` path to data directories
 
 - Frontend (prototype)
-  - Stack: React + Vite + Redux/RTK Query; Biome for lint/format; TypeScript strict checks
-  - Views: Home; Projects list; Project detail with:
-    - Preset selector (apply at creation and later)
-    - ImageTray (upload/list/reorder/delete; drag-and-drop upload; drag ID export)
-    - Validation panel (runs POST /validate; shows issues and details)
-    - Layout editor (Grid) with drag assignments from tray, YAML preview, Save Layout (writes spec.yaml)
+  - Stack: React + Vite + Redux/RTK Query; Biome for lint/format; TypeScript checks
+  - Views & routes:
+    - `/` Home; `/projects` Projects; `/projects/:id` Project Detail; `/projects/:id/yaml` YAML Editor
+  - Project Detail includes:
+    - Preset selector (apply later)
+    - ImageTray (upload/list/reorder/delete; drag‑and‑drop upload; drag ID export for future DnD features)
+    - Validation panel (POST `/validate`)
     - Render panel (trigger renders; list, preview thumbnails, ZIP download)
-    - YAML editor (load/edit/save spec.yaml)
+    - Link to “Open YAML editor →”
+  - YAML Editor page includes:
+    - Preset loader (GET preset YAML; PUT project YAML)
+    - YAML editing (load/edit/save) + live Preview using test images (POST `/render` with `test`)
   - Build output: `web/dist` (exported into `cmd/zine-layout/dist` via Dagger)
-  - Files and symbols:
-    - `web/src/api.ts`: endpoints for projects, images, presets, yaml, validation, render, specFromUI
-    - `web/src/components/ImageTray.tsx`: exposes draggable images with ID in dataTransfer
-    - `web/src/components/ProjectValidationPanel.tsx`
-    - `web/src/components/ProjectLayoutEditor.tsx`: grid rows/cols, drop cells to set `input_index`, YAML gen via js-yaml
-    - `web/src/components/ProjectRenderPanel.tsx`: render options + listing
-    - `web/src/components/ProjectYamlEditor.tsx`
-    - `web/src/views/Projects.tsx` and `web/src/views/ProjectDetail.tsx`
-  - Tooling: Biome config (`web/biome.json`), scripts (`lint`, `check`, `format`, `typecheck`), Make targets (`web-*`)
+  - Components and files:
+    - API: `web/src/api.ts` (projects, images, presets, yaml, validation, render)
+    - Image tray: `web/src/components/ImageTray.tsx`
+    - Validation: `web/src/components/ProjectValidationPanel.tsx`
+    - Render: `web/src/components/ProjectRenderPanel.tsx`
+    - YAML editor: `web/src/components/ProjectYamlEditor.tsx`
+    - Pages: `web/src/views/Projects.tsx`, `web/src/views/ProjectDetail.tsx`, `web/src/views/ProjectYamlPage.tsx`
+    - Router: `web/src/routes/App.tsx`
+  - Tooling:
+    - Biome config `web/biome.json` and scripts: `lint`, `check`, `format`, `typecheck`
+    - Vite dev proxy for API: `/api` → `http://localhost:8088` in `web/vite.config.ts`
+    - Make targets: `web-lint`, `web-format`, `web-check`, `web-typecheck`, `web-verify`
+
+### API Summary (current)
+
+- Health: `GET /api/health`
+- Projects:
+  - `GET /api/projects`
+  - `POST /api/projects` `{ name?, presetId? }`
+  - `GET /api/projects/:id`
+  - `PUT /api/projects/:id` `{ name }`
+  - `DELETE /api/projects/:id`
+- Presets:
+  - `GET /api/presets`
+  - `GET /api/presets/:id` (YAML)
+  - `POST /api/projects/:id/preset` `{ presetId }`
+- Images:
+  - `GET /api/projects/:id/images`
+  - `POST /api/projects/:id/images` (multipart `images[]`)
+  - `POST /api/projects/:id/images/reorder` `{ order: string[] }`
+  - `GET /api/projects/:id/images/:imageId`
+  - `DELETE /api/projects/:id/images/:imageId`
+- YAML / Spec:
+  - `GET /api/projects/:id/yaml` (text/yaml)
+  - `PUT /api/projects/:id/yaml` (text/plain body)
+  - `POST /api/projects/:id/spec/to-ui`
+  - `POST /api/projects/:id/spec/from-ui`
+- Validation:
+  - `POST /api/projects/:id/validate` → `{ ok, issues[], details }
+- Render:
+  - `POST /api/projects/:id/render` `{ test?, test_bw?, test_dimensions? }`
+  - `GET /api/projects/:id/renders`
+  - `GET /api/projects/:id/renders/:renderId/files/:name`
+  - `GET /api/projects/:id/renders/:renderId/download.zip`
+
+### Server internals (key functions)
+
+- File: `cmd/zine-layout/cmds/serve.go`
+  - Project helpers: `listProjects`, `createProject`, `readProject`, `writeProject`, `deleteProject`
+  - Presets: `seedPresetsIfEmpty`, `copyYamlFiles`, `listPresets`, `applyPresetToProject`
+  - Images: `projectDir`, `projectImagesDir`, `listProjectImages`, `savePngImage`, `setProjectOrder`, `deleteProjectImage`, `nextImageNumber`
+  - Validation: `validateProject`, `readSpecGridAndPages`
+  - Renders: `doProjectRender`, `projectRendersRoot`, `projectRenderDir`, `listProjectRenders`, `streamZipDir`
+  - SPA handler: `spaHandler`
+
+### Dev experience
+
+- Vite build with sourcemaps (`web/vite.config.ts`) for better stack traces under `/assets/*.map`
+- Vite dev server with API proxy (`pnpm dev` at http://localhost:5173) routes `/api` to `http://localhost:8088`
+- Makefile targets for linting, formatting, type checks; tmux helpers to run the server
 
 ### Building the Web UI (Dagger + Vite)
 

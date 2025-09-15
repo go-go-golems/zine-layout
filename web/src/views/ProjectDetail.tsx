@@ -2,7 +2,6 @@ import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApplyPresetMutation, useGetPresetsQuery } from '../api';
 import { ImageTray } from '../components/ImageTray';
-import { ProjectLayoutEditor } from '../components/ProjectLayoutEditor';
 import { ProjectRenderPanel } from '../components/ProjectRenderPanel';
 import { ProjectValidationPanel } from '../components/ProjectValidationPanel';
 import { ProjectYamlEditor } from '../components/ProjectYamlEditor';
@@ -46,9 +45,10 @@ export const ProjectDetail: React.FC = () => {
       </section>
       <ImageTray id={id} />
       <ProjectValidationPanel id={id} />
-      <ProjectLayoutEditor id={id} />
       <ProjectRenderPanel id={id} />
-      <ProjectYamlEditor id={id} />
+      <p>
+        <Link to={`/projects/${id}/yaml`}>Open YAML editor →</Link>
+      </p>
     </main>
   );
 };

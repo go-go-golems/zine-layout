@@ -3,6 +3,7 @@ import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
 import { Health } from '../views/Health';
 import { Home } from '../views/Home';
 import { ProjectDetail } from '../views/ProjectDetail';
+import { ProjectYamlPage } from '../views/ProjectYamlPage';
 import { Projects } from '../views/Projects';
 
 export const App: React.FC = () => {
@@ -20,6 +21,7 @@ export const App: React.FC = () => {
           <Route path="/" element={<Home />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/projects/:id/yaml" element={<ProjectYamlPage />} />
         </Routes>
       </div>
     </BrowserRouter>
