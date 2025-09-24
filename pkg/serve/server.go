@@ -4,8 +4,10 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,12 +16,15 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-go-golems/zine-layout/pkg/presets"
 	"github.com/go-go-golems/zine-layout/pkg/projects"
 	"github.com/go-go-golems/zine-layout/pkg/render"
+	"github.com/go-go-golems/zine-layout/pkg/repo"
+	sqliterepo "github.com/go-go-golems/zine-layout/pkg/repo/sqlite"
 	"github.com/go-go-golems/zine-layout/pkg/spread"
 	simple "github.com/go-go-golems/zine-layout/pkg/spread/simple"
 	"github.com/go-go-golems/zine-layout/pkg/validation"
@@ -41,6 +46,576 @@ type Server struct {
 	projectsRoot string
 	presetsRoot  string
 	uploadsRoot  string
+	db           *sql.DB
+	repos        *repo.Repositories
+}
+
+func optionalString(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	copy := trimmed
+	return &copy
+}
+
+func (s *Server) upsertProjectRecord(p *projects.Project) {
+	if s.repos == nil || p == nil {
+		return
+	}
+	rp := &repo.Project{
+		ID:        p.ID,
+		Name:      p.Name,
+		CreatedAt: p.CreatedAt,
+		UpdatedAt: p.UpdatedAt,
+	}
+	if val := optionalString(p.PresetID); val != nil {
+		rp.PresetID = val
+	}
+	existing, err := s.repos.Projects.Get(p.ID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if rp.CreatedAt.IsZero() {
+				rp.CreatedAt = time.Now().UTC()
+			}
+			if rp.UpdatedAt.IsZero() {
+				rp.UpdatedAt = rp.CreatedAt
+			}
+			if err := s.repos.Projects.Create(rp); err != nil {
+				log.Printf("warn: failed to create project record: %v", err)
+			}
+			return
+		}
+		log.Printf("warn: failed to read project record: %v", err)
+		return
+	}
+	if rp.CreatedAt.IsZero() {
+		rp.CreatedAt = existing.CreatedAt
+	}
+	if rp.UpdatedAt.IsZero() {
+		rp.UpdatedAt = existing.UpdatedAt
+	}
+	if rp.PresetID == nil {
+		rp.PresetID = existing.PresetID
+	}
+	rp.CoverAssetID = existing.CoverAssetID
+	if err := s.repos.Projects.Update(rp); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if err := s.repos.Projects.Create(rp); err != nil {
+				log.Printf("warn: failed to recreate project record: %v", err)
+			}
+			return
+		}
+		log.Printf("warn: failed to update project record: %v", err)
+	}
+}
+
+func (s *Server) ensureProjectAssets(projectID string) {
+	if s.repos == nil {
+		return
+	}
+	assets, err := s.repos.Assets.ListByProject(projectID)
+	if err != nil {
+		log.Printf("warn: list assets for seeding failed: %v", err)
+		return
+	}
+	if len(assets) > 0 {
+		return
+	}
+	imgs, order, err := projects.ListProjectImages(s.projectsRoot, projectID)
+	if err != nil {
+		log.Printf("warn: seed assets failed: %v", err)
+		return
+	}
+	orderIndex := make(map[string]int)
+	for idx, id := range order {
+		orderIndex[id] = idx
+	}
+	for _, img := range imgs {
+		statPath := filepath.Join(projects.ProjectImagesDir(s.projectsRoot, projectID), img.ID)
+		info, err := os.Stat(statPath)
+		if err != nil {
+			continue
+		}
+		created := info.ModTime().UTC()
+		asset := &repo.Asset{
+			ProjectID:   projectID,
+			ID:          img.ID,
+			Filename:    img.Name,
+			RelPath:     filepath.ToSlash(filepath.Join("projects", projectID, "images", img.ID)),
+			ContentType: "image/png",
+			Bytes:       info.Size(),
+			Width:       img.Width,
+			Height:      img.Height,
+			SortIndex:   orderIndex[img.ID],
+			CreatedAt:   created,
+		}
+		if err := s.repos.Assets.Create(asset); err != nil {
+			log.Printf("warn: failed to seed asset %s: %v", img.ID, err)
+		}
+	}
+}
+
+func (s *Server) fetchAssets(projectID string) ([]*repo.Asset, error) {
+	if s.repos == nil {
+		return nil, fmt.Errorf("repository not initialized")
+	}
+	assets, err := s.repos.Assets.ListByProject(projectID)
+	if err == nil && len(assets) > 0 {
+		return assets, nil
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("warn: list assets failed: %v", err)
+	}
+	s.ensureProjectAssets(projectID)
+	return s.repos.Assets.ListByProject(projectID)
+}
+
+func (s *Server) respondWithAssets(w http.ResponseWriter, projectID string) {
+	assets, err := s.fetchAssets(projectID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	images := make([]map[string]any, 0, len(assets))
+	order := make([]string, 0, len(assets))
+	for _, asset := range assets {
+		images = append(images, map[string]any{
+			"id":     asset.ID,
+			"name":   asset.Filename,
+			"width":  asset.Width,
+			"height": asset.Height,
+		})
+		order = append(order, asset.ID)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"images": images, "order": order})
+}
+
+func (s *Server) handleUploadImages(w http.ResponseWriter, r *http.Request, projectID string) {
+	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		http.Error(w, "multipart parse error", http.StatusBadRequest)
+		return
+	}
+	files := r.MultipartForm.File["images[]"]
+	if len(files) == 0 {
+		if fh := r.MultipartForm.File["file"]; len(fh) > 0 {
+			files = fh
+		}
+	}
+	if len(files) == 0 {
+		http.Error(w, "no files provided", http.StatusBadRequest)
+		return
+	}
+	s.ensureProjectAssets(projectID)
+	var baseIndex int
+	if s.repos != nil {
+		if current, err := s.repos.Assets.ListByProject(projectID); err == nil {
+			baseIndex = len(current)
+		}
+	}
+	newImages := make([]map[string]any, 0, len(files))
+	for idx, fh := range files {
+		if fh.Size == 0 {
+			continue
+		}
+		if !strings.HasSuffix(strings.ToLower(fh.Filename), ".png") {
+			http.Error(w, "only PNG files supported", http.StatusBadRequest)
+			return
+		}
+		item, err := projects.SavePNGImage(s.projectsRoot, projectID, fh)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if s.repos != nil {
+			asset := &repo.Asset{
+				ProjectID:   projectID,
+				ID:          item.ID,
+				Filename:    item.Name,
+				RelPath:     filepath.ToSlash(filepath.Join("projects", projectID, "images", item.ID)),
+				ContentType: "image/png",
+				Bytes:       fh.Size,
+				Width:       item.Width,
+				Height:      item.Height,
+				SortIndex:   baseIndex + idx,
+				CreatedAt:   time.Now().UTC(),
+			}
+			if err := s.repos.Assets.Create(asset); err != nil {
+				log.Printf("warn: failed to create asset record: %v", err)
+			}
+		}
+		newImages = append(newImages, map[string]any{
+			"id":     item.ID,
+			"name":   item.Name,
+			"width":  item.Width,
+			"height": item.Height,
+		})
+	}
+	s.bumpProjectUpdatedAt(projectID)
+	writeJSON(w, http.StatusCreated, map[string]any{"images": newImages})
+}
+
+func (s *Server) handleReorderImages(w http.ResponseWriter, r *http.Request, projectID string) {
+	var req struct {
+		Order []string `json:"order"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if len(req.Order) == 0 {
+		http.Error(w, "order required", http.StatusBadRequest)
+		return
+	}
+	if s.repos != nil {
+		if err := s.repos.Assets.UpdateOrder(projectID, req.Order); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := projects.SetProjectOrder(s.projectsRoot, projectID, req.Order); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.bumpProjectUpdatedAt(projectID)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleDeleteImage(w http.ResponseWriter, projectID, imageID string) {
+	if err := projects.DeleteProjectImage(s.projectsRoot, projectID, imageID); err != nil {
+		status := http.StatusInternalServerError
+		if os.IsNotExist(err) {
+			status = http.StatusNotFound
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	if s.repos != nil {
+		if err := s.repos.Assets.Delete(projectID, imageID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			log.Printf("warn: failed to delete asset record: %v", err)
+		}
+	}
+	s.bumpProjectUpdatedAt(projectID)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) serveProjectImage(w http.ResponseWriter, r *http.Request, projectID, imageID string) {
+	fn := filepath.Join(projects.ProjectImagesDir(s.projectsRoot, projectID), filepath.Base(imageID))
+	if _, err := os.Stat(fn); err != nil {
+		if os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.ServeFile(w, r, fn)
+}
+
+func (s *Server) bumpProjectUpdatedAt(projectID string) {
+	if p, err := projects.ReadProject(s.projectsRoot, projectID); err == nil {
+		p.UpdatedAt = time.Now().UTC()
+		if err := projects.WriteProject(s.projectsRoot, p); err != nil {
+			log.Printf("warn: failed to write project for updated_at: %v", err)
+		}
+		s.upsertProjectRecord(p)
+	}
+}
+
+type pageResponse struct {
+	PageNumber int             `json:"page_number"`
+	AssetID    *string         `json:"asset_id,omitempty"`
+	Settings   spread.Settings `json:"settings"`
+	Result     *simple.Result  `json:"result,omitempty"`
+	CreatedAt  time.Time       `json:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at"`
+}
+
+type spreadResponse struct {
+	SpreadNumber    int             `json:"spread_number"`
+	LeftPageNumber  *int            `json:"left_page_number,omitempty"`
+	RightPageNumber *int            `json:"right_page_number,omitempty"`
+	Settings        spread.Settings `json:"settings"`
+	Result          *simple.Result  `json:"result,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+}
+
+func encodeSettingsJSON(settings spread.Settings) (string, error) {
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func decodeSettingsJSON(raw string) (spread.Settings, error) {
+	var settings spread.Settings
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return spread.Settings{}, err
+	}
+	return settings, nil
+}
+
+func encodeResultJSON(result *simple.Result) (*string, error) {
+	if result == nil {
+		return nil, nil
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+	str := string(data)
+	return &str, nil
+}
+
+func decodeResultJSON(raw *string) (*simple.Result, error) {
+	if raw == nil || *raw == "" {
+		return nil, nil
+	}
+	var result simple.Result
+	if err := json.Unmarshal([]byte(*raw), &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func pageRecordToResponse(rec *repo.Page) (*pageResponse, error) {
+	settings, err := decodeSettingsJSON(rec.SettingsJSON)
+	if err != nil {
+		return nil, err
+	}
+	result, err := decodeResultJSON(rec.ResultJSON)
+	if err != nil {
+		return nil, err
+	}
+	return &pageResponse{
+		PageNumber: rec.PageNumber,
+		AssetID:    rec.AssetID,
+		Settings:   settings,
+		Result:     result,
+		CreatedAt:  rec.CreatedAt,
+		UpdatedAt:  rec.UpdatedAt,
+	}, nil
+}
+
+func spreadRecordToResponse(rec *repo.Spread) (*spreadResponse, error) {
+	settings, err := decodeSettingsJSON(rec.SettingsJSON)
+	if err != nil {
+		return nil, err
+	}
+	result, err := decodeResultJSON(rec.ResultJSON)
+	if err != nil {
+		return nil, err
+	}
+	return &spreadResponse{
+		SpreadNumber:    rec.SpreadNumber,
+		LeftPageNumber:  rec.LeftPageNumber,
+		RightPageNumber: rec.RightPageNumber,
+		Settings:        settings,
+		Result:          result,
+		CreatedAt:       rec.CreatedAt,
+		UpdatedAt:       rec.UpdatedAt,
+	}, nil
+}
+
+func (s *Server) handleListPages(w http.ResponseWriter, projectID string) {
+	if s.repos == nil {
+		http.Error(w, "repository not initialized", http.StatusInternalServerError)
+		return
+	}
+	records, err := s.repos.Pages.List(projectID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	pages := make([]*pageResponse, 0, len(records))
+	for _, rec := range records {
+		resp, err := pageRecordToResponse(rec)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		pages = append(pages, resp)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"pages": pages})
+}
+
+func (s *Server) handleUpsertPage(w http.ResponseWriter, r *http.Request, projectID string, pageNumber int) {
+	if s.repos == nil {
+		http.Error(w, "repository not initialized", http.StatusInternalServerError)
+		return
+	}
+	var req struct {
+		AssetID  *string          `json:"asset_id"`
+		Settings *spread.Settings `json:"settings"`
+		Result   *simple.Result   `json:"result"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if req.Settings == nil {
+		http.Error(w, "settings required", http.StatusBadRequest)
+		return
+	}
+	settingsJSON, err := encodeSettingsJSON(*req.Settings)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	resultJSON, err := encodeResultJSON(req.Result)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	page := &repo.Page{
+		ProjectID:    projectID,
+		PageNumber:   pageNumber,
+		AssetID:      req.AssetID,
+		SettingsJSON: settingsJSON,
+		ResultJSON:   resultJSON,
+		CreatedAt:    time.Now().UTC(),
+		UpdatedAt:    time.Now().UTC(),
+	}
+	if existing, err := s.repos.Pages.GetByNumber(projectID, pageNumber); err == nil {
+		page.CreatedAt = existing.CreatedAt
+		if req.AssetID == nil {
+			page.AssetID = existing.AssetID
+		}
+	}
+	if err := s.repos.Pages.Upsert(page); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	updated, err := s.repos.Pages.GetByNumber(projectID, pageNumber)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp, err := pageRecordToResponse(updated)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.bumpProjectUpdatedAt(projectID)
+	writeJSON(w, http.StatusOK, map[string]any{"page": resp})
+}
+
+func (s *Server) handleDeletePage(w http.ResponseWriter, projectID string, pageNumber int) {
+	if s.repos == nil {
+		http.Error(w, "repository not initialized", http.StatusInternalServerError)
+		return
+	}
+	if err := s.repos.Pages.Delete(projectID, pageNumber); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.bumpProjectUpdatedAt(projectID)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleListSpreads(w http.ResponseWriter, projectID string) {
+	if s.repos == nil {
+		http.Error(w, "repository not initialized", http.StatusInternalServerError)
+		return
+	}
+	records, err := s.repos.Spreads.List(projectID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	spreads := make([]*spreadResponse, 0, len(records))
+	for _, rec := range records {
+		resp, err := spreadRecordToResponse(rec)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		spreads = append(spreads, resp)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"spreads": spreads})
+}
+
+func (s *Server) handleUpsertSpread(w http.ResponseWriter, r *http.Request, projectID string, spreadNumber int) {
+	if s.repos == nil {
+		http.Error(w, "repository not initialized", http.StatusInternalServerError)
+		return
+	}
+	var req struct {
+		LeftPageNumber  *int             `json:"left_page_number"`
+		RightPageNumber *int             `json:"right_page_number"`
+		Settings        *spread.Settings `json:"settings"`
+		Result          *simple.Result   `json:"result"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if req.Settings == nil {
+		http.Error(w, "settings required", http.StatusBadRequest)
+		return
+	}
+	settingsJSON, err := encodeSettingsJSON(*req.Settings)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	resultJSON, err := encodeResultJSON(req.Result)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	spreadRecord := &repo.Spread{
+		ProjectID:       projectID,
+		SpreadNumber:    spreadNumber,
+		LeftPageNumber:  req.LeftPageNumber,
+		RightPageNumber: req.RightPageNumber,
+		SettingsJSON:    settingsJSON,
+		ResultJSON:      resultJSON,
+		CreatedAt:       time.Now().UTC(),
+		UpdatedAt:       time.Now().UTC(),
+	}
+	if existing, err := s.repos.Spreads.GetByNumber(projectID, spreadNumber); err == nil {
+		spreadRecord.CreatedAt = existing.CreatedAt
+	}
+	if err := s.repos.Spreads.Upsert(spreadRecord); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	updated, err := s.repos.Spreads.GetByNumber(projectID, spreadNumber)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp, err := spreadRecordToResponse(updated)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.bumpProjectUpdatedAt(projectID)
+	writeJSON(w, http.StatusOK, map[string]any{"spread": resp})
+}
+
+func (s *Server) handleDeleteSpread(w http.ResponseWriter, projectID string, spreadNumber int) {
+	if s.repos == nil {
+		http.Error(w, "repository not initialized", http.StatusInternalServerError)
+		return
+	}
+	if err := s.repos.Spreads.Delete(projectID, spreadNumber); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.bumpProjectUpdatedAt(projectID)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 type panelImage struct {
@@ -92,9 +667,39 @@ func (s *Server) prepare() error {
 	if err := os.MkdirAll(s.uploadsRoot, 0o755); err != nil {
 		return fmt.Errorf("create uploads root: %w", err)
 	}
+	if err := s.initDatabase(); err != nil {
+		return err
+	}
 	if err := presets.SeedPresetsIfEmpty(s.presetsRoot); err != nil {
 		log.Printf("warning: failed to seed presets: %v", err)
 	}
+	return nil
+}
+
+func (s *Server) databasePath() string {
+	return filepath.Join(s.settings.DataRoot, "zine-layout.db")
+}
+
+func (s *Server) initDatabase() error {
+	if s.repos != nil && s.db != nil {
+		return nil
+	}
+	dbPath := s.databasePath()
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		return fmt.Errorf("prepare db dir: %w", err)
+	}
+	dsn := fmt.Sprintf("file:%s?_busy_timeout=5000&_journal_mode=WAL", dbPath)
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return fmt.Errorf("open sqlite: %w", err)
+	}
+	repos, err := sqliterepo.NewRepositories(db)
+	if err != nil {
+		_ = db.Close()
+		return err
+	}
+	s.db = db
+	s.repos = repos
 	return nil
 }
 
@@ -150,6 +755,9 @@ func (s *Server) Routes() http.Handler {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			for i := range prjs {
+				s.upsertProjectRecord(&prjs[i])
+			}
 			writeJSON(w, http.StatusOK, map[string]any{"projects": prjs})
 		case http.MethodPost:
 			var req struct{ Name, PresetID string }
@@ -167,6 +775,7 @@ func (s *Server) Routes() http.Handler {
 					_ = projects.WriteProject(s.projectsRoot, p)
 				}
 			}
+			s.upsertProjectRecord(p)
 			writeJSON(w, http.StatusCreated, map[string]any{"project": p})
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -500,6 +1109,81 @@ func (s *Server) Routes() http.Handler {
 			}
 		}
 
+		if len(parts) >= 2 && parts[1] == "images" {
+			switch {
+			case len(parts) == 2 && r.Method == http.MethodGet:
+				s.respondWithAssets(w, id)
+				return
+			case len(parts) == 2 && r.Method == http.MethodPost:
+				s.handleUploadImages(w, r, id)
+				return
+			case len(parts) == 3 && parts[2] == "reorder" && r.Method == http.MethodPost:
+				s.handleReorderImages(w, r, id)
+				return
+			case len(parts) == 3 && r.Method == http.MethodDelete:
+				s.handleDeleteImage(w, id, parts[2])
+				return
+			case len(parts) == 3 && r.Method == http.MethodGet:
+				s.serveProjectImage(w, r, id, parts[2])
+				return
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+		}
+
+		if len(parts) >= 2 && parts[1] == "pages" {
+			switch {
+			case len(parts) == 2 && r.Method == http.MethodGet:
+				s.handleListPages(w, id)
+				return
+			case len(parts) == 3:
+				num, err := strconv.Atoi(parts[2])
+				if err != nil {
+					http.Error(w, "invalid page number", http.StatusBadRequest)
+					return
+				}
+				switch r.Method {
+				case http.MethodPut:
+					s.handleUpsertPage(w, r, id, num)
+				case http.MethodDelete:
+					s.handleDeletePage(w, id, num)
+				default:
+					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+		}
+
+		if len(parts) >= 2 && parts[1] == "spreads" {
+			switch {
+			case len(parts) == 2 && r.Method == http.MethodGet:
+				s.handleListSpreads(w, id)
+				return
+			case len(parts) == 3:
+				num, err := strconv.Atoi(parts[2])
+				if err != nil {
+					http.Error(w, "invalid spread number", http.StatusBadRequest)
+					return
+				}
+				switch r.Method {
+				case http.MethodPut:
+					s.handleUpsertSpread(w, r, id, num)
+				case http.MethodDelete:
+					s.handleDeleteSpread(w, id, num)
+				default:
+					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+		}
+
 		// spec to/from ui placeholders
 		if len(parts) == 3 && parts[1] == "spec" && parts[2] == "to-ui" && r.Method == http.MethodPost {
 			fn := filepath.Join(projects.ProjectDir(s.projectsRoot, id), "spec.yaml")
@@ -550,6 +1234,7 @@ func (s *Server) Routes() http.Handler {
 					http.Error(w, err.Error(), status)
 					return
 				}
+				s.upsertProjectRecord(p)
 				writeJSON(w, http.StatusOK, map[string]any{"project": p})
 				return
 			case http.MethodPut:
@@ -577,6 +1262,7 @@ func (s *Server) Routes() http.Handler {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
+				s.upsertProjectRecord(p)
 				writeJSON(w, http.StatusOK, map[string]any{"project": p})
 				return
 			case http.MethodDelete:
@@ -587,6 +1273,11 @@ func (s *Server) Routes() http.Handler {
 					}
 					http.Error(w, err.Error(), status)
 					return
+				}
+				if s.repos != nil {
+					if err := s.repos.Projects.Delete(id); err != nil && !errors.Is(err, sql.ErrNoRows) {
+						log.Printf("warn: failed to delete project record: %v", err)
+					}
 				}
 				writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 				return
@@ -617,7 +1308,9 @@ func (s *Server) Routes() http.Handler {
 				}
 				if p, err := projects.ReadProject(s.projectsRoot, id); err == nil {
 					p.PresetID = req.PresetID
+					p.UpdatedAt = time.Now().UTC()
 					_ = projects.WriteProject(s.projectsRoot, p)
+					s.upsertProjectRecord(p)
 				}
 				writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 				return
@@ -946,6 +1639,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	if err := s.prepare(); err != nil {
 		return err
 	}
+	defer s.close()
 	handler := s.Routes()
 	s.httpServer = &http.Server{Addr: s.settings.Addr, Handler: handler}
 
@@ -973,6 +1667,14 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func (s *Server) close() {
+	if s.db != nil {
+		_ = s.db.Close()
+		s.db = nil
+	}
+	s.repos = nil
 }
 
 func readImageMeta(path string) (spread.ImageMeta, error) {

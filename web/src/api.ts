@@ -16,6 +16,25 @@ export interface ImageItem {
   height: number;
 }
 
+export interface PersistedPage {
+  page_number: number;
+  asset_id?: string;
+  settings: SpreadSettings;
+  result?: any;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersistedSpread {
+  spread_number: number;
+  left_page_number?: number;
+  right_page_number?: number;
+  settings: SpreadSettings;
+  result?: any;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PresetInfo {
   id: string;
   name: string;
@@ -268,6 +287,42 @@ export const api = createApi({
         responseHandler: async (response) => response.text(),
       }),
     }),
+    getPages: b.query<{ pages: PersistedPage[] }, { id: string }>({
+      query: ({ id }) => `/projects/${id}/pages`,
+    }),
+    putPage: b.mutation<{ page: PersistedPage }, { id: string; pageNumber: number; page: { asset_id?: string; settings: SpreadSettings; result?: any } }>(
+      {
+        query: ({ id, pageNumber, page }) => ({
+          url: `/projects/${id}/pages/${pageNumber}`,
+          method: 'PUT',
+          body: page,
+        }),
+      },
+    ),
+    deletePage: b.mutation<{ ok: boolean }, { id: string; pageNumber: number }>({
+      query: ({ id, pageNumber }) => ({
+        url: `/projects/${id}/pages/${pageNumber}`,
+        method: 'DELETE',
+      }),
+    }),
+    getSpreads: b.query<{ spreads: PersistedSpread[] }, { id: string }>({
+      query: ({ id }) => `/projects/${id}/spreads`,
+    }),
+    putSpread: b.mutation<{ spread: PersistedSpread }, { id: string; spreadNumber: number; spread: { left_page_number?: number; right_page_number?: number; settings: SpreadSettings; result?: any } }>(
+      {
+        query: ({ id, spreadNumber, spread }) => ({
+          url: `/projects/${id}/spreads/${spreadNumber}`,
+          method: 'PUT',
+          body: spread,
+        }),
+      },
+    ),
+    deleteSpread: b.mutation<{ ok: boolean }, { id: string; spreadNumber: number }>({
+      query: ({ id, spreadNumber }) => ({
+        url: `/projects/${id}/spreads/${spreadNumber}`,
+        method: 'DELETE',
+      }),
+    }),
     getPreviewSpread: b.query<string, ComputeRequest>({
       query: (body) => ({
         url: '/v1/preview',
@@ -308,4 +363,10 @@ export const {
   useRenderYamlMutation,
   useExportBookYamlQuery,
   useLazyExportBookYamlQuery,
+  useGetPagesQuery,
+  usePutPageMutation,
+  useDeletePageMutation,
+  useGetSpreadsQuery,
+  usePutSpreadMutation,
+  useDeleteSpreadMutation,
 } = api;

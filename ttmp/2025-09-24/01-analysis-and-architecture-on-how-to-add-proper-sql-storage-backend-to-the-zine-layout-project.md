@@ -218,6 +218,15 @@ When materializing `SettingsJSON` and `ResultJSON`, follow the structures alread
 
 Implementation: provide pkg/repo/sqlite with concrete types and a NewSQLiteRepositories(db *sql.DB) factory returning a struct with these repos. Use BEGIN IMMEDIATE transactions where appropriate (reorder, batch upserts).
 
+Implementation snapshot:
+- `pkg/repo/types.go` contains the shared structs and interfaces.
+- `pkg/repo/sqlite` wires SQLite via `modernc.org/sqlite`, applies inline migrations (see `migrations.go`), and exposes CRUD via `NewRepositories`.
+- The HTTP server (`pkg/serve/server.go`) opens `data/zine-layout.db` on startup, seeds missing rows from the legacy filesystem, and keeps both SQLite and the existing `project.json` files in sync.
+- New/updated endpoints:
+  - `GET/POST /api/projects/{id}/images`, `POST /api/projects/{id}/images/reorder`, `DELETE /api/projects/{id}/images/{imageId}` (assets backed by `repo.Assets`).
+  - `GET/PUT/DELETE /api/projects/{id}/pages/{pageNumber}` and `/api/projects/{id}/spreads/{spreadNumber}` persist `spread.Settings` / `simple.Result` blobs as JSON strings.
+- Frontend RTK Query stubs (`web/src/api.ts`) mirror the new pages/spreads endpoints so future UI work can hook into the DB-backed data model.
+
 ## REST API design
 
 Keep existing routes and add DB-backed routes. New resources:
