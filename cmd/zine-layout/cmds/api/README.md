@@ -50,6 +50,34 @@ go run ./cmd/zine-layout api images-list --project-id prj-12345 --output json
 go run ./cmd/zine-layout api images-list --project-id prj-12345 --fields name,width,height
 ```
 
+#### `images-upload`
+Upload one or more PNG images to a project.
+
+```bash
+go run ./cmd/zine-layout api images-upload --project-id prj-12345 --files image.png
+go run ./cmd/zine-layout api images-upload --project-id prj-12345 --files img1.png,img2.png,img3.png
+go run ./cmd/zine-layout api images-upload --project-id prj-12345 --files photo.png --output json
+```
+
+#### `images-upload-dir`
+Upload all PNG images from a directory to a project (bulk upload).
+
+```bash
+go run ./cmd/zine-layout api images-upload-dir --project-id prj-12345 --directory ./images
+go run ./cmd/zine-layout api images-upload-dir --project-id prj-12345 --directory ./photos --recursive
+go run ./cmd/zine-layout api images-upload-dir --project-id prj-12345 --directory ./assets --output json
+```
+
+#### `images-sync`
+Sync PNG images from a directory to a project (upload missing files only).
+
+```bash
+go run ./cmd/zine-layout api images-sync --project-id prj-12345 --directory ./images
+go run ./cmd/zine-layout api images-sync --project-id prj-12345 --directory ./images --dry-run
+go run ./cmd/zine-layout api images-sync --project-id prj-12345 --directory ./photos --recursive
+go run ./cmd/zine-layout api images-sync --project-id prj-12345 --directory ./images --output csv
+```
+
 ### Presets
 
 #### `presets-list`
@@ -111,6 +139,49 @@ Each command follows the same structure:
 - Handles server errors and HTTP status codes appropriately
 - Parses JSON responses into structured `types.Row` objects for Glazed processing
 
+## Upload Capabilities
+
+The CLI provides comprehensive image upload functionality:
+
+### Single/Multiple File Upload
+```bash
+# Upload single file
+zine-layout api images-upload --project-id prj-12345 --files image.png
+
+# Upload multiple files
+zine-layout api images-upload --project-id prj-12345 --files img1.png,img2.png,img3.png
+```
+
+### Bulk Directory Upload  
+```bash
+# Upload all PNG files from directory
+zine-layout api images-upload-dir --project-id prj-12345 --directory ./images
+
+# Recursive directory upload
+zine-layout api images-upload-dir --project-id prj-12345 --directory ./photos --recursive
+```
+
+### Smart Synchronization
+```bash
+# Dry run - see what would be uploaded
+zine-layout api images-sync --project-id prj-12345 --directory ./images --dry-run
+
+# Upload only missing files
+zine-layout api images-sync --project-id prj-12345 --directory ./images
+
+# Recursive sync
+zine-layout api images-sync --project-id prj-12345 --directory ./photos --recursive
+```
+
+**Key Features:**
+- ✅ **Multipart Upload**: Proper HTTP multipart form handling
+- ✅ **Batch Processing**: Large directories uploaded in manageable batches  
+- ✅ **Smart Sync**: Compares local files with server, uploads missing only
+- ✅ **Dry Run**: Preview what would be uploaded without actually uploading
+- ✅ **Recursive**: Handle nested directory structures
+- ✅ **Error Handling**: Validates file existence and PNG format
+- ✅ **Progress Reporting**: Clear status for each file and batch
+
 ## Testing
 
 Test the commands with a running zine-layout server:
@@ -126,6 +197,11 @@ go run ./cmd/zine-layout api projects-get --id <project-id>
 go run ./cmd/zine-layout api images-list --project-id <project-id>
 go run ./cmd/zine-layout api presets-list
 go run ./cmd/zine-layout api projects-delete --id <project-id>
+
+# Test upload functionality
+go run ./cmd/zine-layout api images-upload --project-id <id> --files image.png
+go run ./cmd/zine-layout api images-upload-dir --project-id <id> --directory ./images
+go run ./cmd/zine-layout api images-sync --project-id <id> --directory ./images --dry-run
 ```
 
 ## Extending
@@ -136,11 +212,8 @@ To add new commands:
 3. Add a registration function to `commands.go`
 4. Call the registration function in `AddAllAPICommands`
 
-Example endpoints that could be added:
-- `images-upload` - Upload images to a project
+Example endpoints that could still be added:
 - `images-reorder` - Reorder project images
 - `images-delete` - Delete specific images
-- `pages-list` - List project pages
-- `pages-get/put/delete` - Manage individual pages
 - `spreads-list` - List project spreads
 - `spreads-get/put/delete` - Manage individual spreads
