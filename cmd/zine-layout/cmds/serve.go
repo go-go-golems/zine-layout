@@ -371,8 +371,10 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
                 TestDimensions string `json:"test_dimensions"`
             }
             _ = json.NewDecoder(r.Body).Decode(&req)
+            log.Printf("render request project=%s test=%v bw=%v dims=%q", id, req.Test, req.TestBW, req.TestDimensions)
             out, err := doProjectRender(projectsRoot, id, req.Test, req.TestBW, req.TestDimensions)
             if err != nil {
+                log.Printf("render error project=%s: %v", id, err)
                 http.Error(w, err.Error(), http.StatusBadRequest)
                 return
             }
@@ -901,15 +903,23 @@ func doProjectRender(projectsRoot, id string, test, testBW bool, testDimensions 
         return nil, fmt.Errorf("spec.yaml did not produce any layouts")
     }
     zl := layouts[0]
+    log.Printf("render spec loaded: pages=%d rows=%d cols=%d ppi=%.2f", len(zl.OutputPages), func() int { if zl.PageSetup!=nil { return zl.PageSetup.GridSize.Rows }; return 0 }(), func() int { if zl.PageSetup!=nil { return zl.PageSetup.GridSize.Columns }; return 0 }(), func() float64 { if zl.Global!=nil { return zl.Global.PPI }; return 0 }())
     // determine inputs
     var inputs []image.Image
     if test {
-        // parse dims
-        ppi := zl.Global.PPI
-        if ppi == 0 { ppi = 300 }
+        // parse dims with safe defaults
+        ppi := 300.0
+        if zl.Global != nil && zl.Global.PPI != 0 { ppi = zl.Global.PPI }
         w, h, err := apppkg.ParseTestDimensions(testDimensions, ppi)
         if err != nil { return nil, err }
-        n := zl.PageSetup.GridSize.Rows * zl.PageSetup.GridSize.Columns * len(zl.OutputPages)
+        rows, cols := 1, 1
+        if zl.PageSetup != nil {
+            if zl.PageSetup.GridSize.Rows > 0 { rows = zl.PageSetup.GridSize.Rows }
+            if zl.PageSetup.GridSize.Columns > 0 { cols = zl.PageSetup.GridSize.Columns }
+        }
+        pages := len(zl.OutputPages)
+        if pages <= 0 { pages = 1 }
+        n := rows * cols * pages
         if n <= 0 { n = 1 }
         inputs, err = apppkg.GenerateTestImages(n, w, h, testBW)
         if err != nil { return nil, err }
@@ -953,7 +963,7 @@ func listProjectRenders(projectsRoot, id string) ([]RenderListItem, error) {
         if !e.IsDir() { continue }
         rid := e.Name()
         files, _ := os.ReadDir(filepath.Join(root, rid))
-        var names []string
+        names := []string{}
         for _, f := range files { if !f.IsDir() && strings.HasSuffix(strings.ToLower(f.Name()), ".png") { names = append(names, f.Name()) } }
         out = append(out, RenderListItem{ ID: rid, Files: names })
     }

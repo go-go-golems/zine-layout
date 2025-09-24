@@ -1,0 +1,275 @@
+@import "tailwindcss";
+
+/* Import Inter font from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Custom CSS variables */
+:root {
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #2563eb;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+  --color-primary-950: #172554;
+}
+
+/* Base styles for better defaults */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: rgb(249 250 251);
+  color: rgb(17 24 39);
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Focus styles for accessibility */
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-primary-500), 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+/* Button components - compatible with all Tailwind versions */
+.btn-base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.btn-base:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-base:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-primary-500), 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.btn-primary {
+  background-color: var(--color-primary-600);
+  color: white;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--color-primary-700);
+}
+
+.btn-secondary {
+  background-color: white;
+  color: rgb(55 65 81);
+  border-color: rgb(209 213 219);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: rgb(249 250 251);
+}
+
+.btn-danger {
+  background-color: rgb(220 38 38);
+  color: white;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: rgb(185 28 28);
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.btn-lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+/* Input components */
+.input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  border: 1px solid rgb(209 213 219);
+  border-radius: 0.5rem;
+  background-color: white;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.input::placeholder {
+  color: rgb(156 163 175);
+}
+
+.input:focus {
+  outline: none;
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--color-primary-500);
+}
+
+.input:disabled {
+  background-color: rgb(249 250 251);
+  color: rgb(107 114 128);
+  cursor: not-allowed;
+}
+
+.input-error {
+  border-color: rgb(239 68 68);
+  color: rgb(127 29 29);
+}
+
+.input-error::placeholder {
+  color: rgb(252 165 165);
+}
+
+.input-error:focus {
+  box-shadow: 0 0 0 2px rgb(239 68 68);
+  border-color: rgb(239 68 68);
+}
+
+/* Card components */
+.card {
+  background-color: white;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(229 231 235);
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.06);
+}
+
+.card-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgb(229 231 235);
+}
+
+.card-body {
+  padding: 1rem 1.5rem;
+}
+
+.card-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgb(229 231 235);
+  background-color: rgb(249 250 251);
+  border-bottom-left-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
+}
+
+/* Panel components for the three-column layout */
+.panel {
+  background-color: white;
+  border-right: 1px solid rgb(229 231 235);
+  overflow-y: auto;
+}
+
+.panel-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgb(229 231 235);
+  background-color: rgb(249 250 251);
+}
+
+.panel-body {
+  padding: 1rem;
+}
+
+.panel-body > * + * {
+  margin-top: 1rem;
+}
+
+/* Drag and drop styles */
+.drop-zone {
+  border: 2px dashed rgb(209 213 219);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  text-align: center;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+.drop-zone-active {
+  border-color: var(--color-primary-500);
+  background-color: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+/* Grid canvas styles */
+.grid-cell {
+  border: 1px solid rgb(209 213 219);
+  border-radius: 0.5rem;
+  background-color: white;
+  padding: 0.5rem;
+  min-height: 6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(156 163 175);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+.grid-cell-filled {
+  border-color: var(--color-primary-500);
+  background-color: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.grid-cell-hover {
+  border-color: var(--color-primary-400);
+  background-color: rgba(37, 99, 235, 0.05);
+}
+
+/* Custom spacing utilities */
+.space-y-6 > * + * {
+  margin-top: 1.5rem;
+}
+
+/* Scrollbar styling */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgb(203 213 225);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(148 163 184);
+}
