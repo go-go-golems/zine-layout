@@ -631,11 +631,13 @@ type yamlRenderSpread struct {
 	ImagePath string        `json:"image_path"`
 	Result    simple.Result `json:"result"`
 	Trace     []string      `json:"trace,omitempty"`
+    TraceJSON any           `json:"trace_json,omitempty"`
 	Panels    []panelImage  `json:"panels"`
 }
 
 type yamlRenderResponse struct {
 	Spreads []yamlRenderSpread `json:"spreads"`
+    HTML    string             `json:"html,omitempty"`
 }
 
 func makePanelPaths(tempDir, prefix, format string, isSpread bool) map[string]string {
@@ -849,7 +851,7 @@ func (s *Server) Routes() http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		trace := &simple.Trace{UseZerolog: true}
+    trace := &simple.Trace{UseZerolog: true}
 		result := simple.ComputePlacement(inputs, trace)
 		writeJSON(w, http.StatusOK, map[string]any{"result": result, "trace": trace.Lines})
 	})
@@ -1026,15 +1028,28 @@ func (s *Server) Routes() http.Handler {
 			baseDir = s.settings.DataRoot
 		}
 		resp := yamlRenderResponse{Spreads: make([]yamlRenderSpread, 0, len(doc.Spreads))}
-		for idx, spec := range doc.Spreads {
-			spreadResp, err := s.renderSimpleSpreadSpec(r.Context(), idx+1, spec, baseDir)
+        var htmlOut simple.SpreadOutput
+        for idx, spec := range doc.Spreads {
+            spreadResp, out, err := s.renderSimpleSpreadSpec(r.Context(), idx+1, spec, baseDir)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 			resp.Spreads = append(resp.Spreads, spreadResp)
+            // Build HTML from the last spread (or accumulate later if needed)
+            htmlOut = out
 		}
-		writeJSON(w, http.StatusOK, resp)
+        // Synthesize an HTML index blob with one representative spread (simple for now)
+        if (len(htmlOut.PanelFiles) > 0) || (htmlOut.StructuredPlacement != nil) || (len(htmlOut.Logs) > 0) {
+            tmp := filepath.Join(os.TempDir(), fmt.Sprintf("yaml-index-%d.html", time.Now().UnixNano()))
+            if err := simple.WriteHTMLIndex(tmp, []simple.SpreadOutput{htmlOut}); err == nil {
+                if b, err := os.ReadFile(tmp); err == nil {
+                    resp.HTML = string(b)
+                }
+                _ = os.Remove(tmp)
+            }
+        }
+        writeJSON(w, http.StatusOK, resp)
 	})
 
 	// Project subtree
@@ -1391,27 +1406,28 @@ func (s *Server) Routes() http.Handler {
 	return mux
 }
 
-func (s *Server) renderSimpleSpreadSpec(ctx context.Context, index int, spec spread.SimpleSpread, baseDir string) (yamlRenderSpread, error) {
+func (s *Server) renderSimpleSpreadSpec(ctx context.Context, index int, spec spread.SimpleSpread, baseDir string) (yamlRenderSpread, simple.SpreadOutput, error) {
 	resolvedPath := resolveImagePath(baseDir, spec.ImagePath)
-	resp := yamlRenderSpread{Name: spec.Name, ImagePath: resolvedPath}
+    resp := yamlRenderSpread{Name: spec.Name, ImagePath: resolvedPath}
+    out := simple.SpreadOutput{Name: spec.Name, Timestamp: time.Now()}
 	if strings.TrimSpace(resolvedPath) == "" {
-		return resp, fmt.Errorf("spread %q missing image path", spec.Name)
+        return resp, out, fmt.Errorf("spread %q missing image path", spec.Name)
 	}
 	img, err := decodeImage(resolvedPath)
 	if err != nil {
-		return resp, fmt.Errorf("load image %s: %w", resolvedPath, err)
+        return resp, out, fmt.Errorf("load image %s: %w", resolvedPath, err)
 	}
 	bounds := img.Bounds()
 	meta := spread.ImageMeta{Width: bounds.Dx(), Height: bounds.Dy()}
-	inputs, err := simple.InputsFromSettings(spec.Settings, meta)
+    inputs, err := simple.InputsFromSettings(spec.Settings, meta)
 	if err != nil {
-		return resp, fmt.Errorf("inputs simple(%s): %w", spec.Name, err)
+        return resp, out, fmt.Errorf("inputs simple(%s): %w", spec.Name, err)
 	}
 	trace := &simple.Trace{UseZerolog: true}
 	result := simple.ComputePlacement(inputs, trace)
 	tempDir, err := os.MkdirTemp("", "yaml-simple-")
 	if err != nil {
-		return resp, err
+        return resp, out, err
 	}
 	defer os.RemoveAll(tempDir)
 	format := normalizeFormat(spec.Settings.Export.Format)
@@ -1426,35 +1442,61 @@ func (s *Server) renderSimpleSpreadSpec(ctx context.Context, index int, spec spr
 	info.OutputDir = tempDir
 	info.PathOverrides = overrides
 	panels := make([]panelImage, 0, len(overrides))
-	if !spec.Settings.IsSpread {
-		path, err := simple.RenderSingle(ctx, img, result, info)
+    // attach trace handle to render info so render traces are captured
+    info.Trace = trace
+    if !spec.Settings.IsSpread {
+        path, err := simple.RenderSingle(ctx, img, result, info)
 		if err != nil {
-			return resp, fmt.Errorf("render simple(%s): %w", spec.Name, err)
+            return resp, out, fmt.Errorf("render simple(%s): %w", spec.Name, err)
 		}
 		panel, err := buildPanelImage("single", path)
 		if err != nil {
-			return resp, err
+            return resp, out, err
 		}
 		panels = append(panels, panel)
+        out.PanelFiles = append(out.PanelFiles, panel.DataURL)
+        out.PanelLabels = append(out.PanelLabels, "single")
 	} else {
-		leftPath, rightPath, err := simple.RenderSpread(ctx, img, result, info)
+        leftPath, rightPath, err := simple.RenderSpread(ctx, img, result, info)
 		if err != nil {
-			return resp, fmt.Errorf("render simple(%s): %w", spec.Name, err)
+            return resp, out, fmt.Errorf("render simple(%s): %w", spec.Name, err)
 		}
 		leftPanel, err := buildPanelImage("left", leftPath)
 		if err != nil {
-			return resp, err
+            return resp, out, err
 		}
 		rightPanel, err := buildPanelImage("right", rightPath)
 		if err != nil {
-			return resp, err
+            return resp, out, err
 		}
 		panels = append(panels, leftPanel, rightPanel)
+        out.PanelFiles = append(out.PanelFiles, leftPanel.DataURL, rightPanel.DataURL)
+        out.PanelLabels = append(out.PanelLabels, "left", "right")
 	}
-	resp.Result = result
-	resp.Trace = append([]string(nil), trace.Lines...)
+    resp.Result = result
+    resp.Trace = append([]string(nil), trace.Lines...)
+    if trace.Structured != nil {
+        // include render traces if any were set by the render functions
+        if info.Trace != nil {
+            if info.Trace.RenderSingle != nil || info.Trace.RenderSpread != nil {
+                // Copy placement reference so HTML can find it later when producing an index
+            }
+        }
+        resp.TraceJSON = trace.Structured
+        out.StructuredPlacement = trace.Structured
+        out.Logs = append(out.Logs, trace.Lines...)
+        // Attach render traces when available
+        if info.Trace != nil {
+            if info.Trace.RenderSingle != nil {
+                out.RenderSingle = info.Trace.RenderSingle
+            }
+            if info.Trace.RenderSpread != nil {
+                out.RenderSpread = info.Trace.RenderSpread
+            }
+        }
+    }
 	resp.Panels = panels
-	return resp, nil
+    return resp, out, nil
 }
 
 func resolveImagePath(baseDir, imagePath string) string {

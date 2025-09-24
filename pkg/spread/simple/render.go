@@ -32,6 +32,7 @@ type RenderInfo struct {
 	Scaler         string // fast|quality
 	ParallelEncode bool
 	PathOverrides  map[string]string
+    Trace          *Trace
 }
 
 // SpreadOutput captures rendered panel files along with trace metadata.
@@ -41,6 +42,57 @@ type SpreadOutput struct {
 	PanelLabels []string
 	Logs        []string
 	Timestamp   time.Time
+    StructuredPlacement *PlacementTrace
+    RenderSingle        *RenderSingleTrace
+    RenderSpread        *RenderSpreadTrace
+}
+
+// Render trace schema types
+type RenderInfoSnapshot struct {
+    Format           string
+    Quality          int
+    Background       string
+    PNGLevel         string
+    Scaler           string
+    ParallelEncode   bool
+    FilenameTemplate string
+    OutputDir        string
+}
+
+type ScaleRectsInt struct {
+    SrcRect image.Rectangle
+    DstRect image.Rectangle
+}
+
+type RenderSingleTrace struct {
+    Version    string
+    Info       RenderInfoSnapshot
+    Canvas     Size
+    ScaleRects ScaleRectsInt
+    Scaler     string
+    OutputPath string
+}
+
+type ClipMapping struct {
+    Clip        image.Rectangle
+    OrigDst     image.Rectangle
+    IntersectDst image.Rectangle
+    OffX        int
+    OffY        int
+    SrcRect     image.Rectangle
+}
+
+type RenderSpreadTrace struct {
+    Version          string
+    Info             RenderInfoSnapshot
+    LeftCanvas       Size
+    RightCanvas      Size
+    LeftClip         ClipMapping
+    RightClip        ClipMapping
+    Scaler           string
+    LeftOutputPath   string
+    RightOutputPath  string
+    EncodedInParallel bool
 }
 
 func backgroundColor(bg string) (color.Color, bool) {
@@ -104,7 +156,20 @@ func RenderSingle(ctx context.Context, src image.Image, res Result, info RenderI
 	}
 
 	drawRect := res.DstRectGlobal
-	scaleAndDrawWith(info, src, dst, res.SrcRectGlobal, drawRect)
+    // Capture rectangles used
+    sRect := image.Rect(
+        int(res.SrcRectGlobal.X+0.5),
+        int(res.SrcRectGlobal.Y+0.5),
+        int(res.SrcRectGlobal.X+res.SrcRectGlobal.W+0.5),
+        int(res.SrcRectGlobal.Y+res.SrcRectGlobal.H+0.5),
+    )
+    dRect := image.Rect(
+        int(drawRect.X+0.5),
+        int(drawRect.Y+0.5),
+        int(drawRect.X+drawRect.W+0.5),
+        int(drawRect.Y+drawRect.H+0.5),
+    )
+    scaleAndDrawWith(info, src, dst, res.SrcRectGlobal, drawRect)
 
 	ext := strings.ToLower(info.Format)
 	if ext == "jpeg" {
@@ -122,12 +187,28 @@ func RenderSingle(ctx context.Context, src image.Image, res Result, info RenderI
 		return "", err
 	}
 	log.Debug().Str("file", fp).Msg("saved single")
+
+    // Structured render trace
+    if info.Trace != nil {
+        scalerName := "CatmullRom"
+        if strings.ToLower(info.Scaler) == "fast" {
+            scalerName = "ApproxBiLinear"
+        }
+        info.Trace.RenderSingle = &RenderSingleTrace{
+            Version:    TraceSchemaVersion,
+            Info:       RenderInfoSnapshot{Format: ext, Quality: info.Quality, Background: info.Background, PNGLevel: info.PNGLevel, Scaler: info.Scaler, ParallelEncode: info.ParallelEncode, FilenameTemplate: info.FilenameTmpl, OutputDir: info.OutputDir},
+            Canvas:     Size{W: w, H: h},
+            ScaleRects: ScaleRectsInt{SrcRect: sRect, DstRect: dRect},
+            Scaler:     scalerName,
+            OutputPath: fp,
+        }
+    }
 	return fp, nil
 }
 
 // RenderSpread renders left/right panels for a spread.
 func RenderSpread(ctx context.Context, src image.Image, res Result, info RenderInfo) (string, string, error) {
-	if res.ExportSpread == nil || res.LeftPanel == nil || res.RightPanel == nil || res.DstRectLeft == nil || res.DstRectRight == nil {
+    if res.ExportSpread == nil || res.LeftPanel == nil || res.RightPanel == nil || res.DstRectLeft == nil || res.DstRectRight == nil {
 		return "", "", fmt.Errorf("invalid spread result")
 	}
 
@@ -156,7 +237,7 @@ func RenderSpread(ctx context.Context, src image.Image, res Result, info RenderI
 	clipLeft := image.Rect(0, 0, pageW-mLeft, pageH)
 	clipRight := image.Rect(mRight, 0, pageW, pageH)
 
-	type resErr struct{ err error }
+    type resErr struct{ err error }
 	ch := make(chan resErr, 2)
 	go func() {
 		scaleAndDrawWithClip(info, src, leftImg, res.SrcRectGlobal, *res.DstRectLeft, clipLeft)
@@ -188,7 +269,7 @@ func RenderSpread(ctx context.Context, src image.Image, res Result, info RenderI
 		rightPath = filepath.Join(info.OutputDir, rightName)
 	}
 
-	if info.ParallelEncode {
+    if info.ParallelEncode {
 		encCh := make(chan resErr, 2)
 		go func() { encCh <- resErr{saveImage(leftPath, leftImg, ext, info.Quality, info.PNGLevel)} }()
 		go func() { encCh <- resErr{saveImage(rightPath, rightImg, ext, info.Quality, info.PNGLevel)} }()
@@ -209,7 +290,88 @@ func RenderSpread(ctx context.Context, src image.Image, res Result, info RenderI
 		}
 	}
 
-	return leftPath, rightPath, nil
+    // Structured render trace
+    if info.Trace != nil {
+        // Recompute the same clip/source mapping used in scaleAndDrawWithClip for both panels
+        // Left
+        leftDstRect := image.Rect(
+            int(res.DstRectLeft.X+0.5),
+            int(res.DstRectLeft.Y+0.5),
+            int(res.DstRectLeft.X+res.DstRectLeft.W+0.5),
+            int(res.DstRectLeft.Y+res.DstRectLeft.H+0.5),
+        )
+        leftClip := clipLeft
+        leftIntersect := leftDstRect.Intersect(leftClip)
+        var leftMap ClipMapping
+        leftMap.Clip = leftClip
+        leftMap.OrigDst = leftDstRect
+        leftMap.IntersectDst = leftIntersect
+        if !leftIntersect.Empty() {
+            origD := leftDstRect
+            scaleX := res.SrcRectGlobal.W / float64(origD.Dx())
+            scaleY := res.SrcRectGlobal.H / float64(origD.Dy())
+            offX := leftIntersect.Min.X - origD.Min.X
+            offY := leftIntersect.Min.Y - origD.Min.Y
+            sRect := image.Rect(
+                int(res.SrcRectGlobal.X+float64(offX)*scaleX+0.5),
+                int(res.SrcRectGlobal.Y+float64(offY)*scaleY+0.5),
+                int(res.SrcRectGlobal.X+float64(offX+leftIntersect.Dx())*scaleX+0.5),
+                int(res.SrcRectGlobal.Y+float64(offY+leftIntersect.Dy())*scaleY+0.5),
+            )
+            leftMap.OffX = offX
+            leftMap.OffY = offY
+            leftMap.SrcRect = sRect
+        }
+
+        // Right
+        rightDstRect := image.Rect(
+            int(res.DstRectRight.X+0.5),
+            int(res.DstRectRight.Y+0.5),
+            int(res.DstRectRight.X+res.DstRectRight.W+0.5),
+            int(res.DstRectRight.Y+res.DstRectRight.H+0.5),
+        )
+        rightClip := clipRight
+        rightIntersect := rightDstRect.Intersect(rightClip)
+        var rightMap ClipMapping
+        rightMap.Clip = rightClip
+        rightMap.OrigDst = rightDstRect
+        rightMap.IntersectDst = rightIntersect
+        if !rightIntersect.Empty() {
+            origD := rightDstRect
+            scaleX := res.SrcRectGlobal.W / float64(origD.Dx())
+            scaleY := res.SrcRectGlobal.H / float64(origD.Dy())
+            offX := rightIntersect.Min.X - origD.Min.X
+            offY := rightIntersect.Min.Y - origD.Min.Y
+            sRect := image.Rect(
+                int(res.SrcRectGlobal.X+float64(offX)*scaleX+0.5),
+                int(res.SrcRectGlobal.Y+float64(offY)*scaleY+0.5),
+                int(res.SrcRectGlobal.X+float64(offX+rightIntersect.Dx())*scaleX+0.5),
+                int(res.SrcRectGlobal.Y+float64(offY+rightIntersect.Dy())*scaleY+0.5),
+            )
+            rightMap.OffX = offX
+            rightMap.OffY = offY
+            rightMap.SrcRect = sRect
+        }
+
+        scalerName := "CatmullRom"
+        if strings.ToLower(info.Scaler) == "fast" {
+            scalerName = "ApproxBiLinear"
+        }
+        info.Trace.RenderSpread = &RenderSpreadTrace{
+            Version:          TraceSchemaVersion,
+            Info:             RenderInfoSnapshot{Format: ext, Quality: info.Quality, Background: info.Background, PNGLevel: info.PNGLevel, Scaler: info.Scaler, ParallelEncode: info.ParallelEncode, FilenameTemplate: info.FilenameTmpl, OutputDir: info.OutputDir},
+            LeftCanvas:       Size{W: lw, H: lh},
+            RightCanvas:      Size{W: rw, H: rh},
+            LeftClip:         leftMap,
+            RightClip:        rightMap,
+            Scaler:           scalerName,
+            LeftOutputPath:   leftPath,
+            RightOutputPath:  rightPath,
+            EncodedInParallel: info.ParallelEncode,
+        }
+    }
+
+    return leftPath, rightPath, nil
 }
 
 func saveImage(path string, img image.Image, ext string, quality int, pngLevel string) error {

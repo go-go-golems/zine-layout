@@ -13,6 +13,12 @@ A: Inside a project, upload two PNGs via the carousel. The UI sends `POST /api/p
 **Q: How do I confirm drag-and-drop reorder hits the new endpoint?**
 A: Reorder the images. The UI issues `POST /api/projects/{id}/images/reorder`. After a refresh, the carousel order should match. Check logs for the reorder handler and verify the `sort_index` values using the SQL query above.
 
+**Q: How do I know the new project asset sidebar is synced with Redux state?**
+A: Select a thumbnail in the “Project Assets” panel and watch the preview + controls update instantly. Network panel should stay idle (selection is client-side), while the Redux devtools should show a `bookSpread/setImage` action populated with the asset dimensions and `uploadedPath`.
+
+**Q: How do I validate uploads through `ProjectAssetsPanel` trigger previews?**
+A: Drop a PNG onto the upload zone. The UI issues `POST /api/projects/{id}/images` and immediately selects the latest image. Confirm the preview renders the new asset and that Redux contains the new `uploadedPath`. SQL check: `SELECT COUNT(*) FROM assets WHERE project_id='…'` should increment.
+
 ## Page Editing
 
 **Q: What steps prove page edits persist?**
@@ -20,6 +26,9 @@ A: Select a page, change layout settings (e.g., margins), and save/apply. This s
 
 **Q: How can I test deleting a page?**
 A: Use the UI delete action. It sends `DELETE /api/projects/{id}/pages/{pageNumber}`. Confirm the page disappears without a refresh and that reloading the project keeps it gone. Validate with `sqlite3 … "SELECT COUNT(*) FROM pages WHERE project_id='…';"`.
+
+**Q: How do I confirm loading a stored page back into the designer works?**
+A: Save a page layout via the “Persisted Layouts → Pages → Save” button, clear some controls (e.g., reset margins), then click “Load”. Redux should receive `bookSpread/loadSettings`, the panels should jump back to the saved values, and the selected asset should update if `asset_id` was stored.
 
 ## Spread Editing
 
@@ -29,6 +38,9 @@ A: Create a spread linking left/right page numbers and save. Watch for `PUT /api
 **Q: How can I test removing a spread?**
 A: Trigger the UI delete. Expect `DELETE /api/projects/{id}/spreads/{spreadNumber}`. After a reload, confirm it’s gone. SQL check: `SELECT COUNT(*) FROM spreads …;`.
 
+**Q: How do I validate spread loads set the page selectors?**
+A: Save a spread with left/right page assignments. Change the numeric inputs and click “Load”. The inputs should reset to the persisted numbers and Redux settings should match the saved spread configuration.
+
 ## Preview & Render Integration
 
 **Q: What indicates previews respect persisted settings?**
@@ -37,10 +49,16 @@ A: After saving a page or spread, click the preview button. The UI should use th
 **Q: How do I verify Book YAML export still works with SQL data?**
 A: Use the export action. The UI calls `GET /api/projects/{id}/yaml/book`. Inspect the YAML: it should include spreads you configured via SQL-backed forms. For deeper validation, run the CLI `go run ./cmd/zine-layout render --spec <downloaded.yaml> --output-dir /tmp/out` and inspect the generated files.
 
+**Q: How can I ensure previews reflect the selected project asset?**
+A: Toggle between thumbnails in the Project Assets panel. Each selection should dispatch `bookSpread/setImage`, update the preview request payload (check DevTools Network for `/api/v1/preview`), and regenerate the preview image without a page reload.
+
 ## Failure Handling
 
 **Q: How does the UI behave if the DB entry is missing?**
 A: Manually delete a row (e.g., `DELETE FROM pages …`) while the server runs. Reload the project—Pages panel should fall back gracefully (empty list), and logs should show 404s only on stale requests. Use this to confirm error toasts or retries appear.
+
+**Q: What happens if the server rejects a save (e.g., unplug SQLite or send bad JSON)?**
+A: Temporarily chmod the DB to readonly or force a body validation error (remove required fields via DevTools). Attempt to save in the persistence panel—the UI should surface the failure message and the Redux state should remain unchanged.
 
 ## Cleanup
 

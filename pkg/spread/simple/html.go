@@ -1,6 +1,7 @@
 package simple
 
 import (
+	"encoding/json"
 	"fmt"
 	"html"
 	"os"
@@ -23,6 +24,7 @@ func WriteHTMLIndex(path string, results []SpreadOutput) error {
 	b.WriteString("details{margin-top:8px}\n")
 	b.WriteString("pre{background:#0b1021;color:#e6edf3;padding:12px;border-radius:6px;overflow:auto;font-size:12px;line-height:1.4}\n")
 	b.WriteString("summary{cursor:pointer;color:#0366d6}\n")
+	b.WriteString(".badge{display:inline-block;margin-left:8px;padding:2px 6px;border-radius:10px;background:#eef6ff;color:#0366d6;font-size:11px}\n")
 	b.WriteString("</style>\n</head><body>\n")
 	b.WriteString("<h1>Spread Renders</h1>\n")
 
@@ -30,16 +32,22 @@ func WriteHTMLIndex(path string, results []SpreadOutput) error {
 
 	for _, r := range results {
 		b.WriteString("<div class=\"spread\">\n")
-		b.WriteString(fmt.Sprintf("<div class=\"meta\"><strong>%s</strong></div>\n", html.EscapeString(r.Name)))
+		b.WriteString(fmt.Sprintf("<div class=\"meta\"><strong>%s</strong>", html.EscapeString(r.Name)))
+		if r.StructuredPlacement != nil || r.RenderSingle != nil || r.RenderSpread != nil {
+			b.WriteString("<span class=\"badge\">structured trace</span>")
+		}
+		b.WriteString("</div>\n")
 		b.WriteString("<div class=\"imgs\">\n")
-		for i, fp := range r.PanelFiles {
-			rel := fp
-			if !filepath.IsAbs(rel) {
-				rel = filepath.Join(baseDir, rel)
-			}
-			if r2, err := filepath.Rel(baseDir, rel); err == nil {
-				rel = r2
-			}
+        for i, fp := range r.PanelFiles {
+            rel := fp
+            if !strings.HasPrefix(fp, "data:") {
+                if !filepath.IsAbs(rel) {
+                    rel = filepath.Join(baseDir, rel)
+                }
+                if r2, err := filepath.Rel(baseDir, rel); err == nil {
+                    rel = r2
+                }
+            }
 			alt := "image"
 			if i < len(r.PanelLabels) {
 				alt = r.PanelLabels[i]
@@ -48,17 +56,42 @@ func WriteHTMLIndex(path string, results []SpreadOutput) error {
 				html.EscapeString(rel), html.EscapeString(alt), html.EscapeString(alt)))
 		}
 		b.WriteString("</div>\n")
-		if len(r.Logs) > 0 {
-			b.WriteString("<details><summary>Algorithm trace</summary><pre>")
-			for _, line := range r.Logs {
-				b.WriteString(html.EscapeString(line))
-				b.WriteString("\n")
+		// Structured traces
+		if r.StructuredPlacement != nil || len(r.Logs) > 0 || r.RenderSingle != nil || r.RenderSpread != nil {
+			b.WriteString("<details><summary>Algorithm trace</summary>")
+			if len(r.Logs) > 0 {
+				b.WriteString("<h4>Text log</h4><pre>")
+				for _, line := range r.Logs {
+					b.WriteString(html.EscapeString(line))
+					b.WriteString("\n")
+				}
+				b.WriteString("</pre>")
 			}
-			b.WriteString("</pre></details>\n")
+			if r.StructuredPlacement != nil {
+				if data, err := json.MarshalIndent(r.StructuredPlacement, "", "  "); err == nil {
+					b.WriteString("<h4>Structured placement</h4><pre>")
+					b.WriteString(html.EscapeString(string(data)))
+					b.WriteString("</pre>")
+				}
+			}
+			if r.RenderSingle != nil {
+				if data, err := json.MarshalIndent(r.RenderSingle, "", "  "); err == nil {
+					b.WriteString("<h4>Render (single)</h4><pre>")
+					b.WriteString(html.EscapeString(string(data)))
+					b.WriteString("</pre>")
+				}
+			}
+			if r.RenderSpread != nil {
+				if data, err := json.MarshalIndent(r.RenderSpread, "", "  "); err == nil {
+					b.WriteString("<h4>Render (spread)</h4><pre>")
+					b.WriteString(html.EscapeString(string(data)))
+					b.WriteString("</pre>")
+				}
+			}
+			b.WriteString("</details>\n")
 		}
 		b.WriteString("</div>\n")
 	}
 
-	b.WriteString("</body></html>\n")
 	return os.WriteFile(path, []byte(b.String()), 0o644)
 }

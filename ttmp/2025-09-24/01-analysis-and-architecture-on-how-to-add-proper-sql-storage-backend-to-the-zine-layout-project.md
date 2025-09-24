@@ -307,11 +307,20 @@ Routing and state:
 - Extend the Redux slice with `selectedPageNumber` / `selectedSpreadNumber` values that reference the persisted records.
 - Update selectors powering previews/renders to read from the chosen record when available, falling back to in-flight form state otherwise.
 
+### React UI wiring snapshot (2025-09-24)
+
+- `web/src/views/BookSpreadDesigner.tsx` orchestrates the new store-first workflow: it loads assets via `useGetImagesQuery`, selects thumbnails with `setImage`, and exposes persistence controls through `LayoutPersistencePanel`.
+- Asset management lives in `web/src/components/bookSpread/ProjectAssetsPanel.tsx`, which wraps `useUploadImagesMutation`, `useDeleteImageMutation`, and `useReorderImagesMutation` to keep the SQL-backed carousel authoritative.
+- Page/spread CRUD hooks are consumed inside `web/src/components/bookSpread/LayoutPersistencePanel.tsx`, translating UI form fields into the `SpreadSettings` JSON the server persists.
+- Legacy `ImageTray` (used by `web/src/views/ProjectDetail.tsx`) still works against the same endpoints; refactoring it to reuse the new ProjectAssets panel would give a consistent UX across entry points.
+- All of the new panels rely on Redux actions from `web/src/store/bookSpreadSlice.ts` (`setImage`, `loadSettings`, `setPaperSize`, `setMargins`, `setOrientation`) to hydrate designer state from persisted records.
+
 ## Follow-up roadmap
 
 - Remove the remaining filesystem fallbacks once the React layer reads persisted pages/spreads by default.
 - Add a nightly task or CLI to materialize `spec.yaml` from SQL, keeping YAML exports aligned with the DB representation.
 - Introduce repository-level tests with a temp SQLite database (look at `modernc.org/sqlite` in-memory DSN) to lock down migrations and JSON encoding.
+- Consolidate project views by migrating `web/src/views/ProjectDetail.tsx` to the shared asset/persistence panels so uploads and page saves behave consistently across the app.
 
 ## Implementation status
 
