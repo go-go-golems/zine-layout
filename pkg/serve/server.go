@@ -17,6 +17,13 @@ import (
     "github.com/go-go-golems/zine-layout/pkg/projects"
     "github.com/go-go-golems/zine-layout/pkg/render"
     "github.com/go-go-golems/zine-layout/pkg/validation"
+    sonnetCfg "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/config"
+    sonnetEng "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/engine"
+    "github.com/go-go-golems/zine-layout/pkg/spread"
+    "image"
+    _ "image/gif"
+    _ "image/jpeg"
+    _ "image/png"
 )
 
 type Settings struct {
@@ -30,6 +37,7 @@ type Server struct {
     httpServer  *http.Server
     projectsRoot string
     presetsRoot  string
+    uploadsRoot  string
 }
 
 func New(settings Settings) *Server {
@@ -39,8 +47,10 @@ func New(settings Settings) *Server {
 func (s *Server) prepare() error {
     s.projectsRoot = filepath.Join(s.settings.DataRoot, "projects")
     s.presetsRoot = filepath.Join(s.settings.DataRoot, "presets")
+    s.uploadsRoot = filepath.Join(s.settings.DataRoot, "uploads")
     if err := os.MkdirAll(s.projectsRoot, 0o755); err != nil { return fmt.Errorf("create projects root: %w", err) }
     if err := os.MkdirAll(s.presetsRoot, 0o755); err != nil { return fmt.Errorf("create presets root: %w", err) }
+    if err := os.MkdirAll(s.uploadsRoot, 0o755); err != nil { return fmt.Errorf("create uploads root: %w", err) }
     if err := presets.SeedPresetsIfEmpty(s.presetsRoot); err != nil {
         log.Printf("warning: failed to seed presets: %v", err)
     }
@@ -75,6 +85,9 @@ func (s *Server) Routes() http.Handler {
         http.ServeFile(w, r, fn)
     })
 
+    // serve uploaded files statically
+    mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.uploadsRoot))))
+
     // Projects collection
     mux.HandleFunc("/api/projects", func(w http.ResponseWriter, r *http.Request) {
         switch r.Method {
@@ -99,6 +112,145 @@ func (s *Server) Routes() http.Handler {
         default:
             http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
         }
+    })
+
+    // Uploads
+    mux.HandleFunc("/api/uploads", func(w http.ResponseWriter, r *http.Request) {
+        switch r.Method {
+        case http.MethodPost:
+            if err := r.ParseMultipartForm(64 << 20); err != nil { http.Error(w, "multipart parse error", http.StatusBadRequest); return }
+            file, header, err := r.FormFile("file")
+            if err != nil { http.Error(w, "missing file", http.StatusBadRequest); return }
+            defer file.Close()
+            name := sanitizeFilename(header.Filename)
+            if name == "" { name = fmt.Sprintf("upload-%d", time.Now().UnixNano()) }
+            dstName := uniqueName(s.uploadsRoot, name)
+            dstPath := filepath.Join(s.uploadsRoot, dstName)
+            if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
+            out, err := os.Create(dstPath)
+            if err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
+            n, copyErr := io.Copy(out, file)
+            cerr := out.Close()
+            if copyErr != nil { http.Error(w, copyErr.Error(), http.StatusInternalServerError); return }
+            if cerr != nil { http.Error(w, cerr.Error(), http.StatusInternalServerError); return }
+            url := "/uploads/" + dstName
+            writeJSON(w, http.StatusOK, map[string]any{"name": dstName, "url": url, "bytes": n})
+        default:
+            http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+        }
+    })
+
+    // Spread API (v1)
+    mux.HandleFunc("/api/v1/compute", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost { http.Error(w, "method not allowed", http.StatusMethodNotAllowed); return }
+        var req spread.ComputeRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "invalid json", http.StatusBadRequest); return }
+        // For now, use Sonnet engine directly by mapping Settings to its config.ResolvedSettings
+        // Minimal mapping: expect Settings fields to be valid and present.
+        // Build a pseudo SpreadSpec for compute
+        rs := sonnetCfg.ResolvedSettings{
+            PaperWidthIn:  req.Settings.PaperWidthIn,
+            PaperHeightIn: req.Settings.PaperHeightIn,
+            DPI:           req.Settings.DPI,
+            Orientation:   req.Settings.Orientation,
+            Margins:       sonnetCfg.MarginValues{TopIn: req.Settings.MarginTopIn, RightIn: req.Settings.MarginRightIn, BottomIn: req.Settings.MarginBottomIn, LeftIn: req.Settings.MarginLeftIn},
+            IsSpread:      req.Settings.IsSpread,
+            GutterIn:      req.Settings.GutterIn,
+            CropRatio:     req.Settings.CropRatio,
+            CropToFill:    req.Settings.CropToFill,
+            UserScale:     req.Settings.UserScale,
+            Position:      sonnetCfg.PositionValues{X: req.Settings.PositionX, Y: req.Settings.PositionY, Units: req.Settings.Units},
+            Export:        sonnetCfg.ExportValues{Format: req.Settings.Export.Format, Quality: req.Settings.Export.Quality, Background: req.Settings.Export.Background, OutDir: req.Settings.Export.OutDir, FilenameTemplate: req.Settings.Export.FilenameTemplate},
+        }
+        spec := sonnetCfg.SpreadSpec{Name: req.Name, ImagePath: req.ImagePath, Settings: rs}
+        meta := sonnetEng.SourceMeta{}
+        if req.Meta != nil { meta.Width, meta.Height = req.Meta.Width, req.Meta.Height }
+        if meta.Width <= 0 || meta.Height <= 0 {
+            // Try reading file if path provided
+            if req.ImagePath == "" { http.Error(w, "missing image meta/ path", http.StatusBadRequest); return }
+            m, err := readImageMeta(req.ImagePath)
+            if err != nil { http.Error(w, fmt.Sprintf("read image: %v", err), http.StatusBadRequest); return }
+            meta = m
+        }
+        res, err := sonnetEng.Compute(spec, meta)
+        if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+        writeJSON(w, http.StatusOK, map[string]any{"result": res})
+    })
+
+    mux.HandleFunc("/api/v1/preview", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost { http.Error(w, "method not allowed", http.StatusMethodNotAllowed); return }
+        var req spread.ComputeRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "invalid json", http.StatusBadRequest); return }
+        rs := sonnetCfg.ResolvedSettings{
+            PaperWidthIn:  req.Settings.PaperWidthIn,
+            PaperHeightIn: req.Settings.PaperHeightIn,
+            DPI:           req.Settings.DPI,
+            Orientation:   req.Settings.Orientation,
+            Margins:       sonnetCfg.MarginValues{TopIn: req.Settings.MarginTopIn, RightIn: req.Settings.MarginRightIn, BottomIn: req.Settings.MarginBottomIn, LeftIn: req.Settings.MarginLeftIn},
+            IsSpread:      req.Settings.IsSpread,
+            GutterIn:      req.Settings.GutterIn,
+            CropRatio:     req.Settings.CropRatio,
+            CropToFill:    req.Settings.CropToFill,
+            UserScale:     req.Settings.UserScale,
+            Position:      sonnetCfg.PositionValues{X: req.Settings.PositionX, Y: req.Settings.PositionY, Units: req.Settings.Units},
+            Export:        sonnetCfg.ExportValues{Format: req.Settings.Export.Format, Quality: req.Settings.Export.Quality, Background: req.Settings.Export.Background, OutDir: req.Settings.Export.OutDir, FilenameTemplate: req.Settings.Export.FilenameTemplate},
+        }
+        spec := sonnetCfg.SpreadSpec{Name: req.Name, ImagePath: req.ImagePath, Settings: rs}
+        // Load image
+        img, meta, err := loadImage(req)
+        if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+        result, err := sonnetEng.Compute(spec, meta)
+        if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+        // Plan outputs in-memory; use engine.Render to get output images, but here we stream combined canvas
+        // Render full paper canvas by writing a temporary PNG to memory
+        outPaths := map[string]string{"single": filepath.Join(os.TempDir(), "preview-single.png"), "left": filepath.Join(os.TempDir(), "preview-left.png"), "right": filepath.Join(os.TempDir(), "preview-right.png")}
+        _, _, err = sonnetEng.Render(result, img, outPaths)
+        if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+        // Prefer the single or left panel for preview; if spread, return left panel file
+        var file string
+        if !result.Settings.IsSpread { file = outPaths["single"] } else { file = outPaths["left"] }
+        http.ServeFile(w, r, file)
+    })
+
+    mux.HandleFunc("/api/v1/render", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost { http.Error(w, "method not allowed", http.StatusMethodNotAllowed); return }
+        var req spread.ComputeRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "invalid json", http.StatusBadRequest); return }
+        rs := sonnetCfg.ResolvedSettings{
+            PaperWidthIn:  req.Settings.PaperWidthIn,
+            PaperHeightIn: req.Settings.PaperHeightIn,
+            DPI:           req.Settings.DPI,
+            Orientation:   req.Settings.Orientation,
+            Margins:       sonnetCfg.MarginValues{TopIn: req.Settings.MarginTopIn, RightIn: req.Settings.MarginRightIn, BottomIn: req.Settings.MarginBottomIn, LeftIn: req.Settings.MarginLeftIn},
+            IsSpread:      req.Settings.IsSpread,
+            GutterIn:      req.Settings.GutterIn,
+            CropRatio:     req.Settings.CropRatio,
+            CropToFill:    req.Settings.CropToFill,
+            UserScale:     req.Settings.UserScale,
+            Position:      sonnetCfg.PositionValues{X: req.Settings.PositionX, Y: req.Settings.PositionY, Units: req.Settings.Units},
+            Export:        sonnetCfg.ExportValues{Format: req.Settings.Export.Format, Quality: req.Settings.Export.Quality, Background: req.Settings.Export.Background, OutDir: req.Settings.Export.OutDir, FilenameTemplate: req.Settings.Export.FilenameTemplate},
+        }
+        spec := sonnetCfg.SpreadSpec{Name: req.Name, ImagePath: req.ImagePath, Settings: rs}
+        img, meta, err := loadImage(req)
+        if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+        result, err := sonnetEng.Compute(spec, meta)
+        if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+        // Plan outputs: use OutDir and template
+        ensureDir := func(p string) { _ = os.MkdirAll(filepath.Dir(p), 0o755) }
+        out := map[string]string{}
+        if !result.Settings.IsSpread {
+            fn := filepath.Join(req.Settings.Export.OutDir, "render-single.png")
+            ensureDir(fn)
+            out["single"] = fn
+        } else {
+            fnL := filepath.Join(req.Settings.Export.OutDir, "render-left.png")
+            fnR := filepath.Join(req.Settings.Export.OutDir, "render-right.png")
+            ensureDir(fnL); ensureDir(fnR)
+            out["left"], out["right"] = fnL, fnR
+        }
+        outputs, _, err := sonnetEng.Render(result, img, out)
+        if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+        writeJSON(w, http.StatusOK, map[string]any{"outputs": outputs})
     })
 
     // Project subtree
@@ -303,6 +455,26 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
     _ = json.NewEncoder(w).Encode(v)
 }
 
+func readImageMeta(path string) (sonnetEng.SourceMeta, error) {
+    f, err := os.Open(path)
+    if err != nil { return sonnetEng.SourceMeta{}, err }
+    defer f.Close()
+    cfg, _, err := image.DecodeConfig(f)
+    if err != nil { return sonnetEng.SourceMeta{}, err }
+    return sonnetEng.SourceMeta{Width: cfg.Width, Height: cfg.Height}, nil
+}
+
+func loadImage(req spread.ComputeRequest) (image.Image, sonnetEng.SourceMeta, error) {
+    if req.ImagePath == "" { return nil, sonnetEng.SourceMeta{}, fmt.Errorf("image_path required") }
+    f, err := os.Open(req.ImagePath)
+    if err != nil { return nil, sonnetEng.SourceMeta{}, err }
+    defer f.Close()
+    img, _, err := image.Decode(f)
+    if err != nil { return nil, sonnetEng.SourceMeta{}, err }
+    b := img.Bounds()
+    return img, sonnetEng.SourceMeta{Width: b.Dx(), Height: b.Dy()}, nil
+}
+
 func streamZipDir(w http.ResponseWriter, dir string) error {
     w.Header().Set("Content-Type", "application/zip")
     w.Header().Set("Content-Disposition", "attachment; filename=render.zip")
@@ -340,6 +512,29 @@ func pathClean(p string) string {
     if p == "" || p == "/" { return "index.html" }
     for len(p) > 0 && p[0] == '/' { p = p[1:] }
     return p
+}
+
+func sanitizeFilename(name string) string {
+    name = strings.TrimSpace(name)
+    name = strings.ReplaceAll(name, "\\", "-")
+    name = strings.ReplaceAll(name, "/", "-")
+    name = strings.ReplaceAll(name, "..", "-")
+    if name == "" { return name }
+    return name
+}
+
+func uniqueName(dir, base string) string {
+    candidate := base
+    ext := filepath.Ext(base)
+    stem := strings.TrimSuffix(base, ext)
+    i := 1
+    for {
+        if _, err := os.Stat(filepath.Join(dir, candidate)); os.IsNotExist(err) {
+            return candidate
+        }
+        candidate = fmt.Sprintf("%s-%d%s", stem, i, ext)
+        i++
+    }
 }
 
 

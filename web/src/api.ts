@@ -32,6 +32,50 @@ export interface ValidationDetails {
   multiple: number;
 }
 
+export interface UploadResponse {
+  name: string;
+  url: string;
+  bytes: number;
+}
+
+export interface SpreadSettings {
+  paper_width_in: number;
+  paper_height_in: number;
+  dpi: number;
+  orientation: string;
+  margin_top_in: number;
+  margin_right_in: number;
+  margin_bottom_in: number;
+  margin_left_in: number;
+  is_spread: boolean;
+  gutter_in: number;
+  crop_ratio?: number;
+  crop_to_fill: boolean;
+  user_scale: number;
+  position_x: number;
+  position_y: number;
+  units: string;
+  export: {
+    format: string;
+    quality: number;
+    background: string;
+    out_dir: string;
+    filename_template: string;
+  };
+}
+
+export interface ComputeRequest {
+  algorithm: string;
+  image_path?: string;
+  meta?: { width: number; height: number };
+  name?: string;
+  settings: SpreadSettings;
+}
+
+export interface ComputeResult {
+  result: any; // Sonnet engine result
+}
+
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
@@ -158,6 +202,24 @@ export const api = createApi({
     getRenders: b.query<{ renders: { id: string; files: string[] }[] }, { id: string }>({
       query: ({ id }) => `/projects/${id}/renders`,
     }),
+    uploadFile: b.mutation<UploadResponse, File>({
+      query: (file) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        return { url: '/uploads', method: 'POST', body: fd };
+      },
+    }),
+    computeSpread: b.mutation<ComputeResult, ComputeRequest>({
+      query: (body) => ({ url: '/v1/compute', method: 'POST', body }),
+    }),
+    previewSpread: b.mutation<Blob, ComputeRequest>({
+      query: (body) => ({
+        url: '/v1/preview',
+        method: 'POST',
+        body,
+        responseHandler: (response) => response.blob(),
+      }),
+    }),
   }),
 });
 
@@ -178,4 +240,7 @@ export const {
   useLazyValidateProjectQuery,
   useRenderProjectMutation,
   useGetRendersQuery,
+  useUploadFileMutation,
+  useComputeSpreadMutation,
+  usePreviewSpreadMutation,
 } = api;

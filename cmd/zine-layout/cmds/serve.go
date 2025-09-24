@@ -75,6 +75,10 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
     if err := os.MkdirAll(presetsRoot, 0o755); err != nil {
         return fmt.Errorf("create presets root: %w", err)
     }
+    uploadsRoot := filepath.Join(s.DataRoot, "uploads")
+    if err := os.MkdirAll(uploadsRoot, 0o755); err != nil {
+        return fmt.Errorf("create uploads root: %w", err)
+    }
     // Seed presets from examples if directory is empty
     if err := seedPresetsIfEmpty(presetsRoot); err != nil {
         log.Printf("warning: failed to seed presets: %v", err)
@@ -83,6 +87,83 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
     mux := http.NewServeMux()
     mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
         writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+    })
+
+    // Serve uploaded files statically
+    mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsRoot))))
+
+    // File upload endpoint
+    mux.HandleFunc("/api/uploads", func(w http.ResponseWriter, r *http.Request) {
+        switch r.Method {
+        case http.MethodPost:
+            if err := r.ParseMultipartForm(64 << 20); err != nil {
+                http.Error(w, "multipart parse error", http.StatusBadRequest)
+                return
+            }
+            file, header, err := r.FormFile("file")
+            if err != nil {
+                http.Error(w, "missing file", http.StatusBadRequest)
+                return
+            }
+            defer file.Close()
+            name := sanitizeFilename(header.Filename)
+            if name == "" {
+                name = fmt.Sprintf("upload-%d", time.Now().UnixNano())
+            }
+            dstName := uniqueName(uploadsRoot, name)
+            dstPath := filepath.Join(uploadsRoot, dstName)
+            if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+            out, err := os.Create(dstPath)
+            if err != nil {
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                return
+            }
+            n, copyErr := io.Copy(out, file)
+            cerr := out.Close()
+            if copyErr != nil {
+                http.Error(w, copyErr.Error(), http.StatusInternalServerError)
+                return
+            }
+            if cerr != nil {
+                http.Error(w, cerr.Error(), http.StatusInternalServerError)
+                return
+            }
+            url := "/uploads/" + dstName
+            writeJSON(w, http.StatusOK, map[string]any{"name": dstName, "url": url, "bytes": n})
+        default:
+            http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+        }
+    })
+
+    // Spread API v1 endpoints
+    mux.HandleFunc("/api/v1/compute", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+            http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        // TODO: Call pkg/spread Sonnet engine with request body
+        writeJSON(w, http.StatusOK, map[string]any{"message": "compute endpoint not implemented yet"})
+    })
+
+    mux.HandleFunc("/api/v1/preview", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+            http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        // TODO: Call pkg/spread Sonnet engine and return image
+        writeJSON(w, http.StatusOK, map[string]any{"message": "preview endpoint not implemented yet"})
+    })
+
+    mux.HandleFunc("/api/v1/render", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+            http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        // TODO: Call pkg/spread Sonnet engine and save files
+        writeJSON(w, http.StatusOK, map[string]any{"message": "render endpoint not implemented yet"})
     })
 
     // Presets
@@ -1027,4 +1108,29 @@ func pathClean(p string) string {
         p = p[1:]
     }
     return p
+}
+
+func sanitizeFilename(name string) string {
+    name = strings.TrimSpace(name)
+    name = strings.ReplaceAll(name, "\\", "-")
+    name = strings.ReplaceAll(name, "/", "-")
+    name = strings.ReplaceAll(name, "..", "-")
+    if name == "" {
+        return name
+    }
+    return name
+}
+
+func uniqueName(dir, base string) string {
+    candidate := base
+    ext := filepath.Ext(base)
+    stem := strings.TrimSuffix(base, ext)
+    i := 1
+    for {
+        if _, err := os.Stat(filepath.Join(dir, candidate)); os.IsNotExist(err) {
+            return candidate
+        }
+        candidate = fmt.Sprintf("%s-%d%s", stem, i, ext)
+        i++
+    }
 }

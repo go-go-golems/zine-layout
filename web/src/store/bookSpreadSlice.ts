@@ -29,6 +29,7 @@ export interface BookSpreadState {
     height: number;
     fileSize: number | null;
     fileName: string | null;
+    uploadedPath?: string; // Backend uploaded file path
   } | null;
   paperSize: keyof typeof PAPER_SIZES;
   isSpread: boolean;
