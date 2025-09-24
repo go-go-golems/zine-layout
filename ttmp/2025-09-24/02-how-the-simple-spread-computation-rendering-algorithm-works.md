@@ -308,9 +308,15 @@ Emitted structured trace (RenderSpread):
 
 ## 6) Trace logging & HTML index (html.go)
 
-`Trace` collects human‑readable lines that explain each step’s key numbers. When assembled into a `SpreadOutput`, these logs can be embedded into an HTML gallery via `WriteHTMLIndex(path, results)` to aid troubleshooting.
+`Trace` now collects both human‑readable lines and a structured `PlacementTrace` (and per‑render traces) that record all numeric inputs, intermediate values, and decisions. When assembled into a `SpreadOutput`, the HTML index visualizes:
 
-The annotations include page/content sizes, gutter handling, crop window, scale factors, destination rects, and export dimensions.
+- Text log (compact, chronological)
+- Structured placement (JSON, step 1–5 with all computed fields)
+- Structured render (JSON)
+  - Single: canvas + rounded source/dest rectangles and scaler
+  - Spread: per‑page clip rectangles, intersected dest subrects, mapped source rectangles, scaler, output paths
+
+Batch YAML processing returns an `html` field (string) containing a ready‑to‑view HTML page. The server also embeds data‑URLs for preview images so the gallery opens standalone without extra files.
 
 ---
 

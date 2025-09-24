@@ -60,7 +60,7 @@ func main() {
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(cobraRenderCmd)
 
-	serveCmd, err := cmds.NewServeCommand()
+    serveCmd, err := cmds.NewServeCommand()
 	cobra.CheckErr(err)
 	cobraServeCmd, err := cli.BuildCobraCommandFromCommand(
 		serveCmd,
@@ -71,6 +71,11 @@ func main() {
 	)
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(cobraServeCmd)
+
+    // api group commands
+    apiCmd, err := cmds.NewAPICobraCommand()
+    cobra.CheckErr(err)
+    rootCmd.AddCommand(apiCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal().Err(err).Msg("Error executing root command")
