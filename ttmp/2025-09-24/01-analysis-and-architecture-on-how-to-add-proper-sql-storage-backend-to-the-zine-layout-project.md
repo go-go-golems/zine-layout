@@ -229,95 +229,147 @@ Implementation snapshot:
 
 ## REST API design
 
-Keep existing routes and add DB-backed routes. New resources:
+We kept the established route surface and layered persistence beneath it:
 
-- Assets
-  - GET /api/projects/{id}/assets -> { assets: Asset[] }
-  - POST /api/projects/{id}/assets (multipart form: file) -> { asset: Asset }
-  - POST /api/projects/{id}/assets/reorder -> { ok: true }
-  - DELETE /api/projects/{id}/assets/{assetId} -> { ok: true }
+- Images (`/api/projects/{id}/images`) continue to return `{images, order}` so existing components stay untouched, but the handlers now read/write via the asset repository and sync disk + DB state.
+- Pages use the new `/api/projects/{id}/pages` collection with numeric keys. Requests accept `{ settings, asset_id?, result? }` bodies and respond with serialized `spread.Settings` & `simple.Result` documents.
+- Spreads follow the same pattern under `/api/projects/{id}/spreads`, linking to pages by number instead of IDs to match the Simple workflow.
 
-Note: Maintain /uploads endpoint for generic uploads; for project assets prefer the project assets endpoint so we persist metadata.
+Preview/render endpoints (`/api/v1/*`) remain payload based today. Future enhancements can add variants that fetch stored page/spread settings before invoking the Simple algorithm.
 
-- Pages
-  - GET /api/projects/{id}/pages -> { pages: Page[] }
-  - PUT /api/projects/{id}/pages/{pageNumber} body: { assetId?, settings, result? } -> { page: Page }
-  - DELETE /api/projects/{id}/pages/{pageNumber} -> { ok: true }
-
-- Spreads
-  - GET /api/projects/{id}/spreads -> { spreads: Spread[] }
-  - PUT /api/projects/{id}/spreads/{spreadNumber} body: { leftPageNumber?, rightPageNumber?, settings, result? } -> { spread: Spread }
-  - DELETE /api/projects/{id}/spreads/{spreadNumber} -> { ok: true }
-
-Interplay with preview and render:
-- Existing /api/v1/preview and /api/v1/render stay as-is; we can add variants that reference a Page or Spread by number which lookup asset(s) from DB.
-
-Error handling:
-- 404 when project or asset not found
-- 400 for invalid body
-- 409 for reorder mismatches
+Errors surface as standard HTTP responses: 400 for malformed JSON, 404 for missing records, and 409 for reorder mismatches during asset updates.
 
 ## RTK Query additions
 
-New types in web/src/api.ts:
+`web/src/api.ts` now defines the wire types that match the server payloads:
 ```ts
-export interface Asset { id: string; projectId: string; filename: string; rel_path: string; content_type: string; bytes: number; width: number; height: number; sort_index: number; created_at: string }
-export interface Page { id: string; projectId: string; pageNumber: number; assetId?: string; settings: any; result?: any; createdAt: string; updatedAt: string }
-export interface Spread { id: string; projectId: string; spreadNumber: number; leftPageId?: string; rightPageId?: string; settings: any; result?: any; createdAt: string; updatedAt: string }
+export interface ImageItem { id: string; name: string; width: number; height: number }
+export interface PersistedPage {
+  page_number: number;
+  asset_id?: string;
+  settings: SpreadSettings;
+  result?: any;
+  created_at: string;
+  updated_at: string;
+}
+export interface PersistedSpread {
+  spread_number: number;
+  left_page_number?: number;
+  right_page_number?: number;
+  settings: SpreadSettings;
+  result?: any;
+  created_at: string;
+  updated_at: string;
+}
 ```
 
-Add endpoints:
+Endpoints align closely with the server routes:
 ```ts
-getAssets: b.query<{ assets: Asset[] }, { id: string }>({ query: ({ id }) => `/projects/${id}/assets`, providesTags: (_r,_e,arg) => [{ type: 'Image', id: arg.id }] }),
-uploadAsset: b.mutation<{ asset: Asset }, { id: string; file: File }>({ query: ({ id, file }) => { const fd = new FormData(); fd.append('file', file); return { url: `/projects/${id}/assets`, method: 'POST', body: fd }; }, invalidatesTags: ['Image'] }),
-reorderAssets: b.mutation<{ ok: boolean }, { id: string; order: string[] }>({ query: ({ id, order }) => ({ url: `/projects/${id}/assets/reorder`, method: 'POST', body: { order } }), invalidatesTags: ['Image'] }),
-deleteAsset: b.mutation<{ ok: boolean }, { id: string; assetId: string }>({ query: ({ id, assetId }) => ({ url: `/projects/${id}/assets/${encodeURIComponent(assetId)}`, method: 'DELETE' }), invalidatesTags: ['Image'] }),
-
-getPages: b.query<{ pages: Page[] }, { id: string }>({ query: ({ id }) => `/projects/${id}/pages` }),
-putPage: b.mutation<{ page: Page }, { id: string; pageNumber: number; page: Partial<Page> }>({ query: ({ id, pageNumber, page }) => ({ url: `/projects/${id}/pages/${pageNumber}`, method: 'PUT', body: page }), invalidatesTags: ['Project'] }),
-deletePage: b.mutation<{ ok: boolean }, { id: string; pageNumber: number }>({ query: ({ id, pageNumber }) => ({ url: `/projects/${id}/pages/${pageNumber}`, method: 'DELETE' }), invalidatesTags: ['Project'] }),
-
-getSpreads: b.query<{ spreads: Spread[] }, { id: string }>({ query: ({ id }) => `/projects/${id}/spreads` }),
-putSpread: b.mutation<{ spread: Spread }, { id: string; spreadNumber: number; spread: Partial<Spread> }>({ query: ({ id, spreadNumber, spread }) => ({ url: `/projects/${id}/spreads/${spreadNumber}`, method: 'PUT', body: spread }), invalidatesTags: ['Project'] }),
-deleteSpread: b.mutation<{ ok: boolean }, { id: string; spreadNumber: number }>({ query: ({ id, spreadNumber }) => ({ url: `/projects/${id}/spreads/${spreadNumber}`, method: 'DELETE' }), invalidatesTags: ['Project'] }),
+getImages: b.query<{ images: ImageItem[]; order: string[] }, { id: string }>({
+  query: ({ id }) => `/projects/${id}/images`,
+  providesTags: ['Image'],
+}),
+uploadImages: b.mutation<{ images: ImageItem[] }, { id: string; files: FileList | File[] }>({
+  query: ({ id, files }) => { /* multi-upload */ },
+  invalidatesTags: ['Image'],
+}),
+getPages: b.query<{ pages: PersistedPage[] }, { id: string }>({
+  query: ({ id }) => `/projects/${id}/pages`,
+}),
+putPage: b.mutation<{ page: PersistedPage }, { id: string; pageNumber: number; page: { asset_id?: string; settings: SpreadSettings; result?: any } }>({
+  query: ({ id, pageNumber, page }) => ({ url: `/projects/${id}/pages/${pageNumber}`, method: 'PUT', body: page }),
+}),
+getSpreads: b.query<{ spreads: PersistedSpread[] }, { id: string }>({
+  query: ({ id }) => `/projects/${id}/spreads`,
+}),
+putSpread: b.mutation<{ spread: PersistedSpread }, { id: string; spreadNumber: number; spread: { left_page_number?: number; right_page_number?: number; settings: SpreadSettings; result?: any } }>({
+  query: ({ id, spreadNumber, spread }) => ({ url: `/projects/${id}/spreads/${spreadNumber}`, method: 'PUT', body: spread }),
+}),
 ```
 
-Cache tags:
-- Continue using tagTypes: Project, Image, Preset. Assets reuse Image tag for now to avoid churn.
+Everything shares the existing `Project`/`Image` tag types, so cache invalidation keeps behaving the same while we phase in new UI consumers.
 
 ## React integration plan
 
 Image carousel:
-- Replace current Images endpoints usage with Assets endpoints
-- Component shows assets ordered by sortIndex; drag and drop to reorder -> calls reorderAssets
-- Clicking an asset selects it as the current image for preview and for page assignment
+- Keep using `useGetImagesQuery` but surface the persisted order/sort index in component state so drag-and-drop can call `useReorderImagesMutation`.
+- After upload, refresh the carousel from SQL to verify the backfill path (`ensureProjectAssets`) keeps legacy projects consistent.
 
 Pages management:
-- Add panel to define number of pages and map assets to pages (pageNumber -> assetId)
-- When user updates settings (paper size, margins, dpi) or selects a new asset for a page, PUT to pages to persist settings_json; preview endpoints can accept either raw request or reference to pageNumber for convenience
+- Add UI panels to load `useGetPagesQuery`, edit `SpreadSettings`, and call `usePutPageMutation` so per-page tweaks survive reloads.
+- Offer a “preview from page” action that pipes the stored settings/result into the Simple compute endpoint before writing the updated layout back to SQL.
 
 Spreads management:
-- Add a list of spreads with spreadNumber; allow assigning left/right page numbers
-- Persist spread settings_json; compute result via preview and save result_json
-- Allow render from spread selection
+- Render spreads from `useGetSpreadsQuery`, with controls to map left/right page numbers and persist results via `usePutSpreadMutation`.
+- Once spread edits are persisted, hook `exportBookYaml` so it can derive defaults and overrides from the SQL-backed data rather than solely from `spec.yaml`.
 
 Routing and state:
-- Extend Redux slice to include selectedPageNumber and selectedSpreadNumber
-- Update selectors used by usePreviewRequest to optionally read settings from the current page or spread record
+- Extend the Redux slice with `selectedPageNumber` / `selectedSpreadNumber` values that reference the persisted records.
+- Update selectors powering previews/renders to read from the chosen record when available, falling back to in-flight form state otherwise.
 
-Migration plan:
-- Introduce sqlite-backed repositories and keep existing filesystem code for compatibility
-- Add a feature flag to switch endpoints to DB-backed variants
-- Start with assets for carousel and progressively add pages and spreads
+## Follow-up roadmap
 
-## Implementation checklist
+- Remove the remaining filesystem fallbacks once the React layer reads persisted pages/spreads by default.
+- Add a nightly task or CLI to materialize `spec.yaml` from SQL, keeping YAML exports aligned with the DB representation.
+- Introduce repository-level tests with a temp SQLite database (look at `modernc.org/sqlite` in-memory DSN) to lock down migrations and JSON encoding.
 
-- [ ] Create pkg/repo with interfaces and pkg/repo/sqlite implementation
-- [ ] Add sqlite initialization in server startup with migration execution
-- [ ] Implement assets endpoints backed by DB and disk storage
-- [ ] Add pages and spreads endpoints
-- [ ] Extend RTK Query endpoints and types
-- [ ] Build React components for carousel, pages, spreads, and integrate with preview
-- [ ] Add tests for repository methods and endpoint handlers
+## Implementation status
+
+- [x] Repository interfaces plus a SQLite-backed implementation live under `pkg/repo` and `pkg/repo/sqlite` (see `pkg/repo/sqlite/sqlite.go:22`).
+- [x] Server startup now opens `data/zine-layout.db`, applies migrations, and seeds missing state from disk (`pkg/serve/server.go:706`).
+- [x] Legacy image upload/list/reorder routes persist via the asset repository while continuing to serve the old response shape (`pkg/serve/server.go:174`).
+- [x] Page and spread CRUD endpoints are backed directly by SQL with JSON encoding helpers mirroring the Simple pipeline (`pkg/serve/server.go:344`).
+- [x] RTK Query exposes typed hooks for the new page/spread resources (`web/src/api.ts:233`).
+- [ ] React components still need to consume the persisted records; existing UI continues to rely on in-memory state until that wiring lands.
+- [x] Basic HTTP integration coverage exercises the pages/spreads lifecycle through the REST API (`pkg/serve/server_rest_test.go`).
+- [ ] Repository-focused unit tests are still pending; consider lightweight sqlite-in-memory suites for CRUD edge cases.
 
 Appendix: Using the repository interface pattern allows swapping sqlite for filesystem or future backends and enables unit testing by mocking repositories.
+
+## Repository layer deep dive
+
+The new persistence package cleanly separates domain structs from storage details:
+
+- Structs and narrow interfaces live in `pkg/repo/types.go:5`, keeping timestamps as `time.Time` and avoiding direct SQL dependencies in callers.
+- `pkg/repo/sqlite/migrations.go:1` executes on every boot, enabling WAL mode and foreign keys before creating the `projects`, `assets`, `pages`, and `spreads` tables.
+- Repositories share helpers that translate nullable fields and timestamps (`pkg/repo/sqlite/sqlite.go:44`). This keeps JSON payloads and DB rows consistent with the Simple renderer.
+- Each repo performs the smallest necessary mutation: for example, pages/spreads use `INSERT ... ON CONFLICT` so upserts remain idempotent while preserving `created_at` (`pkg/repo/sqlite/pages.go:18`, `pkg/repo/sqlite/spreads.go:18`).
+
+Key behaviours to know:
+
+- Assets are keyed by `(project_id, id)` and retain filesystem order through the `sort_index` column (`pkg/repo/sqlite/assets.go:43`). Reordering runs inside a single transaction to avoid partially-applied sort orders (`pkg/repo/sqlite/assets.go:82`).
+- Pages and spreads store their algorithm payloads verbatim as JSON text. The `settings_json` column is required, while `result_json` remains nullable for draft stages (`pkg/repo/sqlite/pages.go:21`, `pkg/repo/sqlite/spreads.go:22`).
+- Foreign keys tie pages to assets and spreads back to pages, letting cascading deletes remove associated layout data automatically (see schema definitions in `pkg/repo/sqlite/migrations.go:9`).
+
+## Server integration notes
+
+`serve.Server` now orchestrates both disk and SQL concerns:
+
+- Startup sets project/preset/upload roots, opens SQLite with a busy timeout + WAL DSN, and wires repositories (`pkg/serve/server.go:680`). Errors during repo construction close the DB to avoid leaking handles.
+- `upsertProjectRecord` mirrors `project.json` metadata into the `projects` table, preserving existing timestamps and preset choices (`pkg/serve/server.go:62`).
+- `ensureProjectAssets` backfills SQL rows from the on-disk `images/` directory whenever a project lacks asset records (`pkg/serve/server.go:113`). This keeps the carousel populated for older projects without requiring a manual migration.
+- Asset responses still return the legacy `{images, order}` payload expected by the UI (`pkg/serve/server.go:174`), even though repository rows carry richer metadata.
+- Settings/results for pages and spreads are serialized via dedicated helpers so round-tripping through JSON matches Simple compute/render semantics (`pkg/serve/server.go:344`). Missing JSON values surface as 400s before hitting the DB, keeping persisted data clean.
+- `handleUpsertPage` and `handleUpsertSpread` retain each record’s original `created_at` timestamp when updating, ensuring deterministic ordering for history views (`pkg/serve/server.go:462`, `pkg/serve/server.go:573`).
+- Deleting pages/spreads bumps the project `updated_at`, keeping cross-layer sync accurate (`pkg/serve/server.go:505`, `pkg/serve/server.go:604`).
+
+### Seeding & dual-write strategy
+
+- Asset uploads write the PNG to disk first, then immediately upsert a matching SQL row with the computed dimensions and byte size (`pkg/serve/server.go:194`).
+- The YAML export path still reads disk metadata but now benefits from ordered assets seeded via the repo, so in future we can hydrate YAML entirely from SQL (`pkg/serve/server.go:1471`).
+- Until the React layer consumes `GET /pages` and `GET /spreads`, the server continues to accept ad-hoc compute requests; persisted records are optional but ready for the UI to adopt.
+
+## REST endpoints & client usage
+
+- The assets collection accepts multipart uploads, reorder POSTs, and deletions while persisting through the repo (`pkg/serve/server.go:174`).
+- `GET /api/projects/{id}/pages` and `PUT /api/projects/{id}/pages/{page_number}` expose typed layout storage; both return the canonical JSON produced by `pageRecordToResponse` (`pkg/serve/server.go:383`).
+- `GET /api/projects/{id}/spreads` plus the spread upsert/delete mirror the page semantics and allow linking pages by number (`pkg/serve/server.go:522`).
+- RTK Query surfaces ergonomic hooks (`useGetPagesQuery`, `usePutPageMutation`, etc.) and serializes the request bodies to the shape expected by the server (`web/src/api.ts:233`). Existing hooks for images continue to work, sharing the `Image` cache tag.
+
+For new feature work, start by wiring the BookSpreadDesigner to these hooks so spread edits persist even after refresh. Once the UI depends on the repos, the filesystem JSON can gradually become a legacy compatibility layer.
+
+## Operational tips
+
+- `go test ./...` exercises the repository glue by hitting the server package; add focused unit tests for SQLite repos to catch migration regressions.
+- Use `make serve-tmux` (or `tmux new -s zine-layout -- make serve`) to keep the Go API and Vite dev server running side-by-side while tailing the sqlite-backed logs.
+- The SQLite database lives at `data/zine-layout.db`; remove it to rebuild from the filesystem if you need a clean slate during development.
