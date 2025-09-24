@@ -1,13 +1,42 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAppSelector } from '../../hooks/redux';
-import { useComputeSpreadMutation } from '../../api';
+import { useBuildYamlMutation, useComputeSpreadMutation } from '../../api';
 import { useSpreadRequest } from '../../utils/spreadRequestBuilder';
+
+const formatError = (error: unknown): string => {
+  if (!error) return '';
+  if (typeof error === 'string') return error;
+  if (typeof error === 'object') {
+    const maybeObj = error as Record<string, unknown>;
+    const status = maybeObj['status'];
+    const data = maybeObj['data'];
+    if (typeof status !== 'undefined' && typeof data !== 'undefined') {
+      return `${String(status)}: ${String(data)}`;
+    }
+    if (typeof maybeObj['message'] === 'string') {
+      return String(maybeObj['message']);
+    }
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+};
 
 export const AlgorithmDebugPanel: React.FC = () => {
   const image = useAppSelector((state) => state.bookSpread.image);
   const algorithm = useAppSelector((state) => state.bookSpread.algorithm);
   const spreadRequest = useSpreadRequest();
   const [computeSpread, { data: computeResult, isLoading }] = useComputeSpreadMutation();
+  const [buildYaml, { data: yamlText, isLoading: yamlLoading, error: yamlError }] = useBuildYamlMutation();
+
+  useEffect(() => {
+    if (!spreadRequest) return;
+    buildYaml(spreadRequest).unwrap().catch(() => {
+      /* error handled via yamlError */
+    });
+  }, [spreadRequest, buildYaml]);
 
   if (!image) {
     return (
@@ -41,6 +70,16 @@ export const AlgorithmDebugPanel: React.FC = () => {
     });
   };
 
+  const copyYaml = () => {
+    if (!yamlText) return;
+    navigator.clipboard.writeText(yamlText).then(() => {
+      alert('YAML copied to clipboard!');
+    }).catch(err => {
+      console.error('Failed to copy YAML:', err);
+      alert('Failed to copy YAML');
+    });
+  };
+
   return (
     <div className="mt-4 p-4 bg-gray-100 rounded-lg">
       <div className="flex justify-between items-center mb-2">
@@ -67,6 +106,26 @@ export const AlgorithmDebugPanel: React.FC = () => {
       <pre className="text-xs overflow-auto max-h-60 bg-white p-3 rounded border font-mono">
         {debugText}
       </pre>
+      <div className="mt-4">
+        <div className="flex justify-between items-center mb-2">
+          <h5 className="font-semibold text-xs">Sonnet YAML</h5>
+          <div className="space-x-2">
+            <span className="text-[10px] text-gray-500">
+              {yamlLoading ? 'Generating…' : yamlError ? 'Failed to generate YAML' : 'Copy to reproduce via CLI'}
+            </span>
+            <button
+              onClick={copyYaml}
+              disabled={!yamlText || yamlLoading}
+              className="px-3 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 transition-colors disabled:opacity-50"
+            >
+              📋 Copy YAML
+            </button>
+          </div>
+        </div>
+        <pre className="text-xs overflow-auto max-h-60 bg-white p-3 rounded border font-mono">
+          {yamlText || (yamlError ? formatError(yamlError) : 'YAML will appear here once generated.')}
+        </pre>
+      </div>
     </div>
   );
 };

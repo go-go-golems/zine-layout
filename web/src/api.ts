@@ -220,6 +220,14 @@ export const api = createApi({
         responseHandler: (response) => response.blob(),
       }),
     }),
+    buildYaml: b.mutation<string, ComputeRequest>({
+      query: (body) => ({
+        url: '/v1/yaml',
+        method: 'POST',
+        body,
+        responseHandler: async (response) => response.text(),
+      }),
+    }),
     getPreviewSpread: b.query<string, ComputeRequest>({
       query: (body) => ({
         url: '/v1/preview',
@@ -256,4 +264,5 @@ export const {
   useComputeSpreadMutation,
   usePreviewSpreadMutation,
   useGetPreviewSpreadQuery,
+  useBuildYamlMutation,
 } = api;
