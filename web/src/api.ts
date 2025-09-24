@@ -220,6 +220,18 @@ export const api = createApi({
         responseHandler: (response) => response.blob(),
       }),
     }),
+    getPreviewSpread: b.query<string, ComputeRequest>({
+      query: (body) => ({
+        url: '/v1/preview',
+        method: 'POST',
+        body,
+        responseHandler: async (response) => {
+          const blob = await response.blob();
+          return URL.createObjectURL(blob);
+        },
+      }),
+      keepUnusedDataFor: 30, // Cache preview for 30 seconds
+    }),
   }),
 });
 
@@ -243,4 +255,5 @@ export const {
   useUploadFileMutation,
   useComputeSpreadMutation,
   usePreviewSpreadMutation,
+  useGetPreviewSpreadQuery,
 } = api;

@@ -14,12 +14,19 @@ export const PAPER_SIZES = {
 // Crop ratio definitions
 export const CROP_RATIOS = {
   'original': null,
-  '1:1': 1,
-  '2:3': 2 / 3,
-  '3:4': 3 / 4,
-  '4:5': 4 / 5,
-  '5:7': 5 / 7,
-  '16:9': 16 / 9
+  // Vertical (portrait) ratios
+  '2:3': 2 / 3,     // 0.667 - Classic portrait
+  '3:4': 3 / 4,     // 0.750 - Standard photo
+  '4:5': 4 / 5,     // 0.800 - Instagram portrait
+  '5:7': 5 / 7,     // 0.714 - Medium portrait
+  // Square
+  '1:1': 1,         // 1.000 - Instagram square
+  // Horizontal (landscape) ratios  
+  '3:2': 3 / 2,     // 1.500 - Classic 35mm
+  '7:5': 7 / 5,     // 1.400 - Medium landscape
+  '5:3': 5 / 3,     // 1.667 - Wide landscape
+  '16:9': 16 / 9,   // 1.778 - Widescreen
+  '2:1': 2 / 1,     // 2.000 - Panoramic
 } as const;
 
 export interface BookSpreadState {
@@ -31,6 +38,7 @@ export interface BookSpreadState {
     fileName: string | null;
     uploadedPath?: string; // Backend uploaded file path
   } | null;
+  algorithm: 'sonnet' | 'simple'; // Algorithm selection
   paperSize: keyof typeof PAPER_SIZES;
   isSpread: boolean;
   margins: {
@@ -53,6 +61,7 @@ export interface BookSpreadState {
 
 const initialState: BookSpreadState = {
   image: null,
+  algorithm: 'sonnet',
   paperSize: '8x10',
   isSpread: false,
   margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },
@@ -107,6 +116,9 @@ const bookSpreadSlice = createSlice({
     setGutterMargin: (state, action: PayloadAction<number>) => {
       state.gutterMargin = action.payload;
     },
+    setAlgorithm: (state, action: PayloadAction<'sonnet' | 'simple'>) => {
+      state.algorithm = action.payload;
+    },
   },
 });
 
@@ -122,6 +134,7 @@ export const {
   setImagePosition,
   setDpi,
   setGutterMargin,
+  setAlgorithm,
 } = bookSpreadSlice.actions;
 
 export default bookSpreadSlice.reducer;

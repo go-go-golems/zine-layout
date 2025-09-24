@@ -6,7 +6,10 @@ import (
     "fmt"
     "archive/zip"
     "image"
-    _ "image/png"
+    imagedraw "image/draw"
+    _ "image/gif"
+    "image/jpeg"
+    "image/png"
     "io"
     "log"
     "math/rand"
@@ -26,6 +29,11 @@ import (
     "github.com/go-go-golems/glazed/pkg/cmds/layers"
     "github.com/go-go-golems/glazed/pkg/cmds/parameters"
     "github.com/go-go-golems/glazed/pkg/settings"
+    
+    sonnetCfg "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/config"
+    sonnetEng "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/engine"
+    sonnetMedia "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/media"
+    simple "github.com/go-go-golems/zine-layout/pkg/spread/simple"
 )
 
 type ServeCommand struct {
@@ -144,8 +152,139 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
             http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
             return
         }
-        // TODO: Call pkg/spread Sonnet engine with request body
-        writeJSON(w, http.StatusOK, map[string]any{"message": "compute endpoint not implemented yet"})
+        
+        var req struct {
+            Algorithm string `json:"algorithm"`
+            ImagePath string `json:"image_path,omitempty"`
+            Meta      *struct {
+                Width  int `json:"width"`
+                Height int `json:"height"`
+            } `json:"meta,omitempty"`
+            Name     string `json:"name,omitempty"`
+            Settings struct {
+                PaperWidthIn     float64 `json:"paper_width_in"`
+                PaperHeightIn    float64 `json:"paper_height_in"`
+                DPI              float64 `json:"dpi"`
+                Orientation      string  `json:"orientation"`
+                MarginTopIn      float64 `json:"margin_top_in"`
+                MarginRightIn    float64 `json:"margin_right_in"`
+                MarginBottomIn   float64 `json:"margin_bottom_in"`
+                MarginLeftIn     float64 `json:"margin_left_in"`
+                IsSpread         bool    `json:"is_spread"`
+                GutterIn         float64 `json:"gutter_in"`
+                CropRatio        *float64 `json:"crop_ratio"`
+                CropToFill       bool    `json:"crop_to_fill"`
+                UserScale        float64 `json:"user_scale"`
+                PositionX        float64 `json:"position_x"`
+                PositionY        float64 `json:"position_y"`
+                Units            string  `json:"units"`
+                Export           struct {
+                    Format           string `json:"format"`
+                    Quality          int    `json:"quality"`
+                    Background       string `json:"background"`
+                    OutDir           string `json:"out_dir"`
+                    FilenameTemplate string `json:"filename_template"`
+                } `json:"export"`
+            } `json:"settings"`
+        }
+        
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            http.Error(w, "invalid json", http.StatusBadRequest)
+            return
+        }
+        
+        // Build Sonnet config
+        rs := sonnetCfg.ResolvedSettings{
+            PaperWidthIn:  req.Settings.PaperWidthIn,
+            PaperHeightIn: req.Settings.PaperHeightIn,
+            DPI:           req.Settings.DPI,
+            Orientation:   req.Settings.Orientation,
+            Margins:       sonnetCfg.MarginValues{
+                TopIn:    req.Settings.MarginTopIn,
+                RightIn:  req.Settings.MarginRightIn,
+                BottomIn: req.Settings.MarginBottomIn,
+                LeftIn:   req.Settings.MarginLeftIn,
+            },
+            IsSpread:   req.Settings.IsSpread,
+            GutterIn:   req.Settings.GutterIn,
+            CropRatio:  req.Settings.CropRatio,
+            CropToFill: req.Settings.CropToFill,
+            UserScale:  req.Settings.UserScale,
+            Position: sonnetCfg.PositionValues{
+                X:     req.Settings.PositionX,
+                Y:     req.Settings.PositionY,
+                Units: req.Settings.Units,
+            },
+            Export: sonnetCfg.ExportValues{
+                Format:           req.Settings.Export.Format,
+                Quality:          req.Settings.Export.Quality,
+                Background:       req.Settings.Export.Background,
+                OutDir:           req.Settings.Export.OutDir,
+                FilenameTemplate: req.Settings.Export.FilenameTemplate,
+            },
+        }
+        
+        spec := sonnetCfg.SpreadSpec{
+            Name:      req.Name,
+            ImagePath: req.ImagePath,
+            Settings:  rs,
+        }
+        
+        // Get image metadata
+        var meta sonnetEng.SourceMeta
+        if req.Meta != nil {
+            meta.Width, meta.Height = req.Meta.Width, req.Meta.Height
+        } else if req.ImagePath != "" {
+            var err error
+            meta, err = sonnetMedia.Metadata(req.ImagePath)
+            if err != nil {
+                http.Error(w, fmt.Sprintf("read image metadata: %v", err), http.StatusBadRequest)
+                return
+            }
+        } else {
+            http.Error(w, "missing image meta or path", http.StatusBadRequest)
+            return
+        }
+        
+        // Compute spread based on algorithm
+        switch req.Algorithm {
+        case "sonnet", "":
+            result, err := sonnetEng.Compute(spec, meta)
+            if err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+            }
+            writeJSON(w, http.StatusOK, map[string]any{"result": result})
+        case "simple":
+            // Convert to Simple inputs
+            inputs := simple.Inputs{
+                SrcW: float64(meta.Width),
+                SrcH: float64(meta.Height),
+                PaperWIn: req.Settings.PaperWidthIn,
+                PaperHIn: req.Settings.PaperHeightIn,
+                Orientation: req.Settings.Orientation,
+                MarginTopIn: req.Settings.MarginTopIn,
+                MarginRightIn: req.Settings.MarginRightIn,
+                MarginBottomIn: req.Settings.MarginBottomIn,
+                MarginLeftIn: req.Settings.MarginLeftIn,
+                DPI: req.Settings.DPI,
+                IsSpread: req.Settings.IsSpread,
+                GutterIn: req.Settings.GutterIn,
+                CropRatio: nil,
+                CropToFill: req.Settings.CropToFill,
+                UserScale: req.Settings.UserScale,
+                ImagePosition: simple.Point{X: req.Settings.PositionX, Y: req.Settings.PositionY},
+                PositionUnits: req.Settings.Units,
+            }
+            if req.Settings.CropRatio != nil {
+                inputs.CropRatio = &simple.CropRatio{W: *req.Settings.CropRatio, H: 1.0}
+            }
+            trace := &simple.Trace{}
+            result := simple.ComputePlacement(inputs, trace)
+            writeJSON(w, http.StatusOK, map[string]any{"result": result, "trace": trace.Lines})
+        default:
+            http.Error(w, fmt.Sprintf("unknown algorithm: %s", req.Algorithm), http.StatusBadRequest)
+        }
     })
 
     mux.HandleFunc("/api/v1/preview", func(w http.ResponseWriter, r *http.Request) {
@@ -153,8 +292,214 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
             http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
             return
         }
-        // TODO: Call pkg/spread Sonnet engine and return image
-        writeJSON(w, http.StatusOK, map[string]any{"message": "preview endpoint not implemented yet"})
+        
+        // Preview request with additional preview options
+        var req struct {
+            Algorithm string `json:"algorithm"`
+            ImagePath string `json:"image_path,omitempty"`
+            Meta      *struct {
+                Width  int `json:"width"`
+                Height int `json:"height"`
+            } `json:"meta,omitempty"`
+            Name          string `json:"name,omitempty"`
+            MaxDimension  int    `json:"max_dimension,omitempty"` // Max width or height for preview
+            PreviewFormat string `json:"preview_format,omitempty"` // jpg|png
+            Panel         string `json:"panel,omitempty"`         // combined|single|left|right
+            Settings struct {
+                PaperWidthIn     float64 `json:"paper_width_in"`
+                PaperHeightIn    float64 `json:"paper_height_in"`
+                DPI              float64 `json:"dpi"`
+                Orientation      string  `json:"orientation"`
+                MarginTopIn      float64 `json:"margin_top_in"`
+                MarginRightIn    float64 `json:"margin_right_in"`
+                MarginBottomIn   float64 `json:"margin_bottom_in"`
+                MarginLeftIn     float64 `json:"margin_left_in"`
+                IsSpread         bool    `json:"is_spread"`
+                GutterIn         float64 `json:"gutter_in"`
+                CropRatio        *float64 `json:"crop_ratio"`
+                CropToFill       bool    `json:"crop_to_fill"`
+                UserScale        float64 `json:"user_scale"`
+                PositionX        float64 `json:"position_x"`
+                PositionY        float64 `json:"position_y"`
+                Units            string  `json:"units"`
+                Export           struct {
+                    Format           string `json:"format"`
+                    Quality          int    `json:"quality"`
+                    Background       string `json:"background"`
+                    OutDir           string `json:"out_dir"`
+                    FilenameTemplate string `json:"filename_template"`
+                } `json:"export"`
+            } `json:"settings"`
+        }
+        
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            http.Error(w, "invalid json", http.StatusBadRequest)
+            return
+        }
+        
+        if req.ImagePath == "" {
+            http.Error(w, "image_path required for preview", http.StatusBadRequest)
+            return
+        }
+        
+        // Set preview defaults
+        maxDim := req.MaxDimension
+        if maxDim <= 0 {
+            maxDim = 600
+        }
+        previewFormat := strings.ToLower(req.PreviewFormat)
+        if previewFormat == "" {
+            previewFormat = "jpg"
+        }
+        if previewFormat != "jpg" && previewFormat != "png" {
+            previewFormat = "jpg"
+        }
+        
+        panel := strings.ToLower(req.Panel)
+        if panel == "" {
+            panel = "combined"
+        }
+        
+        // Calculate preview DPI to achieve target max dimension
+        paperW := req.Settings.PaperWidthIn
+        paperH := req.Settings.PaperHeightIn
+        if req.Settings.Orientation == "landscape" {
+            paperW, paperH = paperH, paperW
+        }
+        if req.Settings.IsSpread {
+            paperW *= 2
+        }
+        
+        // Find the larger dimension to scale
+        maxPaperDim := paperW
+        if paperH > paperW {
+            maxPaperDim = paperH
+        }
+        
+        // Scale DPI down to achieve max dimension
+        fullSizePx := maxPaperDim * req.Settings.DPI
+        previewDPI := req.Settings.DPI
+        if fullSizePx > float64(maxDim) {
+            previewDPI = req.Settings.DPI * (float64(maxDim) / fullSizePx)
+        }
+        
+        // Build Sonnet config with preview DPI
+        rs := sonnetCfg.ResolvedSettings{
+            PaperWidthIn:  req.Settings.PaperWidthIn,
+            PaperHeightIn: req.Settings.PaperHeightIn,
+            DPI:           previewDPI,
+            Orientation:   req.Settings.Orientation,
+            Margins:       sonnetCfg.MarginValues{
+                TopIn:    req.Settings.MarginTopIn,
+                RightIn:  req.Settings.MarginRightIn,
+                BottomIn: req.Settings.MarginBottomIn,
+                LeftIn:   req.Settings.MarginLeftIn,
+            },
+            IsSpread:   req.Settings.IsSpread,
+            GutterIn:   req.Settings.GutterIn,
+            CropRatio:  req.Settings.CropRatio,
+            CropToFill: req.Settings.CropToFill,
+            UserScale:  req.Settings.UserScale,
+            Position: sonnetCfg.PositionValues{
+                X:     req.Settings.PositionX,
+                Y:     req.Settings.PositionY,
+                Units: req.Settings.Units,
+            },
+            Export: sonnetCfg.ExportValues{
+                Format:           previewFormat,
+                Quality:          75, // Lower quality for preview
+                Background:       req.Settings.Export.Background,
+                OutDir:           filepath.Join(os.TempDir(), "preview"),
+                FilenameTemplate: fmt.Sprintf("preview-{panel}.%s", previewFormat),
+            },
+        }
+        
+        spec := sonnetCfg.SpreadSpec{
+            Name:      "preview",
+            ImagePath: req.ImagePath,
+            Settings:  rs,
+        }
+        
+        // Load image and get metadata
+        img, err := sonnetMedia.Load(req.ImagePath)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("load image: %v", err), http.StatusBadRequest)
+            return
+        }
+        bounds := img.Bounds()
+        meta := sonnetEng.SourceMeta{Width: bounds.Dx(), Height: bounds.Dy()}
+        
+        // Compute spread
+        result, err := sonnetEng.Compute(spec, meta)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("compute: %v", err), http.StatusBadRequest)
+            return
+        }
+        
+        // Plan temporary output paths
+        tmpDir := filepath.Join(os.TempDir(), "preview")
+        if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+            http.Error(w, fmt.Sprintf("create temp dir: %v", err), http.StatusInternalServerError)
+            return
+        }
+        
+        ext := previewFormat
+        outPaths := map[string]string{
+            "single": filepath.Join(tmpDir, fmt.Sprintf("preview-single.%s", ext)),
+            "left":   filepath.Join(tmpDir, fmt.Sprintf("preview-left.%s", ext)),
+            "right":  filepath.Join(tmpDir, fmt.Sprintf("preview-right.%s", ext)),
+        }
+        
+        // Render
+        _, _, err = sonnetEng.Render(result, img, outPaths)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("render: %v", err), http.StatusInternalServerError)
+            return
+        }
+        
+        // Determine which file to serve based on panel parameter
+        var filePath string
+        var contentType string
+        
+        if previewFormat == "jpg" {
+            contentType = "image/jpeg"
+        } else {
+            contentType = "image/png"
+        }
+        
+        if !result.Settings.IsSpread {
+            // Single page
+            if panel == "single" || panel == "combined" {
+                filePath = outPaths["single"]
+            } else {
+                http.Error(w, "invalid panel for single page", http.StatusBadRequest)
+                return
+            }
+        } else {
+            // Spread
+            switch panel {
+            case "left":
+                filePath = outPaths["left"]
+            case "right":
+                filePath = outPaths["right"]
+            case "single":
+                filePath = outPaths["left"] // Default to left for single
+            case "combined":
+                // Create combined image by stitching left and right together
+                combinedPath := filepath.Join(tmpDir, fmt.Sprintf("preview-combined.%s", ext))
+                if err := createCombinedSpread(outPaths["left"], outPaths["right"], combinedPath, previewFormat); err != nil {
+                    http.Error(w, fmt.Sprintf("create combined preview: %v", err), http.StatusInternalServerError)
+                    return
+                }
+                filePath = combinedPath
+            default:
+                http.Error(w, fmt.Sprintf("invalid panel: %s", panel), http.StatusBadRequest)
+                return
+            }
+        }
+        
+        w.Header().Set("Content-Type", contentType)
+        http.ServeFile(w, r, filePath)
     })
 
     mux.HandleFunc("/api/v1/render", func(w http.ResponseWriter, r *http.Request) {
@@ -162,8 +507,137 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
             http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
             return
         }
-        // TODO: Call pkg/spread Sonnet engine and save files
-        writeJSON(w, http.StatusOK, map[string]any{"message": "render endpoint not implemented yet"})
+        
+        // Same request structure as compute/preview
+        var req struct {
+            Algorithm string `json:"algorithm"`
+            ImagePath string `json:"image_path,omitempty"`
+            Meta      *struct {
+                Width  int `json:"width"`
+                Height int `json:"height"`
+            } `json:"meta,omitempty"`
+            Name     string `json:"name,omitempty"`
+            Settings struct {
+                PaperWidthIn     float64 `json:"paper_width_in"`
+                PaperHeightIn    float64 `json:"paper_height_in"`
+                DPI              float64 `json:"dpi"`
+                Orientation      string  `json:"orientation"`
+                MarginTopIn      float64 `json:"margin_top_in"`
+                MarginRightIn    float64 `json:"margin_right_in"`
+                MarginBottomIn   float64 `json:"margin_bottom_in"`
+                MarginLeftIn     float64 `json:"margin_left_in"`
+                IsSpread         bool    `json:"is_spread"`
+                GutterIn         float64 `json:"gutter_in"`
+                CropRatio        *float64 `json:"crop_ratio"`
+                CropToFill       bool    `json:"crop_to_fill"`
+                UserScale        float64 `json:"user_scale"`
+                PositionX        float64 `json:"position_x"`
+                PositionY        float64 `json:"position_y"`
+                Units            string  `json:"units"`
+                Export           struct {
+                    Format           string `json:"format"`
+                    Quality          int    `json:"quality"`
+                    Background       string `json:"background"`
+                    OutDir           string `json:"out_dir"`
+                    FilenameTemplate string `json:"filename_template"`
+                } `json:"export"`
+            } `json:"settings"`
+        }
+        
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            http.Error(w, "invalid json", http.StatusBadRequest)
+            return
+        }
+        
+        if req.ImagePath == "" {
+            http.Error(w, "image_path required for render", http.StatusBadRequest)
+            return
+        }
+        
+        // Build Sonnet config
+        rs := sonnetCfg.ResolvedSettings{
+            PaperWidthIn:  req.Settings.PaperWidthIn,
+            PaperHeightIn: req.Settings.PaperHeightIn,
+            DPI:           req.Settings.DPI,
+            Orientation:   req.Settings.Orientation,
+            Margins:       sonnetCfg.MarginValues{
+                TopIn:    req.Settings.MarginTopIn,
+                RightIn:  req.Settings.MarginRightIn,
+                BottomIn: req.Settings.MarginBottomIn,
+                LeftIn:   req.Settings.MarginLeftIn,
+            },
+            IsSpread:   req.Settings.IsSpread,
+            GutterIn:   req.Settings.GutterIn,
+            CropRatio:  req.Settings.CropRatio,
+            CropToFill: req.Settings.CropToFill,
+            UserScale:  req.Settings.UserScale,
+            Position: sonnetCfg.PositionValues{
+                X:     req.Settings.PositionX,
+                Y:     req.Settings.PositionY,
+                Units: req.Settings.Units,
+            },
+            Export: sonnetCfg.ExportValues{
+                Format:           req.Settings.Export.Format,
+                Quality:          req.Settings.Export.Quality,
+                Background:       req.Settings.Export.Background,
+                OutDir:           req.Settings.Export.OutDir,
+                FilenameTemplate: req.Settings.Export.FilenameTemplate,
+            },
+        }
+        
+        name := req.Name
+        if name == "" {
+            name = "render"
+        }
+        
+        spec := sonnetCfg.SpreadSpec{
+            Name:      name,
+            ImagePath: req.ImagePath,
+            Settings:  rs,
+        }
+        
+        // Load image and get metadata
+        img, err := sonnetMedia.Load(req.ImagePath)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("load image: %v", err), http.StatusBadRequest)
+            return
+        }
+        bounds := img.Bounds()
+        meta := sonnetEng.SourceMeta{Width: bounds.Dx(), Height: bounds.Dy()}
+        
+        // Compute spread
+        result, err := sonnetEng.Compute(spec, meta)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("compute: %v", err), http.StatusBadRequest)
+            return
+        }
+        
+        // Plan output paths
+        outDir := req.Settings.Export.OutDir
+        if outDir == "" {
+            outDir = filepath.Join(s.DataRoot, "renders")
+        }
+        if err := os.MkdirAll(outDir, 0o755); err != nil {
+            http.Error(w, fmt.Sprintf("create output dir: %v", err), http.StatusInternalServerError)
+            return
+        }
+        
+        outPaths := map[string]string{}
+        if !result.Settings.IsSpread {
+            outPaths["single"] = filepath.Join(outDir, fmt.Sprintf("%s-single.%s", name, req.Settings.Export.Format))
+        } else {
+            outPaths["left"] = filepath.Join(outDir, fmt.Sprintf("%s-left.%s", name, req.Settings.Export.Format))
+            outPaths["right"] = filepath.Join(outDir, fmt.Sprintf("%s-right.%s", name, req.Settings.Export.Format))
+        }
+        
+        // Render
+        outputs, _, err := sonnetEng.Render(result, img, outPaths)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("render: %v", err), http.StatusInternalServerError)
+            return
+        }
+        
+        writeJSON(w, http.StatusOK, map[string]any{"outputs": outputs})
     })
 
     // Presets
@@ -1132,5 +1606,61 @@ func uniqueName(dir, base string) string {
         }
         candidate = fmt.Sprintf("%s-%d%s", stem, i, ext)
         i++
+    }
+}
+
+func createCombinedSpread(leftPath, rightPath, outputPath, format string) error {
+    // Load left and right images
+    leftFile, err := os.Open(leftPath)
+    if err != nil {
+        return err
+    }
+    defer leftFile.Close()
+    
+    rightFile, err := os.Open(rightPath)
+    if err != nil {
+        return err
+    }
+    defer rightFile.Close()
+    
+    leftImg, _, err := image.Decode(leftFile)
+    if err != nil {
+        return err
+    }
+    
+    rightImg, _, err := image.Decode(rightFile)
+    if err != nil {
+        return err
+    }
+    
+    // Create combined canvas
+    leftBounds := leftImg.Bounds()
+    rightBounds := rightImg.Bounds()
+    totalWidth := leftBounds.Dx() + rightBounds.Dx()
+    maxHeight := leftBounds.Dy()
+    if rightBounds.Dy() > maxHeight {
+        maxHeight = rightBounds.Dy()
+    }
+    
+    combined := image.NewRGBA(image.Rect(0, 0, totalWidth, maxHeight))
+    
+    // Draw left image
+    imagedraw.Draw(combined, leftBounds, leftImg, image.Point{}, imagedraw.Src)
+    
+    // Draw right image  
+    rightDst := image.Rect(leftBounds.Dx(), 0, leftBounds.Dx()+rightBounds.Dx(), rightBounds.Dy())
+    imagedraw.Draw(combined, rightDst, rightImg, image.Point{}, imagedraw.Src)
+    
+    // Save combined image
+    outFile, err := os.Create(outputPath)
+    if err != nil {
+        return err
+    }
+    defer outFile.Close()
+    
+    if format == "jpg" {
+        return jpeg.Encode(outFile, combined, &jpeg.Options{Quality: 75})
+    } else {
+        return png.Encode(outFile, combined)
     }
 }

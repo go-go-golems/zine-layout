@@ -10,6 +10,7 @@ import {
   CROP_RATIOS 
 } from '../../store/bookSpreadSlice';
 import { getCurrentDimensions, shouldEnablePositionControl } from '../../utils/bookSpreadUtils';
+import { suggestCropRatio, getRatioCategory } from '../../utils/spreadRequestBuilder';
 
 export const ImageControlsPanel: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -73,15 +74,36 @@ export const ImageControlsPanel: React.FC = () => {
     <div className="bg-gray-50 p-4 rounded-lg">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Crop Ratio</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Crop Ratio
+            {image && (
+              <span className="text-xs text-blue-600 ml-2">
+                (suggested: {suggestCropRatio(image.width, image.height)})
+              </span>
+            )}
+          </label>
           <select
             value={cropRatio}
             onChange={(e) => dispatch(setCropRatio(e.target.value as keyof typeof CROP_RATIOS))}
             className="w-full p-2 border border-gray-300 rounded-md text-sm"
           >
-            {Object.keys(CROP_RATIOS).map(ratio => (
-              <option key={ratio} value={ratio}>{ratio}</option>
-            ))}
+            <option value="original">Original</option>
+            <optgroup label="📱 Portrait (Vertical)">
+              <option value="2:3">2:3 - Classic portrait</option>
+              <option value="5:7">5:7 - Medium portrait</option>  
+              <option value="3:4">3:4 - Standard photo</option>
+              <option value="4:5">4:5 - Instagram portrait</option>
+            </optgroup>
+            <optgroup label="⬜ Square">
+              <option value="1:1">1:1 - Instagram square</option>
+            </optgroup>
+            <optgroup label="🖼️ Landscape (Horizontal)">
+              <option value="7:5">7:5 - Medium landscape</option>
+              <option value="3:2">3:2 - Classic 35mm</option>
+              <option value="5:3">5:3 - Wide landscape</option>
+              <option value="16:9">16:9 - Widescreen</option>
+              <option value="2:1">2:1 - Panoramic</option>
+            </optgroup>
           </select>
         </div>
 
