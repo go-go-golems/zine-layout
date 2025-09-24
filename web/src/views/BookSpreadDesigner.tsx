@@ -1,19 +1,23 @@
-import React, { CSSProperties, useEffect, useState } from 'react';
-import { ImageUploadSection } from '../components/bookSpread/ImageUploadSection';
+import React, { CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
+import { ProjectAssetsPanel, type AssetSummary } from '../components/bookSpread/ProjectAssetsPanel';
 import { PaperSettingsPanel } from '../components/bookSpread/PaperSettingsPanel';
 import { MarginControlsPanel } from '../components/bookSpread/MarginControlsPanel';
 import { ImageControlsPanel } from '../components/bookSpread/ImageControlsPanel';
 import { ImageInformationPanel } from '../components/bookSpread/ImageInformationPanel';
 import { ExportPanel } from '../components/bookSpread/ExportPanel';
 import { AlgorithmDebugPanel } from '../components/bookSpread/AlgorithmDebugPanel';
-import { useAppSelector } from '../hooks/redux';
+import { LayoutPersistencePanel } from '../components/bookSpread/LayoutPersistencePanel';
+import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import {
+  useGetImagesQuery,
   useGetPreviewSpreadQuery,
   useGetProjectsQuery,
   useLazyExportBookYamlQuery,
+  type ImageItem,
 } from '../api';
 import { usePreviewRequest } from '../utils/spreadRequestBuilder';
 import { getCurrentDimensions } from '../utils/bookSpreadUtils';
+import { setImage } from '../store/bookSpreadSlice';
 
 const MAX_EDGE_SINGLE = 520;
 const MAX_EDGE_PANEL = 420;
@@ -54,48 +58,103 @@ const renderFramedPreview = (label: string, url: string | undefined | null, fram
   </div>
 );
 
+const toAssetSummary = (projectId: string, image: ImageItem): AssetSummary => ({
+  id: image.id,
+  name: image.name,
+  width: image.width,
+  height: image.height,
+  src: `/api/projects/${projectId}/images/${image.id}`,
+  uploadedPath: `/projects/${projectId}/images/${image.id}`,
+});
+
 export const BookSpreadDesigner: React.FC = () => {
-  const { image, isSpread, paperSize, orientation } = useAppSelector((state) => state.bookSpread);
+  const dispatch = useAppDispatch();
+  const { image, isSpread, paperWidthIn, paperHeightIn, orientation } = useAppSelector((state) => state.bookSpread);
 
   const { data: projectsData, isLoading: projectsLoading } = useGetProjectsQuery();
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [baseDir, setBaseDir] = useState('');
   const [exportFeedback, setExportFeedback] = useState<{ text: string; tone: 'success' | 'error' | 'info' } | null>(null);
   const [triggerExportYaml, { isFetching: exportingYaml }] = useLazyExportBookYamlQuery();
 
-  useEffect(() => {
-    if (!selectedProjectId && projectsData?.projects?.length) {
-      setSelectedProjectId(projectsData.projects[0].id);
-    }
-  }, [projectsData, selectedProjectId]);
-
   const projectOptions = projectsData?.projects ?? [];
 
-  // Get preview requests for different panels
+  useEffect(() => {
+    if (!selectedProjectId && projectOptions.length) {
+      setSelectedProjectId(projectOptions[0].id);
+    }
+  }, [projectOptions, selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setSelectedAssetId(null);
+      dispatch(setImage(null));
+    }
+  }, [selectedProjectId, dispatch]);
+
+  const imagesQuery = useGetImagesQuery({ id: selectedProjectId ?? '' }, { skip: !selectedProjectId });
+
+  const assets: AssetSummary[] = useMemo(() => {
+    if (!selectedProjectId || !imagesQuery.data) {
+      return [];
+    }
+    const order = imagesQuery.data.order?.length ? imagesQuery.data.order : imagesQuery.data.images.map((img) => img.id);
+    const map = new Map(imagesQuery.data.images.map((img) => [img.id, img] as const));
+    return order
+      .map((id) => map.get(id))
+      .filter((img): img is ImageItem => Boolean(img))
+      .map((img) => toAssetSummary(selectedProjectId, img));
+  }, [imagesQuery.data, selectedProjectId]);
+
+  const handleAssetSelect = useCallback((asset: AssetSummary) => {
+    setSelectedAssetId(asset.id);
+    dispatch(
+      setImage({
+        src: asset.src,
+        width: asset.width,
+        height: asset.height,
+        fileSize: null,
+        fileName: asset.name,
+        uploadedPath: asset.uploadedPath,
+      })
+    );
+  }, [dispatch]);
+
+  const handleSelectAssetById = useCallback((assetId: string) => {
+    const asset = assets.find((item) => item.id === assetId);
+    if (asset) {
+      handleAssetSelect(asset);
+    }
+  }, [assets, handleAssetSelect]);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      return;
+    }
+    if (assets.length === 0) {
+      setSelectedAssetId(null);
+      dispatch(setImage(null));
+      return;
+    }
+    if (!selectedAssetId || !assets.some((asset) => asset.id === selectedAssetId)) {
+      handleAssetSelect(assets[0]);
+    }
+  }, [assets, selectedAssetId, selectedProjectId, dispatch, handleAssetSelect]);
+
+  // Preview data
   const leftRequest = usePreviewRequest(600, 'left');
   const rightRequest = usePreviewRequest(600, 'right');
   const singleRequest = usePreviewRequest(600, 'single');
-  
-  // Get preview images from backend
-  const { data: leftPreviewUrl, isLoading: leftLoading, error: leftError } = useGetPreviewSpreadQuery(
-    leftRequest!,
-    { skip: !leftRequest || !isSpread }
-  );
-  
-  const { data: rightPreviewUrl, isLoading: rightLoading, error: rightError } = useGetPreviewSpreadQuery(
-    rightRequest!,
-    { skip: !rightRequest || !isSpread }
-  );
-  
-  const { data: singlePreviewUrl, isLoading: singleLoading, error: singleError } = useGetPreviewSpreadQuery(
-    singleRequest!,
-    { skip: !singleRequest || isSpread }
-  );
-  
-  const isLoading = isSpread ? (leftLoading || rightLoading) : singleLoading;
-  const error = isSpread ? (leftError || rightError) : singleError;
 
-  const pageDimensions = getCurrentDimensions(paperSize, orientation, false);
+  const { data: leftPreviewUrl, isLoading: leftLoading, error: leftError } = useGetPreviewSpreadQuery(leftRequest!, { skip: !leftRequest || !isSpread });
+  const { data: rightPreviewUrl, isLoading: rightLoading, error: rightError } = useGetPreviewSpreadQuery(rightRequest!, { skip: !rightRequest || !isSpread });
+  const { data: singlePreviewUrl, isLoading: singleLoading, error: singleError } = useGetPreviewSpreadQuery(singleRequest!, { skip: !singleRequest || isSpread });
+
+  const previewLoading = isSpread ? leftLoading || rightLoading : singleLoading;
+  const previewError = isSpread ? leftError || rightError : singleError;
+
+  const pageDimensions = getCurrentDimensions(paperWidthIn, paperHeightIn, orientation, false);
   const singleFrameStyle = computeFrameDimensions(pageDimensions.width, pageDimensions.height, MAX_EDGE_SINGLE);
   const panelFrameStyle = computeFrameDimensions(pageDimensions.width, pageDimensions.height, MAX_EDGE_PANEL);
 
@@ -141,15 +200,10 @@ export const BookSpreadDesigner: React.FC = () => {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">📖 Photobook Spread Designer</h1>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Controls Panel */}
           <div className="space-y-6">
-            <ImageUploadSection />
-            <PaperSettingsPanel />
-            <MarginControlsPanel />
             <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
-              <h3 className="text-base font-semibold text-gray-800 mb-3">Export Book YAML</h3>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="project-select">
                 Project
               </label>
@@ -157,7 +211,7 @@ export const BookSpreadDesigner: React.FC = () => {
                 id="project-select"
                 className="w-full border rounded-md px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-300"
                 value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
+                onChange={(event) => setSelectedProjectId(event.target.value)}
                 disabled={projectsLoading || projectOptions.length === 0}
               >
                 {projectsLoading ? (
@@ -172,15 +226,36 @@ export const BookSpreadDesigner: React.FC = () => {
                   ))
                 )}
               </select>
+            </div>
 
-              <label className="block text-sm font-medium text-gray-700 mt-3 mb-1" htmlFor="base-dir-input">
+            <ProjectAssetsPanel
+              projectId={selectedProjectId || null}
+              assets={assets}
+              selectedAssetId={selectedAssetId}
+              onSelectAsset={handleAssetSelect}
+            />
+
+            <PaperSettingsPanel />
+            <MarginControlsPanel />
+
+            <LayoutPersistencePanel
+              projectId={selectedProjectId || null}
+              assets={assets}
+              selectedAssetId={selectedAssetId}
+              onSelectAssetById={handleSelectAssetById}
+            />
+
+            <div className="bg-white p-4 rounded-lg shadow border border-gray-100">
+              <h3 className="text-base font-semibold text-gray-800 mb-3">Export Book YAML</h3>
+
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="base-dir-input">
                 Base directory (optional)
               </label>
               <input
                 id="base-dir-input"
                 type="text"
                 value={baseDir}
-                onChange={(e) => setBaseDir(e.target.value)}
+                onChange={(event) => setBaseDir(event.target.value)}
                 placeholder="Defaults to server data root"
                 className="w-full border rounded-md px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-300"
               />
@@ -214,7 +289,6 @@ export const BookSpreadDesigner: React.FC = () => {
             </div>
           </div>
 
-          {/* Preview Panel */}
           <div className="lg:col-span-2">
             <div className="bg-white p-6 rounded-lg shadow">
               <div className="flex justify-between items-center mb-4">
@@ -223,32 +297,29 @@ export const BookSpreadDesigner: React.FC = () => {
               </div>
 
               <div className="space-y-6">
-                {/* Image Controls */}
                 <ImageControlsPanel />
 
-                {/* Preview */}
                 <div className="flex justify-center">
                   {image ? (
                     <div className="text-center">
-                      {isLoading && (
+                      {previewLoading && (
                         <div className="text-gray-500 py-12">
                           <div className="text-4xl mb-4">⏳</div>
                           <p>Generating preview...</p>
                         </div>
                       )}
-                      {error && (
+                      {previewError && (
                         <div className="text-red-500 py-12">
-                          <div className="text-4xl mb-4">❌</div>
-                          <p>Error generating preview</p>
+                          <p>Failed to render preview. Adjust settings or retry.</p>
                         </div>
                       )}
-                      {!isLoading && !error && (
-                        <div className="preview-container">
+                      {!previewLoading && !previewError && (
+                        <div className="flex flex-wrap justify-center gap-6">
                           {isSpread ? (
-                            <div className="flex flex-wrap gap-6 items-start justify-center">
+                            <>
                               {renderFramedPreview('Left Page', leftPreviewUrl, panelFrameStyle)}
                               {renderFramedPreview('Right Page', rightPreviewUrl, panelFrameStyle)}
-                            </div>
+                            </>
                           ) : (
                             renderFramedPreview('Single Page', singlePreviewUrl, singleFrameStyle)
                           )}
@@ -256,17 +327,13 @@ export const BookSpreadDesigner: React.FC = () => {
                       )}
                     </div>
                   ) : (
-                    <div className="text-center text-gray-500 py-12">
-                      <div className="text-6xl mb-4">🖼️</div>
-                      <p>Upload an image to start designing your photobook spread</p>
+                    <div className="text-gray-400 py-12">
+                      <p>Select or upload an image to begin previewing layouts.</p>
                     </div>
                   )}
                 </div>
 
-                {/* Image Information */}
                 <ImageInformationPanel />
-
-                {/* Debug Panel */}
                 <AlgorithmDebugPanel />
               </div>
             </div>

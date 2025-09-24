@@ -320,7 +320,7 @@ Routing and state:
 - [x] Legacy image upload/list/reorder routes persist via the asset repository while continuing to serve the old response shape (`pkg/serve/server.go:174`).
 - [x] Page and spread CRUD endpoints are backed directly by SQL with JSON encoding helpers mirroring the Simple pipeline (`pkg/serve/server.go:344`).
 - [x] RTK Query exposes typed hooks for the new page/spread resources (`web/src/api.ts:233`).
-- [ ] React components still need to consume the persisted records; existing UI continues to rely on in-memory state until that wiring lands.
+- [x] React components now load and persist assets/pages/spreads through RTK Query endpoints (`web/src/views/BookSpreadDesigner.tsx`).
 - [x] Basic HTTP integration coverage exercises the pages/spreads lifecycle through the REST API (`pkg/serve/server_rest_test.go`).
 - [ ] Repository-focused unit tests are still pending; consider lightweight sqlite-in-memory suites for CRUD edge cases.
 

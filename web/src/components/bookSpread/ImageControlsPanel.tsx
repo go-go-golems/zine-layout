@@ -14,23 +14,25 @@ import { suggestCropRatio, getRatioCategory } from '../../utils/spreadRequestBui
 
 export const ImageControlsPanel: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { 
-    image, 
-    cropRatio, 
-    cropToFill, 
-    imageScale, 
+  const {
+    image,
+    cropRatio,
+    cropToFill,
+    imageScale,
     imagePosition,
     paperSize,
+    paperWidthIn,
+    paperHeightIn,
     orientation,
     isSpread,
     margins,
-    gutterMargin
+    gutterMargin,
   } = useAppSelector((state) => state.bookSpread);
 
   if (!image) return null;
 
   // Calculate current dimensions and content area
-  const { width, height } = getCurrentDimensions(paperSize, orientation, isSpread);
+  const { width, height } = getCurrentDimensions(paperWidthIn, paperHeightIn, orientation, isSpread);
   const totalMarginWidth = margins.left + margins.right;
   const totalMarginHeight = margins.top + margins.bottom;
   const baseContentWidth = width - totalMarginWidth;

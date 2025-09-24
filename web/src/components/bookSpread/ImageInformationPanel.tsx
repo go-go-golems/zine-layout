@@ -3,13 +3,13 @@ import { useAppSelector } from '../../hooks/redux';
 import { getCurrentDimensions } from '../../utils/bookSpreadUtils';
 
 export const ImageInformationPanel: React.FC = () => {
-  const { image, paperSize, orientation, isSpread, dpi, gutterMargin } = useAppSelector(
+  const { image, paperSize, paperWidthIn, paperHeightIn, orientation, isSpread, dpi, gutterMargin } = useAppSelector(
     (state) => state.bookSpread
   );
 
   if (!image) return null;
 
-  const { width, height } = getCurrentDimensions(paperSize, orientation, isSpread);
+  const { width, height } = getCurrentDimensions(paperWidthIn, paperHeightIn, orientation, isSpread);
   const hasGutter = isSpread && gutterMargin > 0;
   const numImages = hasGutter ? 2 : 1;
   

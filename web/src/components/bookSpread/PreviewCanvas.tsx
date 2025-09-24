@@ -136,17 +136,19 @@ const SinglePreview: React.FC<SinglePreviewProps> = ({
 
 export const PreviewCanvas: React.FC = () => {
   const state = useAppSelector((state) => state.bookSpread);
-  const { 
-    image, 
-    paperSize, 
-    orientation, 
-    isSpread, 
-    margins, 
-    cropRatio, 
-    cropToFill, 
-    imageScale, 
+  const {
+    image,
+    paperSize,
+    paperWidthIn,
+    paperHeightIn,
+    orientation,
+    isSpread,
+    margins,
+    cropRatio,
+    cropToFill,
+    imageScale,
     imagePosition,
-    gutterMargin
+    gutterMargin,
   } = state;
 
   if (!image) {
@@ -158,7 +160,18 @@ export const PreviewCanvas: React.FC = () => {
     );
   }
 
-  const { width, height } = getCurrentDimensions(paperSize, orientation, isSpread);
+  if (!image.src) {
+    return (
+      <div className="text-center text-gray-500 py-12">
+        <div className="text-6xl mb-4">🖼️</div>
+        <p>Select a project asset to preview the layout.</p>
+      </div>
+    );
+  }
+
+  const previewImage = { src: image.src, width: image.width, height: image.height };
+
+  const { width, height } = getCurrentDimensions(paperWidthIn, paperHeightIn, orientation, isSpread);
   const previewWidth = Math.min(600, width * 50); // Scale for preview
   const previewHeight = (height / width) * previewWidth;
 
@@ -236,7 +249,7 @@ export const PreviewCanvas: React.FC = () => {
       {!isSpread || !hasGutter ? (
         /* Single page or spread without gutter */
         <SinglePreview
-          image={image}
+          image={previewImage}
           dimensions={dimensions}
           previewDimensions={previewDimensions}
           contentArea={{
@@ -252,7 +265,7 @@ export const PreviewCanvas: React.FC = () => {
         <>
           {/* Left panel preview */}
           <SinglePreview
-            image={image}
+            image={previewImage}
             dimensions={dimensions}
             previewDimensions={previewDimensions}
             contentArea={{
@@ -269,7 +282,7 @@ export const PreviewCanvas: React.FC = () => {
 
           {/* Right panel preview */}
           <SinglePreview
-            image={image}
+            image={previewImage}
             dimensions={dimensions}
             previewDimensions={previewDimensions}
             contentArea={{

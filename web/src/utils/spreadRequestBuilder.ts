@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAppSelector } from '../hooks/redux';
-import { CROP_RATIOS, PAPER_SIZES } from '../store/bookSpreadSlice';
-import { type ComputeRequest } from '../api';
+import { CROP_RATIOS, type BookSpreadState } from '../store/bookSpreadSlice';
+import { type ComputeRequest, type SpreadSettings } from '../api';
 
 // Hook to build backend request parameters from Redux state
 export const useSpreadRequest = (): ComputeRequest | null => {
@@ -9,6 +9,8 @@ export const useSpreadRequest = (): ComputeRequest | null => {
   const { 
     image, 
     paperSize, 
+    paperWidthIn,
+    paperHeightIn,
     orientation, 
     isSpread, 
     margins, 
@@ -22,8 +24,6 @@ export const useSpreadRequest = (): ComputeRequest | null => {
   return useMemo(() => {
     if (!image?.uploadedPath) return null;
 
-    const paperDims = PAPER_SIZES[paperSize];
-    
     // Convert crop ratio to numeric value for backend
     let cropRatioValue: number | undefined;
     if (cropRatio && cropRatio !== 'original') {
@@ -36,34 +36,10 @@ export const useSpreadRequest = (): ComputeRequest | null => {
     return {
       image_path: `/home/manuel/workspaces/2025-09-23/book-spread-generator/zine-layout/data${image.uploadedPath}`,
       name: 'preview',
-      settings: {
-        paper_width_in: paperDims.width,
-        paper_height_in: paperDims.height,
-        dpi: state.dpi,
-        orientation: orientation,
-        margin_top_in: margins.top,
-        margin_right_in: margins.right,
-        margin_bottom_in: margins.bottom,
-        margin_left_in: margins.left,
-        is_spread: isSpread,
-        gutter_in: gutterMargin,
-        crop_ratio: cropRatioValue,
-        crop_to_fill: cropToFill,
-        user_scale: imageScale,
-        position_x: imagePosition.x,
-        position_y: imagePosition.y,
-        units: 'px',
-        export: {
-          format: 'png',
-          quality: 90,
-          background: '#ffffff',
-          out_dir: './out',
-          filename_template: '{name}-{panel}.{ext}',
-        },
-      },
+      settings: buildSpreadSettingsFromState(state, cropRatioValue),
     };
   }, [
-    image?.uploadedPath, paperSize, orientation, isSpread,
+    image?.uploadedPath, paperWidthIn, paperHeightIn, orientation, isSpread,
     margins.top, margins.right, margins.bottom, margins.left,
     cropRatio, cropToFill, imageScale, imagePosition.x, imagePosition.y,
     gutterMargin, state.dpi
@@ -105,6 +81,47 @@ export const suggestCropRatio = (imageWidth: number, imageHeight: number): keyof
   }
   
   return closestRatio;
+};
+
+export const buildSpreadSettingsFromState = (
+  state: BookSpreadState,
+  overrideCropRatio?: number
+): SpreadSettings => {
+  const { paperWidthIn, paperHeightIn, orientation, margins, isSpread, gutterMargin, cropRatio, cropToFill, imageScale, imagePosition, dpi } = state;
+
+  let cropRatioValue: number | null = null;
+  if (overrideCropRatio !== undefined) {
+    cropRatioValue = overrideCropRatio ?? null;
+  } else if (cropRatio !== 'original') {
+    const value = CROP_RATIOS[cropRatio];
+    cropRatioValue = value ?? null;
+  }
+
+  return {
+    paper_width_in: paperWidthIn,
+    paper_height_in: paperHeightIn,
+    dpi,
+    orientation,
+    margin_top_in: margins.top,
+    margin_right_in: margins.right,
+    margin_bottom_in: margins.bottom,
+    margin_left_in: margins.left,
+    is_spread: isSpread,
+    gutter_in: gutterMargin,
+    crop_ratio: cropRatioValue === null ? undefined : cropRatioValue,
+    crop_to_fill: cropToFill,
+    user_scale: imageScale,
+    position_x: imagePosition.x,
+    position_y: imagePosition.y,
+    units: 'px',
+    export: {
+      format: 'png',
+      quality: 90,
+      background: '#ffffff',
+      out_dir: './out',
+      filename_template: '{name}-{panel}.{ext}',
+    },
+  };
 };
 
 // Helper to categorize ratios

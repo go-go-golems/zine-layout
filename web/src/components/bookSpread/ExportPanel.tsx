@@ -9,24 +9,26 @@ import {
 
 export const ExportPanel: React.FC = () => {
   const state = useAppSelector((state) => state.bookSpread);
-  const { 
-    image, 
-    paperSize, 
-    orientation, 
-    isSpread, 
-    margins, 
-    cropRatio, 
-    cropToFill, 
-    imageScale, 
+  const {
+    image,
+    paperSize,
+    paperWidthIn,
+    paperHeightIn,
+    orientation,
+    isSpread,
+    margins,
+    cropRatio,
+    cropToFill,
+    imageScale,
     imagePosition,
     dpi,
-    gutterMargin
+    gutterMargin,
   } = state;
 
   const exportImage = () => {
     if (!image) return;
 
-    const { width, height } = getCurrentDimensions(paperSize, orientation, isSpread);
+    const { width, height } = getCurrentDimensions(paperWidthIn, paperHeightIn, orientation, isSpread);
     const hasGutter = isSpread && gutterMargin > 0;
 
     if (hasGutter) {
@@ -39,6 +41,8 @@ export const ExportPanel: React.FC = () => {
   };
 
   const exportSingleImage = (width: number, height: number) => {
+    if (!image || !image.src) return;
+    const imageSrc = image.src;
     const pixelWidth = width * dpi;
     const pixelHeight = height * dpi;
 
@@ -107,10 +111,12 @@ export const ExportPanel: React.FC = () => {
       link.href = canvas.toDataURL('image/png');
       link.click();
     };
-    imgElement.src = image.src;
+    imgElement.src = imageSrc;
   };
 
   const exportTwoSeparateImages = (width: number, height: number) => {
+    if (!image || !image.src) return;
+    const imageSrc = image.src;
     // Calculate dimensions
     const fullPixelWidth = width * dpi;
     const pixelHeight = height * dpi;
@@ -205,7 +211,7 @@ export const ExportPanel: React.FC = () => {
         link.href = canvas.toDataURL('image/png');
         link.click();
       };
-      imgElement.src = image.src;
+      imgElement.src = imageSrc;
     };
 
     const createRightImage = () => {
@@ -245,7 +251,7 @@ export const ExportPanel: React.FC = () => {
         link.href = canvas.toDataURL('image/png');
         link.click();
       };
-      imgElement.src = image.src;
+      imgElement.src = imageSrc;
     };
 
     // Create both images with slight delay

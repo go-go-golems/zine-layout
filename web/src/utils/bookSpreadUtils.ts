@@ -1,4 +1,4 @@
-import { PAPER_SIZES, CROP_RATIOS, BookSpreadState } from '../store/bookSpreadSlice';
+import { CROP_RATIOS, BookSpreadState } from '../store/bookSpreadSlice';
 
 export interface Dimensions {
   width: number;
@@ -6,25 +6,20 @@ export interface Dimensions {
 }
 
 export const getCurrentDimensions = (
-  paperSize: keyof typeof PAPER_SIZES,
+  baseWidth: number,
+  baseHeight: number,
   orientation: 'portrait' | 'landscape',
   isSpread: boolean
 ): Dimensions => {
-  const base = PAPER_SIZES[paperSize];
-  let width = base.width;
-  let height = base.height;
+  let width = baseWidth;
+  let height = baseHeight;
 
   // Swap dimensions for landscape
   if (orientation === 'landscape') {
     [width, height] = [height, width];
   }
 
-  // Apply spread multiplier
-  if (isSpread) {
-    width = width * 2;
-  }
-
-  return { width, height };
+  return { width: isSpread ? width * 2 : width, height };
 };
 
 export const loadImageFromFile = (file: File): Promise<HTMLImageElement> => {
