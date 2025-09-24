@@ -43,6 +43,8 @@ export const loadImageFromFile = (file: File): Promise<HTMLImageElement> => {
   });
 };
 
+const DEBUG_UTILS = true;
+
 export const calculateImageDimensions = (
   image: HTMLImageElement,
   contentWidth: number,
@@ -57,6 +59,14 @@ export const calculateImageDimensions = (
   let sourceY = 0;
   let cropAdjustmentX = 0;
   let cropAdjustmentY = 0;
+
+  if (DEBUG_UTILS) {
+    console.log('[calculateImageDimensions] Input:', {
+      image: { width: image.width, height: image.height },
+      content: { width: contentWidth, height: contentHeight },
+      cropRatio, cropToFill, imagePosition
+    });
+  }
 
   if (cropRatio !== 'original' && CROP_RATIOS[cropRatio]) {
     const targetRatio = CROP_RATIOS[cropRatio]!;
@@ -82,6 +92,7 @@ export const calculateImageDimensions = (
       // Image is wider than content area - crop width, allow horizontal adjustment
       const newWidth = imgHeight * contentRatio;
       const maxCropAdjustment = (imgWidth - newWidth) / 2;
+      // imagePosition.x is in [-100, 100], convert to adjustment range
       cropAdjustmentX = (imagePosition.x / 100) * maxCropAdjustment;
       sourceX = (imgWidth - newWidth) / 2 + cropAdjustmentX;
       imgWidth = newWidth;
@@ -95,7 +106,7 @@ export const calculateImageDimensions = (
     }
   }
 
-  return {
+  const result = {
     imgWidth,
     imgHeight,
     sourceX,
@@ -103,6 +114,12 @@ export const calculateImageDimensions = (
     cropAdjustmentX,
     cropAdjustmentY,
   };
+
+  if (DEBUG_UTILS) {
+    console.log('[calculateImageDimensions] Output:', result);
+  }
+
+  return result;
 };
 
 export const calculateImageScale = (

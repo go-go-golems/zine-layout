@@ -1,5 +1,7 @@
 import React from 'react';
 import { useAppSelector, useAppDispatch } from '../../hooks/redux';
+
+const DEBUG = true;
 import { 
   setCropRatio, 
   setCropToFill, 
@@ -33,10 +35,10 @@ export const ImageControlsPanel: React.FC = () => {
   const baseContentWidth = width - totalMarginWidth;
   const baseContentHeight = height - totalMarginHeight;
 
-  // Account for gutter in spread calculations
-  const effectiveContentWidth = (isSpread && gutterMargin > 0) 
-    ? baseContentWidth - gutterMargin 
-    : baseContentWidth;
+  // For position control calculations:
+  // - Single page or spread without gutter: use full content width
+  // - Spread with gutter: image spans full content width (gutter represents lost content in binding)
+  const effectiveContentWidth = baseContentWidth;
 
   // Create mock image object for shouldEnablePositionControl
   const mockImage = image ? {
@@ -50,6 +52,22 @@ export const ImageControlsPanel: React.FC = () => {
     effectiveContentWidth,
     baseContentHeight
   );
+
+  // Debug logging for position controls
+  if (DEBUG) {
+    console.log('[ImageControlsPanel] Position control debug:', {
+      layout: { isSpread, gutterMargin },
+      image: image ? { width: image.width, height: image.height } : null,
+      cropToFill,
+      contentArea: { effectiveContentWidth, baseContentHeight },
+      controls: { enableX, enableY },
+      position: imagePosition,
+      ratios: {
+        content: effectiveContentWidth / baseContentHeight,
+        image: image ? image.width / image.height : null
+      }
+    });
+  }
 
   return (
     <div className="bg-gray-50 p-4 rounded-lg">
