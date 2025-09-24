@@ -20,7 +20,7 @@ dist/
 .envrc
 .history
 
-zine-layout
+/zine-layout
 data/projects/
 
 web/node_modules

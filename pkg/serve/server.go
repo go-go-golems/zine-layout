@@ -853,7 +853,11 @@ func (s *Server) Routes() http.Handler {
 		}
     trace := &simple.Trace{UseZerolog: true}
 		result := simple.ComputePlacement(inputs, trace)
-		writeJSON(w, http.StatusOK, map[string]any{"result": result, "trace": trace.Lines})
+		resp := map[string]any{"result": result, "trace": trace.Lines}
+		if trace.Structured != nil {
+			resp["trace_json"] = trace.Structured
+		}
+		writeJSON(w, http.StatusOK, resp)
 	})
 
 	mux.HandleFunc("/api/v1/preview", func(w http.ResponseWriter, r *http.Request) {
@@ -951,6 +955,7 @@ func (s *Server) Routes() http.Handler {
 		imageBase := strings.TrimSuffix(filepath.Base(req.ImagePath), filepath.Ext(req.ImagePath))
 		opts := simple.RenderOptions{}
 		info := simple.RenderInfoFromExport(req.Settings.Export, 1, req.Name, imageBase, opts)
+		info.Trace = trace
 		info.OutputDir = outDir
 		overrides := makePanelPaths(outDir, sanitizeNameForFile(req.Name), info.Format, req.Settings.IsSpread)
 		info.PathOverrides = overrides
@@ -978,7 +983,17 @@ func (s *Server) Routes() http.Handler {
 				outputFile{Panel: "right", Path: rightPath},
 			)
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"outputs": outputs, "trace": trace.Lines})
+		respBody := map[string]any{"outputs": outputs, "trace": trace.Lines}
+		if trace.Structured != nil {
+			respBody["trace_json"] = trace.Structured
+		}
+		if trace.RenderSingle != nil {
+			respBody["render_single_trace"] = trace.RenderSingle
+		}
+		if trace.RenderSpread != nil {
+			respBody["render_spread_trace"] = trace.RenderSpread
+		}
+		writeJSON(w, http.StatusOK, respBody)
 	})
 
 	mux.HandleFunc("/api/v1/yaml", func(w http.ResponseWriter, r *http.Request) {
