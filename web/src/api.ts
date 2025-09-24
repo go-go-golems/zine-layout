@@ -65,7 +65,6 @@ export interface SpreadSettings {
 }
 
 export interface ComputeRequest {
-  algorithm: string;
   image_path?: string;
   meta?: { width: number; height: number };
   name?: string;
@@ -73,7 +72,8 @@ export interface ComputeRequest {
 }
 
 export interface ComputeResult {
-  result: any; // Sonnet engine result
+  result: any;
+  trace?: string[];
 }
 
 export interface YamlRenderRequest {
@@ -89,17 +89,12 @@ export interface PanelPreview {
   height: number;
 }
 
-export interface AlgorithmPreview {
-  result?: any;
-  trace?: string[];
-  panels: PanelPreview[];
-}
-
 export interface YamlRenderSpread {
   name: string;
   image_path: string;
-  sonnet?: AlgorithmPreview;
-  simple?: AlgorithmPreview;
+  result: any;
+  trace?: string[];
+  panels: PanelPreview[];
 }
 
 export interface YamlRenderResponse {

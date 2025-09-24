@@ -22,7 +22,6 @@ import (
 	"github.com/go-go-golems/zine-layout/pkg/spread"
 	simple "github.com/go-go-golems/zine-layout/pkg/spread/simple"
 	sonnetCfg "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/config"
-	sonnetEng "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/engine"
 	"github.com/go-go-golems/zine-layout/pkg/validation"
 	"gopkg.in/yaml.v3"
 	"image"
@@ -53,21 +52,66 @@ type panelImage struct {
 	Height   int    `json:"height"`
 }
 
-type algorithmRender struct {
-	Result any          `json:"result,omitempty"`
-	Trace  []string     `json:"trace,omitempty"`
-	Panels []panelImage `json:"panels"`
-}
-
 type yamlRenderSpread struct {
-	Name      string           `json:"name"`
-	ImagePath string           `json:"image_path"`
-	Sonnet    *algorithmRender `json:"sonnet,omitempty"`
-	Simple    *algorithmRender `json:"simple,omitempty"`
+	Name      string        `json:"name"`
+	ImagePath string        `json:"image_path"`
+	Result    simple.Result `json:"result"`
+	Trace     []string      `json:"trace,omitempty"`
+	Panels    []panelImage  `json:"panels"`
 }
 
 type yamlRenderResponse struct {
 	Spreads []yamlRenderSpread `json:"spreads"`
+}
+
+type simpleRenderData struct {
+	Result simple.Result
+	Trace  []string
+	Panels []panelImage
+}
+
+func toResolved(settings spread.Settings) sonnetCfg.ResolvedSettings {
+	return sonnetCfg.ResolvedSettings{
+		PaperWidthIn:  settings.PaperWidthIn,
+		PaperHeightIn: settings.PaperHeightIn,
+		DPI:           settings.DPI,
+		Orientation:   settings.Orientation,
+		Margins: sonnetCfg.MarginValues{
+			TopIn:    settings.MarginTopIn,
+			RightIn:  settings.MarginRightIn,
+			BottomIn: settings.MarginBottomIn,
+			LeftIn:   settings.MarginLeftIn,
+		},
+		IsSpread:   settings.IsSpread,
+		GutterIn:   settings.GutterIn,
+		CropRatio:  settings.CropRatio,
+		CropToFill: settings.CropToFill,
+		UserScale:  settings.UserScale,
+		Position: sonnetCfg.PositionValues{
+			X:     settings.PositionX,
+			Y:     settings.PositionY,
+			Units: settings.Units,
+		},
+		Export: sonnetCfg.ExportValues{
+			Format:           settings.Export.Format,
+			Quality:          settings.Export.Quality,
+			Background:       settings.Export.Background,
+			OutDir:           settings.Export.OutDir,
+			FilenameTemplate: settings.Export.FilenameTemplate,
+		},
+	}
+}
+
+func makePanelPaths(tempDir, prefix, format string, isSpread bool) map[string]string {
+	paths := map[string]string{}
+	ext := normalizeExtension(format)
+	if !isSpread {
+		paths["single"] = filepath.Join(tempDir, fmt.Sprintf("%s-single%s", prefix, ext))
+		return paths
+	}
+	paths["left"] = filepath.Join(tempDir, fmt.Sprintf("%s-left%s", prefix, ext))
+	paths["right"] = filepath.Join(tempDir, fmt.Sprintf("%s-right%s", prefix, ext))
+	return paths
 }
 
 func New(settings Settings) *Server {
@@ -225,47 +269,20 @@ func (s *Server) Routes() http.Handler {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		// For now, use Sonnet engine directly by mapping Settings to its config.ResolvedSettings
-		// Minimal mapping: expect Settings fields to be valid and present.
-		// Build a pseudo SpreadSpec for compute
-		rs := sonnetCfg.ResolvedSettings{
-			PaperWidthIn:  req.Settings.PaperWidthIn,
-			PaperHeightIn: req.Settings.PaperHeightIn,
-			DPI:           req.Settings.DPI,
-			Orientation:   req.Settings.Orientation,
-			Margins:       sonnetCfg.MarginValues{TopIn: req.Settings.MarginTopIn, RightIn: req.Settings.MarginRightIn, BottomIn: req.Settings.MarginBottomIn, LeftIn: req.Settings.MarginLeftIn},
-			IsSpread:      req.Settings.IsSpread,
-			GutterIn:      req.Settings.GutterIn,
-			CropRatio:     req.Settings.CropRatio,
-			CropToFill:    req.Settings.CropToFill,
-			UserScale:     req.Settings.UserScale,
-			Position:      sonnetCfg.PositionValues{X: req.Settings.PositionX, Y: req.Settings.PositionY, Units: req.Settings.Units},
-			Export:        sonnetCfg.ExportValues{Format: req.Settings.Export.Format, Quality: req.Settings.Export.Quality, Background: req.Settings.Export.Background, OutDir: req.Settings.Export.OutDir, FilenameTemplate: req.Settings.Export.FilenameTemplate},
-		}
-		spec := sonnetCfg.SpreadSpec{Name: req.Name, ImagePath: req.ImagePath, Settings: rs}
-		meta := sonnetEng.SourceMeta{}
-		if req.Meta != nil {
-			meta.Width, meta.Height = req.Meta.Width, req.Meta.Height
-		}
-		if meta.Width <= 0 || meta.Height <= 0 {
-			// Try reading file if path provided
-			if req.ImagePath == "" {
-				http.Error(w, "missing image meta/ path", http.StatusBadRequest)
-				return
-			}
-			m, err := readImageMeta(req.ImagePath)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("read image: %v", err), http.StatusBadRequest)
-				return
-			}
-			meta = m
-		}
-		res, err := sonnetEng.Compute(spec, meta)
+		resolved := toResolved(req.Settings)
+		meta, err := resolveImageMeta(req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"result": res})
+		inputs, err := simple.InputsFromResolved(resolved, meta)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		trace := &simple.Trace{UseZerolog: true}
+		result := simple.ComputePlacement(inputs, trace)
+		writeJSON(w, http.StatusOK, map[string]any{"result": result, "trace": trace.Lines})
 	})
 
 	mux.HandleFunc("/api/v1/preview", func(w http.ResponseWriter, r *http.Request) {
@@ -278,48 +295,53 @@ func (s *Server) Routes() http.Handler {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		rs := sonnetCfg.ResolvedSettings{
-			PaperWidthIn:  req.Settings.PaperWidthIn,
-			PaperHeightIn: req.Settings.PaperHeightIn,
-			DPI:           req.Settings.DPI,
-			Orientation:   req.Settings.Orientation,
-			Margins:       sonnetCfg.MarginValues{TopIn: req.Settings.MarginTopIn, RightIn: req.Settings.MarginRightIn, BottomIn: req.Settings.MarginBottomIn, LeftIn: req.Settings.MarginLeftIn},
-			IsSpread:      req.Settings.IsSpread,
-			GutterIn:      req.Settings.GutterIn,
-			CropRatio:     req.Settings.CropRatio,
-			CropToFill:    req.Settings.CropToFill,
-			UserScale:     req.Settings.UserScale,
-			Position:      sonnetCfg.PositionValues{X: req.Settings.PositionX, Y: req.Settings.PositionY, Units: req.Settings.Units},
-			Export:        sonnetCfg.ExportValues{Format: req.Settings.Export.Format, Quality: req.Settings.Export.Quality, Background: req.Settings.Export.Background, OutDir: req.Settings.Export.OutDir, FilenameTemplate: req.Settings.Export.FilenameTemplate},
+		if strings.TrimSpace(req.ImagePath) == "" {
+			http.Error(w, "image_path required", http.StatusBadRequest)
+			return
 		}
-		spec := sonnetCfg.SpreadSpec{Name: req.Name, ImagePath: req.ImagePath, Settings: rs}
-		// Load image
-		img, meta, err := loadImage(req)
+		img, meta, err := loadImageFromPath(req.ImagePath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("load image: %v", err), http.StatusBadRequest)
+			return
+		}
+		resolved := toResolved(req.Settings)
+		inputs, err := simple.InputsFromResolved(resolved, meta)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		result, err := sonnetEng.Compute(spec, meta)
+		trace := &simple.Trace{UseZerolog: true}
+		result := simple.ComputePlacement(inputs, trace)
+		tempDir, err := os.MkdirTemp("", "preview-simple-")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// Plan outputs in-memory; use engine.Render to get output images, but here we stream combined canvas
-		// Render full paper canvas by writing a temporary PNG to memory
-		outPaths := map[string]string{"single": filepath.Join(os.TempDir(), "preview-single.png"), "left": filepath.Join(os.TempDir(), "preview-left.png"), "right": filepath.Join(os.TempDir(), "preview-right.png")}
-		_, _, err = sonnetEng.Render(result, img, outPaths)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		// Prefer the single or left panel for preview; if spread, return left panel file
-		var file string
-		if !result.Settings.IsSpread {
-			file = outPaths["single"]
+		defer os.RemoveAll(tempDir)
+		imageBase := strings.TrimSuffix(filepath.Base(req.ImagePath), filepath.Ext(req.ImagePath))
+		opts := simple.RenderOptions{PNGLevel: "speed", Scaler: "fast", ParallelEncode: true}
+		info := simple.RenderInfoFromExport(resolved.Export, 1, req.Name, imageBase, opts)
+		info.OutputDir = tempDir
+		prefix := sanitizeNameForFile(req.Name)
+		overrides := makePanelPaths(tempDir, prefix, info.Format, req.Settings.IsSpread)
+		info.PathOverrides = overrides
+		var target string
+		if !req.Settings.IsSpread {
+			path, err := simple.RenderSingle(r.Context(), img, result, info)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("render preview: %v", err), http.StatusInternalServerError)
+				return
+			}
+			target = path
 		} else {
-			file = outPaths["left"]
+			leftPath, _, err := simple.RenderSpread(r.Context(), img, result, info)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("render preview: %v", err), http.StatusInternalServerError)
+				return
+			}
+			target = leftPath
 		}
-		http.ServeFile(w, r, file)
+		http.ServeFile(w, r, target)
 	})
 
 	mux.HandleFunc("/api/v1/render", func(w http.ResponseWriter, r *http.Request) {
@@ -332,51 +354,62 @@ func (s *Server) Routes() http.Handler {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		rs := sonnetCfg.ResolvedSettings{
-			PaperWidthIn:  req.Settings.PaperWidthIn,
-			PaperHeightIn: req.Settings.PaperHeightIn,
-			DPI:           req.Settings.DPI,
-			Orientation:   req.Settings.Orientation,
-			Margins:       sonnetCfg.MarginValues{TopIn: req.Settings.MarginTopIn, RightIn: req.Settings.MarginRightIn, BottomIn: req.Settings.MarginBottomIn, LeftIn: req.Settings.MarginLeftIn},
-			IsSpread:      req.Settings.IsSpread,
-			GutterIn:      req.Settings.GutterIn,
-			CropRatio:     req.Settings.CropRatio,
-			CropToFill:    req.Settings.CropToFill,
-			UserScale:     req.Settings.UserScale,
-			Position:      sonnetCfg.PositionValues{X: req.Settings.PositionX, Y: req.Settings.PositionY, Units: req.Settings.Units},
-			Export:        sonnetCfg.ExportValues{Format: req.Settings.Export.Format, Quality: req.Settings.Export.Quality, Background: req.Settings.Export.Background, OutDir: req.Settings.Export.OutDir, FilenameTemplate: req.Settings.Export.FilenameTemplate},
+		if strings.TrimSpace(req.ImagePath) == "" {
+			http.Error(w, "image_path required", http.StatusBadRequest)
+			return
 		}
-		spec := sonnetCfg.SpreadSpec{Name: req.Name, ImagePath: req.ImagePath, Settings: rs}
-		img, meta, err := loadImage(req)
+		img, meta, err := loadImageFromPath(req.ImagePath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("load image: %v", err), http.StatusBadRequest)
+			return
+		}
+		resolved := toResolved(req.Settings)
+		inputs, err := simple.InputsFromResolved(resolved, meta)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		result, err := sonnetEng.Compute(spec, meta)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		trace := &simple.Trace{UseZerolog: true}
+		result := simple.ComputePlacement(inputs, trace)
+		outDir := strings.TrimSpace(req.Settings.Export.OutDir)
+		if outDir == "" {
+			outDir = filepath.Join(os.TempDir(), "spread-render")
+		}
+		if err := os.MkdirAll(outDir, 0o755); err != nil {
+			http.Error(w, fmt.Sprintf("create output dir: %v", err), http.StatusInternalServerError)
 			return
 		}
-		// Plan outputs: use OutDir and template
-		ensureDir := func(p string) { _ = os.MkdirAll(filepath.Dir(p), 0o755) }
-		out := map[string]string{}
-		if !result.Settings.IsSpread {
-			fn := filepath.Join(req.Settings.Export.OutDir, "render-single.png")
-			ensureDir(fn)
-			out["single"] = fn
+		imageBase := strings.TrimSuffix(filepath.Base(req.ImagePath), filepath.Ext(req.ImagePath))
+		opts := simple.RenderOptions{}
+		info := simple.RenderInfoFromExport(resolved.Export, 1, req.Name, imageBase, opts)
+		info.OutputDir = outDir
+		overrides := makePanelPaths(outDir, sanitizeNameForFile(req.Name), info.Format, req.Settings.IsSpread)
+		info.PathOverrides = overrides
+
+		type outputFile struct {
+			Panel string `json:"panel"`
+			Path  string `json:"path"`
+		}
+		var outputs []outputFile
+		if !req.Settings.IsSpread {
+			path, err := simple.RenderSingle(r.Context(), img, result, info)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("render: %v", err), http.StatusBadRequest)
+				return
+			}
+			outputs = append(outputs, outputFile{Panel: "single", Path: path})
 		} else {
-			fnL := filepath.Join(req.Settings.Export.OutDir, "render-left.png")
-			fnR := filepath.Join(req.Settings.Export.OutDir, "render-right.png")
-			ensureDir(fnL)
-			ensureDir(fnR)
-			out["left"], out["right"] = fnL, fnR
+			leftPath, rightPath, err := simple.RenderSpread(r.Context(), img, result, info)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("render: %v", err), http.StatusBadRequest)
+				return
+			}
+			outputs = append(outputs,
+				outputFile{Panel: "left", Path: leftPath},
+				outputFile{Panel: "right", Path: rightPath},
+			)
 		}
-		outputs, _, err := sonnetEng.Render(result, img, out)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"outputs": outputs})
+		writeJSON(w, http.StatusOK, map[string]any{"outputs": outputs, "trace": trace.Lines})
 	})
 
 	mux.HandleFunc("/api/v1/yaml", func(w http.ResponseWriter, r *http.Request) {
@@ -697,62 +730,23 @@ func (s *Server) renderSpreadFromSpec(ctx context.Context, index int, spec sonne
 	if strings.TrimSpace(spec.ImagePath) == "" {
 		return resp, fmt.Errorf("spread %q missing image path", spec.Name)
 	}
-	meta, err := readImageMeta(spec.ImagePath)
-	if err != nil {
-		return resp, fmt.Errorf("meta(%s): %w", spec.ImagePath, err)
-	}
-	imgReq := spread.ComputeRequest{ImagePath: spec.ImagePath}
-	img, _, err := loadImage(imgReq)
+	img, err := decodeImage(spec.ImagePath)
 	if err != nil {
 		return resp, fmt.Errorf("load image %s: %w", spec.ImagePath, err)
 	}
-	sonnetAlg, err := renderSonnetPreview(ctx, spec, img, meta)
-	if err != nil {
-		return resp, err
-	}
-	resp.Sonnet = sonnetAlg
+	bounds := img.Bounds()
+	meta := spread.ImageMeta{Width: bounds.Dx(), Height: bounds.Dy()}
 	simpleAlg, err := renderSimplePreview(ctx, index, spec, img, meta)
 	if err != nil {
 		return resp, err
 	}
-	resp.Simple = simpleAlg
+	resp.Result = simpleAlg.Result
+	resp.Trace = simpleAlg.Trace
+	resp.Panels = simpleAlg.Panels
 	return resp, nil
 }
 
-func renderSonnetPreview(_ context.Context, spec sonnetCfg.SpreadSpec, img image.Image, meta sonnetEng.SourceMeta) (*algorithmRender, error) {
-	result, err := sonnetEng.Compute(spec, meta)
-	if err != nil {
-		return nil, fmt.Errorf("compute sonnet(%s): %w", spec.Name, err)
-	}
-	tempDir, err := os.MkdirTemp("", "yaml-sonnet-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(tempDir)
-	format := normalizeFormat(result.Settings.Export.Format)
-	prefix := sanitizeNameForFile(spec.Name) + "-sonnet"
-	outPaths := makePanelPaths(tempDir, prefix, format, result.Settings.IsSpread)
-	outputs, renderTrace, err := sonnetEng.Render(result, img, outPaths)
-	if err != nil {
-		return nil, fmt.Errorf("render sonnet(%s): %w", spec.Name, err)
-	}
-	panels := make([]panelImage, 0, len(outputs))
-	for _, out := range outputs {
-		panel, err := buildPanelImage(out.Panel, out.Path)
-		if err != nil {
-			return nil, fmt.Errorf("panel %s: %w", out.Panel, err)
-		}
-		panels = append(panels, panel)
-	}
-	alg := &algorithmRender{
-		Result: result,
-		Trace:  append(traceEntriesToStrings(result.Trace), traceEntriesToStrings(renderTrace)...),
-		Panels: panels,
-	}
-	return alg, nil
-}
-
-func renderSimplePreview(ctx context.Context, index int, spec sonnetCfg.SpreadSpec, img image.Image, meta sonnetEng.SourceMeta) (*algorithmRender, error) {
+func renderSimplePreview(ctx context.Context, index int, spec sonnetCfg.SpreadSpec, img image.Image, meta spread.ImageMeta) (*simpleRenderData, error) {
 	inputs, err := simple.InputsFromResolved(spec.Settings, meta)
 	if err != nil {
 		return nil, fmt.Errorf("inputs simple(%s): %w", spec.Name, err)
@@ -801,24 +795,11 @@ func renderSimplePreview(ctx context.Context, index int, spec sonnetCfg.SpreadSp
 		}
 		paths = append(paths, leftPanel, rightPanel)
 	}
-	alg := &algorithmRender{
+	return &simpleRenderData{
 		Result: result,
 		Trace:  append([]string(nil), trace.Lines...),
 		Panels: paths,
-	}
-	return alg, nil
-}
-
-func makePanelPaths(tempDir, prefix, format string, isSpread bool) map[string]string {
-	paths := map[string]string{}
-	ext := normalizeExtension(format)
-	if !isSpread {
-		paths["single"] = filepath.Join(tempDir, fmt.Sprintf("%s-single%s", prefix, ext))
-		return paths
-	}
-	paths["left"] = filepath.Join(tempDir, fmt.Sprintf("%s-left%s", prefix, ext))
-	paths["right"] = filepath.Join(tempDir, fmt.Sprintf("%s-right%s", prefix, ext))
-	return paths
+	}, nil
 }
 
 func normalizeExtension(format string) string {
@@ -878,21 +859,6 @@ func buildPanelImage(panel, filePath string) (panelImage, error) {
 	}, nil
 }
 
-func traceEntriesToStrings(entries []sonnetEng.TraceEntry) []string {
-	if len(entries) == 0 {
-		return nil
-	}
-	out := make([]string, len(entries))
-	for i, entry := range entries {
-		if entry.Stage != "" {
-			out[i] = fmt.Sprintf("[%s] %s", entry.Stage, entry.Message)
-		} else {
-			out[i] = entry.Message
-		}
-	}
-	return out
-}
-
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	if err := s.prepare(); err != nil {
 		return err
@@ -926,34 +892,50 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func readImageMeta(path string) (sonnetEng.SourceMeta, error) {
+func readImageMeta(path string) (spread.ImageMeta, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return sonnetEng.SourceMeta{}, err
+		return spread.ImageMeta{}, err
 	}
 	defer f.Close()
 	cfg, _, err := image.DecodeConfig(f)
 	if err != nil {
-		return sonnetEng.SourceMeta{}, err
+		return spread.ImageMeta{}, err
 	}
-	return sonnetEng.SourceMeta{Width: cfg.Width, Height: cfg.Height}, nil
+	return spread.ImageMeta{Width: cfg.Width, Height: cfg.Height}, nil
 }
 
-func loadImage(req spread.ComputeRequest) (image.Image, sonnetEng.SourceMeta, error) {
-	if req.ImagePath == "" {
-		return nil, sonnetEng.SourceMeta{}, fmt.Errorf("image_path required")
+func resolveImageMeta(req spread.ComputeRequest) (spread.ImageMeta, error) {
+	if req.Meta != nil && req.Meta.Width > 0 && req.Meta.Height > 0 {
+		return spread.ImageMeta{Width: req.Meta.Width, Height: req.Meta.Height}, nil
 	}
-	f, err := os.Open(req.ImagePath)
+	if strings.TrimSpace(req.ImagePath) == "" {
+		return spread.ImageMeta{}, fmt.Errorf("image_path required to determine metadata")
+	}
+	return readImageMeta(req.ImagePath)
+}
+
+func decodeImage(path string) (image.Image, error) {
+	f, err := os.Open(path)
 	if err != nil {
-		return nil, sonnetEng.SourceMeta{}, err
+		return nil, err
 	}
 	defer f.Close()
 	img, _, err := image.Decode(f)
 	if err != nil {
-		return nil, sonnetEng.SourceMeta{}, err
+		return nil, err
 	}
-	b := img.Bounds()
-	return img, sonnetEng.SourceMeta{Width: b.Dx(), Height: b.Dy()}, nil
+	return img, nil
+}
+
+func loadImageFromPath(path string) (image.Image, spread.ImageMeta, error) {
+	img, err := decodeImage(path)
+	if err != nil {
+		return nil, spread.ImageMeta{}, err
+	}
+	bounds := img.Bounds()
+	meta := spread.ImageMeta{Width: bounds.Dx(), Height: bounds.Dy()}
+	return img, meta, nil
 }
 
 func streamZipDir(w http.ResponseWriter, dir string) error {

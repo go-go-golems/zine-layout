@@ -1,18 +1,17 @@
 import React from 'react';
 import { useAppSelector, useAppDispatch } from '../../hooks/redux';
-import { 
-  setPaperSize, 
-  setOrientation, 
-  setIsSpread, 
-  setDpi, 
+import {
+  setPaperSize,
+  setOrientation,
+  setIsSpread,
+  setDpi,
   setGutterMargin,
-  setAlgorithm,
-  PAPER_SIZES 
+  PAPER_SIZES
 } from '../../store/bookSpreadSlice';
 
 export const PaperSettingsPanel: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { paperSize, orientation, isSpread, dpi, gutterMargin, algorithm } = useAppSelector(
+  const { paperSize, orientation, isSpread, dpi, gutterMargin } = useAppSelector(
     (state) => state.bookSpread
   );
 
@@ -21,18 +20,6 @@ export const PaperSettingsPanel: React.FC = () => {
       <h3 className="text-lg font-semibold mb-4">📏 Paper Settings</h3>
 
       <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Algorithm</label>
-          <select
-            value={algorithm}
-            onChange={(e) => dispatch(setAlgorithm(e.target.value as 'sonnet' | 'simple'))}
-            className="w-full p-2 border border-gray-300 rounded-md"
-          >
-            <option value="sonnet">Sonnet (Advanced)</option>
-            <option value="simple">Simple (Basic)</option>
-          </select>
-        </div>
-
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Paper Size</label>
           <select

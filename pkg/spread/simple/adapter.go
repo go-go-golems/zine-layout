@@ -3,12 +3,12 @@ package simple
 import (
 	"fmt"
 
+	"github.com/go-go-golems/zine-layout/pkg/spread"
 	sonnetcfg "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/config"
-	sonneteng "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/engine"
 )
 
 // InputsFromResolved converts sonnet resolved settings into simple algorithm inputs.
-func InputsFromResolved(settings sonnetcfg.ResolvedSettings, meta sonneteng.SourceMeta) (Inputs, error) {
+func InputsFromResolved(settings sonnetcfg.ResolvedSettings, meta spread.ImageMeta) (Inputs, error) {
 	if meta.Width <= 0 || meta.Height <= 0 {
 		return Inputs{}, fmt.Errorf("invalid source dimensions %dx%d", meta.Width, meta.Height)
 	}

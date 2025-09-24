@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { SerializedError } from '@reduxjs/toolkit';
-import { useRenderYamlMutation } from '../api';
+import { useRenderYamlMutation, type YamlRenderSpread } from '../api';
 
 const SAMPLE_YAML = `version: "0.1"
 
@@ -60,23 +60,22 @@ const formatError = (error: unknown): string => {
   }
 };
 
-const AlgorithmPreviewView: React.FC<{ title: string; algorithm?: { result?: any; trace?: string[]; panels: { panel: string; mime_type: string; data_url: string; width: number; height: number; }[] } }> = ({ title, algorithm }) => {
-  if (!algorithm) return null;
+const SpreadPreviewView: React.FC<{ spread: YamlRenderSpread }> = ({ spread }) => {
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between mb-2">
-        <h4 className="text-lg font-semibold text-gray-800">{title}</h4>
-        <span className="text-xs text-gray-500">{algorithm.panels.length} panel(s)</span>
+        <h4 className="text-lg font-semibold text-gray-800">Simple Algorithm</h4>
+        <span className="text-xs text-gray-500">{spread.panels.length} panel(s)</span>
       </div>
       <div className="flex flex-wrap gap-4 mb-4">
-        {algorithm.panels.map((panel) => (
-          <div key={`${title}-${panel.panel}`} className="bg-gray-50 border border-gray-200 rounded-lg p-3 shadow-sm max-w-xs">
+        {spread.panels.map((panel) => (
+          <div key={`simple-${panel.panel}`} className="bg-gray-50 border border-gray-200 rounded-lg p-3 shadow-sm max-w-xs">
             <div className="text-sm font-medium text-gray-700 mb-2">
               {panel.panel.toUpperCase()} · {panel.width}×{panel.height}
             </div>
             <img
               src={panel.data_url}
-              alt={`${title} ${panel.panel}`}
+              alt={`Simple ${panel.panel}`}
               className="rounded border border-gray-200 max-h-64 object-contain"
             />
             <div className="mt-2 text-[11px] text-gray-500">{panel.mime_type}</div>
@@ -86,14 +85,14 @@ const AlgorithmPreviewView: React.FC<{ title: string; algorithm?: { result?: any
       <details className="mb-2">
         <summary className="cursor-pointer text-sm font-medium text-gray-700">Result JSON</summary>
         <pre className="bg-gray-900 text-gray-100 text-xs p-3 rounded mt-2 overflow-auto max-h-64">
-          {JSON.stringify(algorithm.result ?? {}, null, 2)}
+          {JSON.stringify(spread.result ?? {}, null, 2)}
         </pre>
       </details>
-      {algorithm.trace && algorithm.trace.length > 0 && (
+      {spread.trace && spread.trace.length > 0 && (
         <details>
           <summary className="cursor-pointer text-sm font-medium text-gray-700">Trace</summary>
           <pre className="bg-gray-900 text-gray-100 text-xs p-3 rounded mt-2 overflow-auto max-h-48 whitespace-pre-wrap">
-            {algorithm.trace.join('\n')}
+            {spread.trace.join('\n')}
           </pre>
         </details>
       )}
@@ -133,8 +132,8 @@ export const YamlPlayground: React.FC = () => {
           </button>
         </div>
         <p className="text-sm text-gray-600 mb-4">
-          Paste a Sonnet YAML configuration below and render it with both algorithms.
-          The server will return metadata and preview panels so you can compare outputs side-by-side.
+          Paste a Sonnet-style YAML configuration below and render it with the simple algorithm.
+          The server will return metadata and preview panels so you can inspect the output.
         </p>
 
         <div className="space-y-4">
@@ -187,8 +186,7 @@ export const YamlPlayground: React.FC = () => {
                   <p className="text-sm text-gray-500">Image: {spread.image_path}</p>
                 </div>
               </div>
-              <AlgorithmPreviewView title="Sonnet" algorithm={spread.sonnet} />
-              <AlgorithmPreviewView title="Simple" algorithm={spread.simple} />
+              <SpreadPreviewView spread={spread} />
             </div>
           ))}
         </div>

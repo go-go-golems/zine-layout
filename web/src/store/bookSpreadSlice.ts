@@ -38,7 +38,6 @@ export interface BookSpreadState {
     fileName: string | null;
     uploadedPath?: string; // Backend uploaded file path
   } | null;
-  algorithm: 'sonnet' | 'simple'; // Algorithm selection
   paperSize: keyof typeof PAPER_SIZES;
   isSpread: boolean;
   margins: {
@@ -61,7 +60,6 @@ export interface BookSpreadState {
 
 const initialState: BookSpreadState = {
   image: null,
-  algorithm: 'sonnet',
   paperSize: '8x10',
   isSpread: false,
   margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },
@@ -116,9 +114,6 @@ const bookSpreadSlice = createSlice({
     setGutterMargin: (state, action: PayloadAction<number>) => {
       state.gutterMargin = action.payload;
     },
-    setAlgorithm: (state, action: PayloadAction<'sonnet' | 'simple'>) => {
-      state.algorithm = action.payload;
-    },
   },
 });
 
@@ -134,7 +129,6 @@ export const {
   setImagePosition,
   setDpi,
   setGutterMargin,
-  setAlgorithm,
 } = bookSpreadSlice.actions;
 
 export default bookSpreadSlice.reducer;

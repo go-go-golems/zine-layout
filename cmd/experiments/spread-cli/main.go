@@ -5,21 +5,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-
-	simplepkg "github.com/go-go-golems/zine-layout/pkg/spread/simple"
-	"github.com/go-go-golems/zine-layout/pkg/spread/sonnet/config"
-	"github.com/go-go-golems/zine-layout/pkg/spread/sonnet/engine"
-	"github.com/go-go-golems/zine-layout/pkg/spread/sonnet/media"
-	"github.com/go-go-golems/zine-layout/pkg/spread/sonnet/namer"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
+
+	"github.com/go-go-golems/zine-layout/pkg/spread"
+	simplepkg "github.com/go-go-golems/zine-layout/pkg/spread/simple"
+	"github.com/go-go-golems/zine-layout/pkg/spread/sonnet/config"
+	"github.com/go-go-golems/zine-layout/pkg/spread/sonnet/namer"
 )
 
 func init() {
@@ -30,7 +32,7 @@ func init() {
 func main() {
 	root := &cobra.Command{
 		Use:   "spread-cli",
-		Short: "Compute and render image spreads from Sonnet YAML configs using different algorithms",
+		Short: "Compute and render image spreads from Sonnet YAML configs using the simple algorithm",
 	}
 
 	root.AddCommand(newComputeCommand())
@@ -42,46 +44,12 @@ func main() {
 	}
 }
 
-type algorithmMode string
-
-const (
-	algoSonnet algorithmMode = "sonnet"
-	algoSimple algorithmMode = "simple"
-	algoBoth   algorithmMode = "both"
-)
-
-func parseAlgorithmMode(raw string) (algorithmMode, error) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "both":
-		return algoBoth, nil
-	case "sonnet":
-		return algoSonnet, nil
-	case "simple":
-		return algoSimple, nil
-	default:
-		return "", fmt.Errorf("unknown algorithm %q (expected sonnet|simple|both)", raw)
-	}
-}
-
-func (m algorithmMode) includesSonnet() bool {
-	return m == algoSonnet || m == algoBoth
-}
-
-func (m algorithmMode) includesSimple() bool {
-	return m == algoSimple || m == algoBoth
-}
-
 // --- compute command ---
 
 type computeReport struct {
-	Index  int                  `json:"index"`
-	Name   string               `json:"name"`
-	Asset  string               `json:"asset,omitempty"`
-	Sonnet *engine.Result       `json:"sonnet,omitempty"`
-	Simple *simpleComputeResult `json:"simple,omitempty"`
-}
-
-type simpleComputeResult struct {
+	Index  int              `json:"index"`
+	Name   string           `json:"name"`
+	Asset  string           `json:"asset,omitempty"`
 	Result simplepkg.Result `json:"result"`
 	Trace  []string         `json:"trace,omitempty"`
 }
@@ -89,27 +57,16 @@ type simpleComputeResult struct {
 func newComputeCommand() *cobra.Command {
 	var printMode string
 	var only []string
-	var algoFlag string
 	cmd := &cobra.Command{
 		Use:   "compute <config.yaml>",
 		Args:  cobra.ExactArgs(1),
-		Short: "Compute spread geometry with the selected algorithm(s)",
+		Short: "Compute spread geometry using the simple algorithm",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mode, err := parseAlgorithmMode(algoFlag)
-			if err != nil {
-				return err
-			}
-
 			configPath, err := filepath.Abs(args[0])
 			if err != nil {
 				return err
 			}
-			cfg, err := config.Load(configPath)
-			if err != nil {
-				return err
-			}
-			baseDir := filepath.Dir(configPath)
-			specs, err := cfg.Resolve(baseDir)
+			specs, err := loadSpecs(configPath)
 			if err != nil {
 				return err
 			}
@@ -121,33 +78,23 @@ func newComputeCommand() *cobra.Command {
 
 			reports := make([]computeReport, 0, len(specs))
 			for i, spec := range specs {
-				meta, err := media.Metadata(spec.ImagePath)
+				meta, err := readImageMeta(spec.ImagePath)
 				if err != nil {
 					return fmt.Errorf("meta(%s): %w", spec.ImagePath, err)
 				}
-
-				rep := computeReport{Index: i + 1, Name: spec.Name, Asset: spec.AssetName}
-
-				if mode.includesSonnet() {
-					res, err := engine.Compute(spec, meta)
-					if err != nil {
-						return fmt.Errorf("compute sonnet(%s): %w", spec.Name, err)
-					}
-					resCopy := res
-					rep.Sonnet = &resCopy
+				inputs, err := simplepkg.InputsFromResolved(spec.Settings, meta)
+				if err != nil {
+					return fmt.Errorf("inputs(%s): %w", spec.Name, err)
 				}
-
-				if mode.includesSimple() {
-					inputs, err := simplepkg.InputsFromResolved(spec.Settings, meta)
-					if err != nil {
-						return fmt.Errorf("inputs simple(%s): %w", spec.Name, err)
-					}
-					trace := &simplepkg.Trace{UseZerolog: true}
-					simpleRes := simplepkg.ComputePlacement(inputs, trace)
-					rep.Simple = &simpleComputeResult{Result: simpleRes, Trace: append([]string{}, trace.Lines...)}
-				}
-
-				reports = append(reports, rep)
+				trace := &simplepkg.Trace{UseZerolog: true}
+				result := simplepkg.ComputePlacement(inputs, trace)
+				reports = append(reports, computeReport{
+					Index:  i + 1,
+					Name:   spec.Name,
+					Asset:  spec.AssetName,
+					Result: result,
+					Trace:  append([]string(nil), trace.Lines...),
+				})
 			}
 
 			switch strings.ToLower(printMode) {
@@ -162,53 +109,35 @@ func newComputeCommand() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&printMode, "print", "json", "Output format: json")
 	cmd.Flags().StringSliceVar(&only, "only", nil, "Filter spreads (name=<value>, asset=<value>)")
-	cmd.Flags().StringVar(&algoFlag, "algo", "both", "Algorithm to run: sonnet|simple|both")
 	return cmd
 }
 
 // --- render command ---
-
-type renderReport struct {
-	Index  int                 `json:"index"`
-	Name   string              `json:"name"`
-	Asset  string              `json:"asset,omitempty"`
-	Sonnet *sonnetRenderReport `json:"sonnet,omitempty"`
-	Simple *simpleRenderReport `json:"simple,omitempty"`
-}
-
-type sonnetRenderReport struct {
-	Result  engine.Result       `json:"result"`
-	Outputs []engine.OutputFile `json:"outputs"`
-	Trace   []engine.TraceEntry `json:"trace"`
-}
-
-type simpleRenderReport struct {
-	Result  simplepkg.Result `json:"result"`
-	Outputs []simpleOutput   `json:"outputs"`
-	Trace   []string         `json:"trace"`
-}
 
 type simpleOutput struct {
 	Panel string `json:"panel"`
 	Path  string `json:"path"`
 }
 
+type renderReport struct {
+	Index   int              `json:"index"`
+	Name    string           `json:"name"`
+	Asset   string           `json:"asset,omitempty"`
+	Result  simplepkg.Result `json:"result"`
+	Outputs []simpleOutput   `json:"outputs"`
+	Trace   []string         `json:"trace,omitempty"`
+}
+
 func newRenderCommand() *cobra.Command {
 	var printMode string
 	var only []string
-	var algoFlag string
 	var dryRun bool
-	var simpleFast bool
+	var fast bool
 	cmd := &cobra.Command{
 		Use:   "render <config.yaml>",
 		Args:  cobra.ExactArgs(1),
-		Short: "Render spreads to disk using the selected algorithm(s)",
+		Short: "Render spreads to disk using the simple algorithm",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mode, err := parseAlgorithmMode(algoFlag)
-			if err != nil {
-				return err
-			}
-
 			configPath, err := filepath.Abs(args[0])
 			if err != nil {
 				return err
@@ -228,111 +157,80 @@ func newRenderCommand() *cobra.Command {
 			}
 			specs = applyFilters(specs, filters)
 
+			ctx := context.Background()
 			reports := make([]renderReport, 0, len(specs))
 			filenameSet := map[string]struct{}{}
 
 			for i, spec := range specs {
-				meta, err := media.Metadata(spec.ImagePath)
+				meta, err := readImageMeta(spec.ImagePath)
 				if err != nil {
 					return fmt.Errorf("meta(%s): %w", spec.ImagePath, err)
 				}
+				inputs, err := simplepkg.InputsFromResolved(spec.Settings, meta)
+				if err != nil {
+					return fmt.Errorf("inputs(%s): %w", spec.Name, err)
+				}
+				trace := &simplepkg.Trace{UseZerolog: true}
+				result := simplepkg.ComputePlacement(inputs, trace)
 
-				outPaths, absOutDir, imageBase, err := planOutputPaths(spec, i+1, baseDir)
+				outPaths, absOutDir, err := planOutputs(spec, i+1, baseDir)
 				if err != nil {
 					return err
 				}
 
-				rep := renderReport{Index: i + 1, Name: spec.Name, Asset: spec.AssetName}
-				var img image.Image
-				var loadErr error
-				needImage := !dryRun && (mode.includesSonnet() || mode.includesSimple())
-				if needImage {
-					img, loadErr = media.Load(spec.ImagePath)
-					if loadErr != nil {
-						return fmt.Errorf("load(%s): %w", spec.ImagePath, loadErr)
-					}
-				}
-				ctx := context.Background()
-
-				if mode.includesSonnet() {
-					res, err := engine.Compute(spec, meta)
-					if err != nil {
-						return fmt.Errorf("compute sonnet(%s): %w", spec.Name, err)
-					}
-					sonnetRep := sonnetRenderReport{Result: res}
-					if dryRun {
-						panels := sortedPanels(outPaths)
-						outputs := make([]engine.OutputFile, 0, len(panels))
-						for _, panel := range panels {
-							outputs = append(outputs, engine.OutputFile{Panel: panel, Path: outPaths[panel]})
-							filenameSet[outPaths[panel]] = struct{}{}
-						}
-						sonnetRep.Outputs = outputs
-						sonnetRep.Trace = append([]engine.TraceEntry{}, res.Trace...)
-					} else {
-						outputs, renderTrace, err := engine.Render(res, img, outPaths)
-						if err != nil {
-							return fmt.Errorf("render sonnet(%s): %w", spec.Name, err)
-						}
-						sonnetRep.Outputs = outputs
-						sonnetRep.Trace = append([]engine.TraceEntry{}, res.Trace...)
-						sonnetRep.Trace = append(sonnetRep.Trace, renderTrace...)
-						for _, out := range outputs {
-							filenameSet[out.Path] = struct{}{}
-						}
-					}
-					rep.Sonnet = &sonnetRep
+				rep := renderReport{
+					Index:  i + 1,
+					Name:   spec.Name,
+					Asset:  spec.AssetName,
+					Result: result,
+					Trace:  append([]string(nil), trace.Lines...),
 				}
 
-				if mode.includesSimple() {
-					inputs, err := simplepkg.InputsFromResolved(spec.Settings, meta)
+				for _, p := range outPaths {
+					filenameSet[p] = struct{}{}
+				}
+
+				if dryRun {
+					panels := sortedPanels(outPaths)
+					for _, panel := range panels {
+						rep.Outputs = append(rep.Outputs, simpleOutput{Panel: panel, Path: outPaths[panel]})
+					}
+					reports = append(reports, rep)
+					continue
+				}
+
+				img, err := loadImage(spec.ImagePath)
+				if err != nil {
+					return fmt.Errorf("load(%s): %w", spec.ImagePath, err)
+				}
+
+				opts := simplepkg.RenderOptions{}
+				if fast {
+					opts.PNGLevel = "speed"
+					opts.Scaler = "fast"
+					opts.ParallelEncode = true
+				}
+
+				imageBase := strings.TrimSuffix(filepath.Base(spec.ImagePath), filepath.Ext(spec.ImagePath))
+				info := simplepkg.RenderInfoFromExport(spec.Settings.Export, i+1, spec.Name, imageBase, opts)
+				info.OutputDir = absOutDir
+				info.PathOverrides = outPaths
+
+				if !spec.Settings.IsSpread {
+					path, err := simplepkg.RenderSingle(ctx, img, result, info)
 					if err != nil {
-						return fmt.Errorf("inputs simple(%s): %w", spec.Name, err)
+						return fmt.Errorf("render single(%s): %w", spec.Name, err)
 					}
-					trace := &simplepkg.Trace{UseZerolog: true}
-					simpleRes := simplepkg.ComputePlacement(inputs, trace)
-
-					opts := simplepkg.RenderOptions{}
-					if simpleFast {
-						opts.PNGLevel = "speed"
-						opts.Scaler = "fast"
-						opts.ParallelEncode = true
+					rep.Outputs = append(rep.Outputs, simpleOutput{Panel: "single", Path: path})
+				} else {
+					leftPath, rightPath, err := simplepkg.RenderSpread(ctx, img, result, info)
+					if err != nil {
+						return fmt.Errorf("render spread(%s): %w", spec.Name, err)
 					}
-					info := simplepkg.RenderInfoFromExport(spec.Settings.Export, i+1, spec.Name, imageBase, opts)
-					info.OutputDir = absOutDir
-					info.PathOverrides = outPaths
-
-					simpleRep := simpleRenderReport{Result: simpleRes, Trace: append([]string{}, trace.Lines...)}
-					if dryRun {
-						panels := sortedPanels(outPaths)
-						outputs := make([]simpleOutput, 0, len(panels))
-						for _, panel := range panels {
-							outputs = append(outputs, simpleOutput{Panel: panel, Path: outPaths[panel]})
-							filenameSet[outPaths[panel]] = struct{}{}
-						}
-						simpleRep.Outputs = outputs
-					} else {
-						if !spec.Settings.IsSpread {
-							path, err := simplepkg.RenderSingle(ctx, img, simpleRes, info)
-							if err != nil {
-								return fmt.Errorf("render simple(%s): %w", spec.Name, err)
-							}
-							simpleRep.Outputs = append(simpleRep.Outputs, simpleOutput{Panel: "single", Path: path})
-							filenameSet[path] = struct{}{}
-						} else {
-							left, right, err := simplepkg.RenderSpread(ctx, img, simpleRes, info)
-							if err != nil {
-								return fmt.Errorf("render simple(%s): %w", spec.Name, err)
-							}
-							simpleRep.Outputs = append(simpleRep.Outputs,
-								simpleOutput{Panel: "left", Path: left},
-								simpleOutput{Panel: "right", Path: right},
-							)
-							filenameSet[left] = struct{}{}
-							filenameSet[right] = struct{}{}
-						}
-					}
-					rep.Simple = &simpleRep
+					rep.Outputs = append(rep.Outputs,
+						simpleOutput{Panel: "left", Path: leftPath},
+						simpleOutput{Panel: "right", Path: rightPath},
+					)
 				}
 
 				reports = append(reports, rep)
@@ -361,10 +259,9 @@ func newRenderCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Plan outputs without writing files")
+	cmd.Flags().BoolVar(&fast, "fast", false, "Use faster render settings (speed PNG, fast scaler, parallel encode)")
 	cmd.Flags().StringVar(&printMode, "print", "json", "Output mode: json|filenames|none")
 	cmd.Flags().StringSliceVar(&only, "only", nil, "Filter spreads (name=<value>, asset=<value>)")
-	cmd.Flags().StringVar(&algoFlag, "algo", "both", "Algorithm to run: sonnet|simple|both")
-	cmd.Flags().BoolVar(&simpleFast, "simple-fast", false, "Use fast render settings for the simple algorithm (PNG speed, fast scaler, parallel encode)")
 	return cmd
 }
 
@@ -373,6 +270,15 @@ func newRenderCommand() *cobra.Command {
 type filterSpec struct {
 	Key   string
 	Value string
+}
+
+func loadSpecs(path string) ([]config.SpreadSpec, error) {
+	cfg, err := config.Load(path)
+	if err != nil {
+		return nil, err
+	}
+	baseDir := filepath.Dir(path)
+	return cfg.Resolve(baseDir)
 }
 
 func parseFilters(raw []string) ([]filterSpec, error) {
@@ -420,7 +326,33 @@ func matchesFilters(spec config.SpreadSpec, filters []filterSpec) bool {
 	return true
 }
 
-func planOutputPaths(spec config.SpreadSpec, index int, baseDir string) (map[string]string, string, string, error) {
+func readImageMeta(path string) (spread.ImageMeta, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return spread.ImageMeta{}, err
+	}
+	defer f.Close()
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return spread.ImageMeta{}, err
+	}
+	return spread.ImageMeta{Width: cfg.Width, Height: cfg.Height}, nil
+}
+
+func loadImage(path string) (image.Image, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	img, _, err := image.Decode(f)
+	if err != nil {
+		return nil, err
+	}
+	return img, nil
+}
+
+func planOutputs(spec config.SpreadSpec, index int, baseDir string) (map[string]string, string, error) {
 	export := spec.Settings.Export
 	outDir := strings.TrimSpace(export.OutDir)
 	if outDir == "" {
@@ -430,8 +362,11 @@ func planOutputPaths(spec config.SpreadSpec, index int, baseDir string) (map[str
 	if !filepath.IsAbs(absOutDir) {
 		absOutDir = filepath.Join(baseDir, absOutDir)
 	}
+	if err := os.MkdirAll(absOutDir, 0o755); err != nil {
+		return nil, "", err
+	}
 
-	format := strings.ToLower(strings.TrimSpace(export.Format))
+	format := normalizeFormat(export.Format)
 	if format == "" {
 		format = "png"
 	}
@@ -452,21 +387,21 @@ func planOutputPaths(spec config.SpreadSpec, index int, baseDir string) (map[str
 		data.Panel = "single"
 		filename, err := namer.Build(export.FilenameTemplate, data)
 		if err != nil {
-			return nil, "", "", err
+			return nil, "", err
 		}
 		paths["single"] = filepath.Join(absOutDir, filename)
-		return paths, absOutDir, imageBase, nil
+		return paths, absOutDir, nil
 	}
-	panels := []string{"left", "right"}
-	for _, panel := range panels {
+
+	for _, panel := range []string{"left", "right"} {
 		data.Panel = panel
 		filename, err := namer.Build(export.FilenameTemplate, data)
 		if err != nil {
-			return nil, "", "", err
+			return nil, "", err
 		}
 		paths[panel] = filepath.Join(absOutDir, filename)
 	}
-	return paths, absOutDir, imageBase, nil
+	return paths, absOutDir, nil
 }
 
 func sortedPanels(paths map[string]string) []string {
@@ -476,4 +411,8 @@ func sortedPanels(paths map[string]string) []string {
 	}
 	sort.Strings(panels)
 	return panels
+}
+
+func normalizeFormat(format string) string {
+	return strings.ToLower(strings.TrimSpace(format))
 }

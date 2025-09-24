@@ -8,7 +8,6 @@ export const useSpreadRequest = (): ComputeRequest | null => {
   const state = useAppSelector((state) => state.bookSpread);
   const { 
     image, 
-    algorithm,
     paperSize, 
     orientation, 
     isSpread, 
@@ -35,7 +34,6 @@ export const useSpreadRequest = (): ComputeRequest | null => {
     }
 
     return {
-      algorithm,
       image_path: `/home/manuel/workspaces/2025-09-23/book-spread-generator/zine-layout/data${image.uploadedPath}`,
       name: 'preview',
       settings: {
@@ -65,7 +63,7 @@ export const useSpreadRequest = (): ComputeRequest | null => {
       },
     };
   }, [
-    image?.uploadedPath, algorithm, paperSize, orientation, isSpread,
+    image?.uploadedPath, paperSize, orientation, isSpread,
     margins.top, margins.right, margins.bottom, margins.left,
     cropRatio, cropToFill, imageScale, imagePosition.x, imagePosition.y,
     gutterMargin, state.dpi

@@ -26,7 +26,6 @@ const formatError = (error: unknown): string => {
 
 export const AlgorithmDebugPanel: React.FC = () => {
   const image = useAppSelector((state) => state.bookSpread.image);
-  const algorithm = useAppSelector((state) => state.bookSpread.algorithm);
   const spreadRequest = useSpreadRequest();
   const [computeSpread, { data: computeResult, isLoading }] = useComputeSpreadMutation();
   const [buildYaml, { data: yamlText, isLoading: yamlLoading, error: yamlError }] = useBuildYamlMutation();
@@ -54,8 +53,8 @@ export const AlgorithmDebugPanel: React.FC = () => {
   };
 
   const debugData = {
-    algorithm,
     computeResult: computeResult?.result,
+    trace: computeResult?.trace,
     request: spreadRequest,
   };
 
@@ -83,7 +82,7 @@ export const AlgorithmDebugPanel: React.FC = () => {
   return (
     <div className="mt-4 p-4 bg-gray-100 rounded-lg">
       <div className="flex justify-between items-center mb-2">
-        <h4 className="font-semibold text-sm">Algorithm Debug ({algorithm})</h4>
+        <h4 className="font-semibold text-sm">Algorithm Debug</h4>
         <div className="space-x-2">
           <button
             onClick={handleComputeDebug}
@@ -101,7 +100,7 @@ export const AlgorithmDebugPanel: React.FC = () => {
         </div>
       </div>
       <div className="text-xs text-gray-600 mb-2">
-        Backend {algorithm} algorithm result and request parameters
+        Backend simple algorithm result and request parameters
       </div>
       <pre className="text-xs overflow-auto max-h-60 bg-white p-3 rounded border font-mono">
         {debugText}
