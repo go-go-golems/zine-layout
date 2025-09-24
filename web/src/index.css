@@ -106,114 +106,170 @@ body {
   font-size: 1rem;
   line-height: 1.5rem;
 }
-  
-  /* Input components */
-  .input {
-    @apply block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed;
-  }
-  
-  .input:focus {
-    box-shadow: 0 0 0 2px var(--color-primary-500);
-    border-color: var(--color-primary-500);
-  }
-  
-  .input-error {
-    @apply border-red-500 text-red-900 placeholder-red-300;
-  }
-  
-  .input-error:focus {
-    box-shadow: 0 0 0 2px rgb(239 68 68);
-    border-color: rgb(239 68 68);
-  }
-  
-  /* Card components */
-  .card {
-    @apply bg-white rounded-xl border border-gray-200;
-    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.06);
-  }
-  
-  .card-header {
-    @apply px-6 py-4 border-b border-gray-200;
-  }
-  
-  .card-body {
-    @apply px-6 py-4;
-  }
-  
-  .card-footer {
-    @apply px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl;
-  }
-  
-  /* Panel components for the three-column layout */
-  .panel {
-    @apply bg-white border-r border-gray-200 overflow-y-auto;
-  }
-  
-  .panel-header {
-    @apply px-4 py-3 border-b border-gray-200 bg-gray-50;
-  }
-  
-  .panel-body {
-    @apply px-4 py-4 space-y-4;
-  }
-  
-  /* Drag and drop styles */
-  .drop-zone {
-    @apply border-2 border-dashed border-gray-300 rounded-lg p-6 text-center transition-colors duration-200;
-  }
-  
-  .drop-zone-active {
-    border-color: var(--color-primary-500);
-    background-color: var(--color-primary-50);
-    color: var(--color-primary-700);
-  }
-  
-  /* Grid canvas styles */
-  .grid-cell {
-    @apply border border-gray-300 rounded-lg bg-white p-2 min-h-24 flex items-center justify-center text-gray-400 text-sm transition-all duration-200;
-  }
-  
-  .grid-cell-filled {
-    border-color: var(--color-primary-500);
-    background-color: var(--color-primary-50);
-    color: var(--color-primary-700);
-  }
-  
-  .grid-cell-hover {
-    border-color: var(--color-primary-400);
-    background-color: rgba(37, 99, 235, 0.05);
-  }
+/* Input components */
+.input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  border: 1px solid rgb(209 213 219);
+  border-radius: 0.5rem;
+  background-color: white;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
 }
 
-@layer utilities {
-  /* Custom spacing utilities */
-  .space-y-6 > :not([hidden]) ~ :not([hidden]) {
-    --tw-space-y-reverse: 0;
-    margin-top: calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));
-    margin-bottom: calc(1.5rem * var(--tw-space-y-reverse));
-  }
-  
-  /* Scrollbar styling */
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: rgb(203 213 225) transparent;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgb(203 213 225);
-    border-radius: 3px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgb(148 163 184);
-  }
+.input::placeholder {
+  color: rgb(156 163 175);
+}
+
+.input:focus {
+  outline: none;
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--color-primary-500);
+}
+
+.input:disabled {
+  background-color: rgb(249 250 251);
+  color: rgb(107 114 128);
+  cursor: not-allowed;
+}
+
+.input-error {
+  border-color: rgb(239 68 68);
+  color: rgb(127 29 29);
+}
+
+.input-error::placeholder {
+  color: rgb(252 165 165);
+}
+
+.input-error:focus {
+  box-shadow: 0 0 0 2px rgb(239 68 68);
+  border-color: rgb(239 68 68);
+}
+
+/* Card components */
+.card {
+  background-color: white;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(229 231 235);
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.06);
+}
+
+.card-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgb(229 231 235);
+}
+
+.card-body {
+  padding: 1rem 1.5rem;
+}
+
+.card-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgb(229 231 235);
+  background-color: rgb(249 250 251);
+  border-bottom-left-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
+}
+
+/* Panel components for the three-column layout */
+.panel {
+  background-color: white;
+  border-right: 1px solid rgb(229 231 235);
+  overflow-y: auto;
+}
+
+.panel-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgb(229 231 235);
+  background-color: rgb(249 250 251);
+}
+
+.panel-body {
+  padding: 1rem;
+}
+
+.panel-body > * + * {
+  margin-top: 1rem;
+}
+
+/* Drag and drop styles */
+.drop-zone {
+  border: 2px dashed rgb(209 213 219);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  text-align: center;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+.drop-zone-active {
+  border-color: var(--color-primary-500);
+  background-color: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+/* Grid canvas styles */
+.grid-cell {
+  border: 1px solid rgb(209 213 219);
+  border-radius: 0.5rem;
+  background-color: white;
+  padding: 0.5rem;
+  min-height: 6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(156 163 175);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+.grid-cell-filled {
+  border-color: var(--color-primary-500);
+  background-color: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.grid-cell-hover {
+  border-color: var(--color-primary-400);
+  background-color: rgba(37, 99, 235, 0.05);
+}
+
+/* Custom spacing utilities */
+.space-y-6 > * + * {
+  margin-top: 1.5rem;
+}
+
+/* Scrollbar styling */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgb(203 213 225);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(148 163 184);
 }
