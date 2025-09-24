@@ -65,21 +65,22 @@ func Compute(spec config.SpreadSpec, meta SourceMeta) (Result, error) {
 	settings := spec.Settings
 	dpi := settings.DPI
 	trace := make([]TraceEntry, 0, 16)
-	addTrace(&trace, "source", "source image dimensions %dx%d px", meta.Width, meta.Height)
+	tracer := NewTracer(spec.Name, "compute", &trace)
+	tracer.Log("source", "source image dimensions %dx%d px", meta.Width, meta.Height)
 
 	paperWidthPx := inchesToPx(settings.PaperWidthIn, dpi)
 	paperHeightPx := inchesToPx(settings.PaperHeightIn, dpi)
 	if paperWidthPx <= 0 || paperHeightPx <= 0 {
 		return Result{}, fmt.Errorf("paper dimensions resolve to zero")
 	}
-	addTrace(&trace, "paper", "%.2fx%.2f in (%s) @ %.1f dpi → %dx%d px", settings.PaperWidthIn, settings.PaperHeightIn, settings.Orientation, dpi, paperWidthPx, paperHeightPx)
+	tracer.Log("paper", "%.2fx%.2f in (%s) @ %.1f dpi → %dx%d px", settings.PaperWidthIn, settings.PaperHeightIn, settings.Orientation, dpi, paperWidthPx, paperHeightPx)
 
 	marginTopPx := inchesToPx(settings.Margins.TopIn, dpi)
 	marginRightPx := inchesToPx(settings.Margins.RightIn, dpi)
 	marginBottomPx := inchesToPx(settings.Margins.BottomIn, dpi)
 	marginLeftPx := inchesToPx(settings.Margins.LeftIn, dpi)
 	gutterPx := inchesToPx(settings.GutterIn, dpi)
-	addTrace(&trace, "margins", "content margins (px) top=%d right=%d bottom=%d left=%d gutter=%d", marginTopPx, marginRightPx, marginBottomPx, marginLeftPx, gutterPx)
+	tracer.Log("margins", "content margins (px) top=%d right=%d bottom=%d left=%d gutter=%d", marginTopPx, marginRightPx, marginBottomPx, marginLeftPx, gutterPx)
 
 	effectiveWidth := paperWidthPx - marginLeftPx - marginRightPx
 	if settings.IsSpread {
@@ -90,7 +91,7 @@ func Compute(spec config.SpreadSpec, meta SourceMeta) (Result, error) {
 	if effectiveWidth <= 0 || effectiveHeight <= 0 {
 		return Result{}, fmt.Errorf("effective area is non-positive")
 	}
-	addTrace(&trace, "effective-area", "effective area %dx%d px at (%d,%d)", effectiveWidth, effectiveHeight, marginLeftPx, marginTopPx)
+	tracer.Log("effective-area", "effective area %dx%d px at (%d,%d)", effectiveWidth, effectiveHeight, marginLeftPx, marginTopPx)
 
 	contentX0 := marginLeftPx
 	contentY0 := marginTopPx
@@ -115,23 +116,23 @@ func Compute(spec config.SpreadSpec, meta SourceMeta) (Result, error) {
 			Height: effectiveHeight,
 		}
 		panels = append(panels, Panel{Name: "right", PanelRect: rightPanelRect})
-		addTrace(&trace, "spread", "spread panels: left %dx%d px, right %dx%d px (gutter %d px)", leftPanelRect.Width, leftPanelRect.Height, rightPanelRect.Width, rightPanelRect.Height, gutterPx)
+		tracer.Log("spread", "spread panels: left %dx%d px, right %dx%d px (gutter %d px)", leftPanelRect.Width, leftPanelRect.Height, rightPanelRect.Width, rightPanelRect.Height, gutterPx)
 	}
 	if !settings.IsSpread {
-		addTrace(&trace, "spread", "single panel %dx%d px", leftPanelRect.Width, leftPanelRect.Height)
+		tracer.Log("spread", "single panel %dx%d px", leftPanelRect.Width, leftPanelRect.Height)
 	}
 
 	cropRect := centerCrop(meta.Width, meta.Height, settings.CropRatio)
 	if settings.CropRatio != nil {
-		addTrace(&trace, "crop", "pre-crop ratio → %dx%d px (offset %d,%d)", cropRect.Width, cropRect.Height, cropRect.X, cropRect.Y)
+		tracer.Log("crop", "pre-crop ratio → %dx%d px (offset %d,%d)", cropRect.Width, cropRect.Height, cropRect.X, cropRect.Y)
 	} else {
-		addTrace(&trace, "crop", "no pre-crop (using full image)")
+		tracer.Log("crop", "no pre-crop (using full image)")
 	}
 
 	sourceCrop := cropRect
 	if settings.CropToFill {
 		sourceCrop = cropToFill(sourceCrop, effectiveWidth, effectiveHeight, settings.Position)
-		addTrace(&trace, "crop", "crop-to-fill target %dx%d px with position (%.2f, %.2f %s)", sourceCrop.Width, sourceCrop.Height, settings.Position.X, settings.Position.Y, settings.Position.Units)
+		tracer.Log("crop", "crop-to-fill target %dx%d px with position (%.2f, %.2f %s)", sourceCrop.Width, sourceCrop.Height, settings.Position.X, settings.Position.Y, settings.Position.Units)
 	}
 
 	var imgDisplay FloatSize
@@ -140,7 +141,7 @@ func Compute(spec config.SpreadSpec, meta SourceMeta) (Result, error) {
 		imgDisplay = FloatSize{Width: float64(effectiveWidth), Height: float64(effectiveHeight)}
 		virtualX = float64(contentX0)
 		virtualY = float64(contentY0)
-		addTrace(&trace, "scale", "fill mode → %dx%d px at origin (%d,%d)", effectiveWidth, effectiveHeight, contentX0, contentY0)
+		tracer.Log("scale", "fill mode → %dx%d px at origin (%d,%d)", effectiveWidth, effectiveHeight, contentX0, contentY0)
 	} else {
 		baseScale := math.Min(float64(effectiveWidth)/float64(sourceCrop.Width), float64(effectiveHeight)/float64(sourceCrop.Height))
 		scale := baseScale * clampFloat(settings.UserScale, 0.1, 3.0)
@@ -155,7 +156,7 @@ func Compute(spec config.SpreadSpec, meta SourceMeta) (Result, error) {
 		py := positionValue(settings.Position.Y, settings.Position.Units, panRangeY)
 		virtualX = cx - px
 		virtualY = cy - py
-		addTrace(&trace, "scale", "fit mode: base scale %.4f × user %.4f = %.4f; display %.1fx%.1f px; pan offsets (%.1f, %.1f)", baseScale, settings.UserScale, scale, imgDisplay.Width, imgDisplay.Height, px, py)
+		tracer.Log("scale", "fit mode: base scale %.4f × user %.4f = %.4f; display %.1fx%.1f px; pan offsets (%.1f, %.1f)", baseScale, settings.UserScale, scale, imgDisplay.Width, imgDisplay.Height, px, py)
 	}
 
 	panels[0].ImageOffset = FloatPoint{
@@ -172,7 +173,7 @@ func Compute(spec config.SpreadSpec, meta SourceMeta) (Result, error) {
 		panels[0].Name = "single"
 	}
 	for _, panel := range panels {
-		addTrace(&trace, "panels", "%s panel rect x=%d y=%d w=%d h=%d, image offset (%.1f, %.1f)", panel.Name, panel.PanelRect.X, panel.PanelRect.Y, panel.PanelRect.Width, panel.PanelRect.Height, panel.ImageOffset.X, panel.ImageOffset.Y)
+		tracer.Log("panels", "%s panel rect x=%d y=%d w=%d h=%d, image offset (%.1f, %.1f)", panel.Name, panel.PanelRect.X, panel.PanelRect.Y, panel.PanelRect.Width, panel.PanelRect.Height, panel.ImageOffset.X, panel.ImageOffset.Y)
 	}
 
 	result := Result{

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -15,6 +16,8 @@ import (
 	"github.com/go-go-golems/zine-layout/cmd/experiments/spread-algorithm-actually-from-sonnet/internal/gallery"
 	"github.com/go-go-golems/zine-layout/cmd/experiments/spread-algorithm-actually-from-sonnet/internal/media"
 	"github.com/go-go-golems/zine-layout/cmd/experiments/spread-algorithm-actually-from-sonnet/internal/namer"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type filterSpec struct {
@@ -34,6 +37,11 @@ type renderReport struct {
 	Result  engine.Result       `json:"result"`
 	Outputs []engine.OutputFile `json:"outputs"`
 	Trace   []engine.TraceEntry `json:"trace"`
+}
+
+func init() {
+	console := zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}
+	log.Logger = log.Output(console)
 }
 
 func main() {
@@ -152,24 +160,38 @@ func newRenderCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				outputs := make([]engine.OutputFile, 0)
+				combinedTrace := append([]engine.TraceEntry{}, result.Trace...)
 				renderTrace := make([]engine.TraceEntry, 0)
-				var combinedTrace []engine.TraceEntry
+				renderTracer := engine.NewTracer(spec.Name, "render", &renderTrace)
+				var outputs []engine.OutputFile
 				if !dryRun {
 					img, err := media.Load(spec.ImagePath)
 					if err != nil {
 						return fmt.Errorf("load(%s): %w", spec.ImagePath, err)
 					}
 					bounds := img.Bounds()
-					renderTrace = append(renderTrace, engine.TraceEntry{Stage: "render", Message: fmt.Sprintf("decoded image %dx%d px", bounds.Dx(), bounds.Dy())})
+					renderTracer.Log("decode", "decoded image %dx%d px", bounds.Dx(), bounds.Dy())
 					renderedOutputs, engineTrace, err := engine.Render(result, img, outPaths)
 					if err != nil {
 						return err
 					}
 					outputs = renderedOutputs
 					renderTrace = append(renderTrace, engineTrace...)
-					combinedTrace = append([]engine.TraceEntry{}, result.Trace...)
-					combinedTrace = append(combinedTrace, renderTrace...)
+				} else {
+					keys := make([]string, 0, len(outPaths))
+					for k := range outPaths {
+						keys = append(keys, k)
+					}
+					sort.Strings(keys)
+					for _, k := range keys {
+						path := outPaths[k]
+						outputs = append(outputs, engine.OutputFile{Panel: k, Path: path})
+						renderTracer.Log("dry-run", "would write %s panel to %s", k, path)
+					}
+					renderTracer.Log("dry-run", "no files written")
+				}
+				combinedTrace = append(combinedTrace, renderTrace...)
+				if !dryRun {
 					formattedTrace := formatTrace(combinedTrace)
 					for _, out := range outputs {
 						rel, _ := filepath.Rel(filepath.Dir(htmlPathOrDefault(htmlPath, baseDir)), out.Path)
@@ -182,20 +204,6 @@ func newRenderCommand() *cobra.Command {
 							Trace:    formattedTrace,
 						})
 					}
-				} else {
-					keys := make([]string, 0, len(outPaths))
-					for k := range outPaths {
-						keys = append(keys, k)
-					}
-					sort.Strings(keys)
-					for _, k := range keys {
-						path := outPaths[k]
-						outputs = append(outputs, engine.OutputFile{Panel: k, Path: path})
-						renderTrace = append(renderTrace, engine.TraceEntry{Stage: "render", Message: fmt.Sprintf("dry-run: would write %s panel to %s", k, path)})
-					}
-					renderTrace = append(renderTrace, engine.TraceEntry{Stage: "render", Message: "dry-run: no files written"})
-					combinedTrace = append([]engine.TraceEntry{}, result.Trace...)
-					combinedTrace = append(combinedTrace, renderTrace...)
 				}
 				reports = append(reports, renderReport{
 					Index:   index,

@@ -3,11 +3,16 @@ import { ImageUploadSection } from '../components/bookSpread/ImageUploadSection'
 import { PaperSettingsPanel } from '../components/bookSpread/PaperSettingsPanel';
 import { MarginControlsPanel } from '../components/bookSpread/MarginControlsPanel';
 import { ImageControlsPanel } from '../components/bookSpread/ImageControlsPanel';
-import { PreviewCanvas } from '../components/bookSpread/PreviewCanvas';
+import { PreviewCanvasNew } from '../components/bookSpread/PreviewCanvasNew';
 import { ImageInformationPanel } from '../components/bookSpread/ImageInformationPanel';
 import { ExportPanel } from '../components/bookSpread/ExportPanel';
+import { useSpreadAlgorithm } from '../utils/spreadAlgorithmHook';
+import { AlgorithmDebugPanel } from '../components/bookSpread/AlgorithmDebugPanel';
 
 export const BookSpreadDesigner: React.FC = () => {
+  // Compute algorithm data once in parent
+  const algorithmData = useSpreadAlgorithm();
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
@@ -35,11 +40,21 @@ export const BookSpreadDesigner: React.FC = () => {
 
                 {/* Preview */}
                 <div className="flex justify-center">
-                  <PreviewCanvas />
+                  {algorithmData ? (
+                    <PreviewCanvasNew algorithmData={algorithmData} />
+                  ) : (
+                    <div className="text-center text-gray-500 py-12">
+                      <div className="text-6xl mb-4">🖼️</div>
+                      <p>Upload an image to start designing your photobook spread</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Image Information */}
                 <ImageInformationPanel />
+
+                {/* Debug Panel */}
+                <AlgorithmDebugPanel algorithmData={algorithmData} />
               </div>
             </div>
           </div>

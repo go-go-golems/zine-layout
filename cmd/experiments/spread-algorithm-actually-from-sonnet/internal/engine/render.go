@@ -26,19 +26,20 @@ type OutputFile struct {
 // Render saves the computed spread into one or more files according to export settings.
 func Render(result Result, src image.Image, outPaths map[string]string) ([]OutputFile, []TraceEntry, error) {
 	trace := make([]TraceEntry, 0, 16)
+	tracer := NewTracer(result.SpreadName, "render", &trace)
 	export := result.Settings.Export
 	bg, err := parseBackground(export.Background, export.Format)
 	if err != nil {
 		return nil, trace, err
 	}
-	addTrace(&trace, "render", "background %s format %s (quality %d)", export.Background, export.Format, export.Quality)
+	tracer.Log("background", "background %s format %s (quality %d)", export.Background, export.Format, export.Quality)
 
 	canvas := image.NewNRGBA(image.Rect(0, 0, int(result.PaperSizePx.Width), int(result.PaperSizePx.Height)))
 	draw.Draw(canvas, canvas.Bounds(), &image.Uniform{bg}, image.Point{}, draw.Src)
 
 	cropRect := image.Rect(result.SourceCrop.X, result.SourceCrop.Y, result.SourceCrop.X+result.SourceCrop.Width, result.SourceCrop.Y+result.SourceCrop.Height)
 	cropped := cropImage(src, cropRect)
-	addTrace(&trace, "render", "cropping source to rect (%d,%d,%d,%d)", cropRect.Min.X, cropRect.Min.Y, cropRect.Max.X, cropRect.Max.Y)
+	tracer.Log("crop", "cropping source to rect (%d,%d,%d,%d)", cropRect.Min.X, cropRect.Min.Y, cropRect.Max.X, cropRect.Max.Y)
 
 	targetW := int(math.Round(result.ImageDisplay.Width))
 	targetH := int(math.Round(result.ImageDisplay.Height))
@@ -47,11 +48,11 @@ func Render(result Result, src image.Image, outPaths map[string]string) ([]Outpu
 	}
 	scaled := image.NewNRGBA(image.Rect(0, 0, targetW, targetH))
 	xdraw.CatmullRom.Scale(scaled, scaled.Bounds(), cropped, cropped.Bounds(), draw.Src, nil)
-	addTrace(&trace, "render", "scaled crop to %dx%d px", targetW, targetH)
+	tracer.Log("scale", "scaled crop to %dx%d px", targetW, targetH)
 
 	dstPoint := image.Point{X: int(math.Round(result.VirtualPosition.X)), Y: int(math.Round(result.VirtualPosition.Y))}
 	draw.Draw(canvas, image.Rectangle{Min: dstPoint, Max: dstPoint.Add(scaled.Bounds().Size())}, scaled, image.Point{}, draw.Over)
-	addTrace(&trace, "render", "drawn at destination (%d,%d)", dstPoint.X, dstPoint.Y)
+	tracer.Log("draw", "drawn at destination (%d,%d)", dstPoint.X, dstPoint.Y)
 
 	outputs := []OutputFile{}
 
@@ -64,7 +65,7 @@ func Render(result Result, src image.Image, outPaths map[string]string) ([]Outpu
 			return nil, trace, err
 		}
 		outputs = append(outputs, OutputFile{Panel: "single", Path: path})
-		addTrace(&trace, "render", "wrote single panel to %s", path)
+		tracer.Log("write", "wrote single panel to %s", path)
 		return outputs, trace, nil
 	}
 
@@ -77,7 +78,7 @@ func Render(result Result, src image.Image, outPaths map[string]string) ([]Outpu
 
 	leftRect := image.Rect(0, 0, leftWidth, canvas.Bounds().Dy())
 	rightRect := image.Rect(rightX, 0, canvas.Bounds().Dx(), canvas.Bounds().Dy())
-	addTrace(&trace, "render", "split canvas: left width %d, right starts at %d", leftWidth, rightX)
+	tracer.Log("split", "split canvas: left width %d, right starts at %d", leftWidth, rightX)
 
 	leftImg := cropImage(canvas, leftRect)
 	rightImg := cropImage(canvas, rightRect)
@@ -90,7 +91,7 @@ func Render(result Result, src image.Image, outPaths map[string]string) ([]Outpu
 		return nil, trace, err
 	}
 	outputs = append(outputs, OutputFile{Panel: "left", Path: leftPath})
-	addTrace(&trace, "render", "wrote left panel to %s", leftPath)
+	tracer.Log("write", "wrote left panel to %s", leftPath)
 
 	rightPath, ok := outPaths["right"]
 	if !ok {
@@ -100,7 +101,7 @@ func Render(result Result, src image.Image, outPaths map[string]string) ([]Outpu
 		return nil, trace, err
 	}
 	outputs = append(outputs, OutputFile{Panel: "right", Path: rightPath})
-	addTrace(&trace, "render", "wrote right panel to %s", rightPath)
+	tracer.Log("write", "wrote right panel to %s", rightPath)
 	return outputs, trace, nil
 }
 
