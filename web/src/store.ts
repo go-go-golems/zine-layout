@@ -1,5 +1,6 @@
 import { configureStore, createSlice } from '@reduxjs/toolkit';
 import { api } from './api';
+import bookSpreadReducer from './store/bookSpreadSlice';
 
 const uiSlice = createSlice({
   name: 'ui',
@@ -17,6 +18,7 @@ const uiSlice = createSlice({
 export const store = configureStore({
   reducer: {
     ui: uiSlice.reducer,
+    bookSpread: bookSpreadReducer,
     [api.reducerPath]: api.reducer,
   },
   middleware: (gDM) => gDM().concat(api.middleware),

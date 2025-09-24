@@ -5,6 +5,7 @@ import { Home } from '../views/Home';
 import { ProjectDetail } from '../views/ProjectDetail';
 import { ProjectYamlPage } from '../views/ProjectYamlPage';
 import { Projects } from '../views/Projects';
+import { BookSpreadDesigner } from '../views/BookSpreadDesigner';
 
 const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -46,6 +47,16 @@ const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 >
                   Projects
                 </Link>
+                <Link
+                  to="/book-spread"
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                    location.pathname === '/book-spread'
+                      ? 'bg-primary-100 text-primary-700' 
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  Book Spread
+                </Link>
               </nav>
             </div>
             
@@ -74,6 +85,7 @@ export const App: React.FC = () => {
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/projects/:id/yaml" element={<ProjectYamlPage />} />
+          <Route path="/book-spread" element={<BookSpreadDesigner />} />
         </Routes>
       </AppShell>
     </BrowserRouter>
