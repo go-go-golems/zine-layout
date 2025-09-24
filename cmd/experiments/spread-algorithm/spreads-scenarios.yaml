@@ -1,0 +1,215 @@
+version: "0.1"
+
+defaults:
+  paper:
+    width_in: 8.5
+    height_in: 11
+    orientation: portrait
+    dpi: 150
+  margins:
+    all_in: 0.5
+  spread:
+    is_spread: true
+    gutter_in: 0.25
+  crop:
+    ratio: original
+    to_fill: false
+  scale:
+    user_scale: 1.0
+  position:
+    x: 0
+    y: 0
+    units: normalized
+  export:
+    format: png
+    background: "#ffffff"
+    filename_template: "{index:03d}-{name}-{panel}.{ext}"
+    png_level: speed
+    scaler: fast
+    parallel_encode: true
+
+spreads:
+  # Margins variations
+  - name: margins-0
+    margins:
+      all_in: 0
+  - name: margins-025
+    margins:
+      all_in: 0.25
+  - name: margins-075
+    margins:
+      all_in: 0.75
+  - name: margins-1in
+    margins:
+      all_in: 1.0
+
+  # Gutter variations
+  - name: gutter-0
+    spread:
+      is_spread: true
+      gutter_in: 0
+  - name: gutter-05
+    spread:
+      is_spread: true
+      gutter_in: 0.5
+
+  # Crop ratios (fit)
+  - name: crop-1-1-fit
+    crop:
+      ratio: 1:1
+      to_fill: false
+  - name: crop-4-5-fit
+    crop:
+      ratio: 4:5
+      to_fill: false
+  - name: crop-3-2-fit
+    crop:
+      ratio: 3:2
+      to_fill: false
+  - name: crop-16-9-fit
+    crop:
+      ratio: 16:9
+      to_fill: false
+
+  # Crop to fill (cover)
+  - name: crop-1-1-fill
+    crop:
+      ratio: 1:1
+      to_fill: true
+  - name: crop-4-5-fill
+    crop:
+      ratio: 4:5
+      to_fill: true
+  - name: crop-3-2-fill
+    crop:
+      ratio: 3:2
+      to_fill: true
+  - name: crop-16-9-fill
+    crop:
+      ratio: 16:9
+      to_fill: true
+
+  # Scaling down (< 1) and up (> 1) in fit mode
+  - name: fit-scale-0-5
+    crop:
+      ratio: original
+      to_fill: false
+    scale:
+      user_scale: 0.5
+  - name: fit-scale-2-0
+    crop:
+      ratio: original
+      to_fill: false
+    scale:
+      user_scale: 2.0
+
+  # Positioning in fit mode (move image in the content box)
+  - name: fit-pos-left-top
+    crop:
+      ratio: original
+      to_fill: false
+    position:
+      x: -1
+      y: -1
+      units: normalized
+  - name: fit-pos-right-bottom
+    crop:
+      ratio: original
+      to_fill: false
+    position:
+      x: 1
+      y: 1
+      units: normalized
+  - name: fit-pos-center-left-100px
+    crop:
+      ratio: original
+      to_fill: false
+    position:
+      x: -100
+      y: 0
+      units: px
+
+  # Crop-to-fill with sliding the crop window in source space
+  - name: fill-crop-left
+    crop:
+      ratio: 3:2
+      to_fill: true
+    position:
+      x: -1
+      y: 0
+      units: normalized
+  - name: fill-crop-right
+    crop:
+      ratio: 3:2
+      to_fill: true
+    position:
+      x: 1
+      y: 0
+      units: normalized
+  - name: fill-crop-top
+    crop:
+      ratio: 2:3
+      to_fill: true
+    position:
+      x: 0
+      y: -1
+      units: normalized
+  - name: fill-crop-bottom
+    crop:
+      ratio: 2:3
+      to_fill: true
+    position:
+      x: 0
+      y: 1
+      units: normalized
+
+  # Single page variants for comparison
+  - name: single-fit-default
+    spread:
+      is_spread: false
+      gutter_in: 0
+    crop:
+      ratio: original
+      to_fill: false
+  - name: single-fill-4-5
+    spread:
+      is_spread: false
+      gutter_in: 0
+    crop:
+      ratio: 4:5
+      to_fill: true
+
+  # Inner gutter sweep (spread) — test a range of gutter sizes
+  - name: gutter-0-10in
+    spread:
+      is_spread: true
+      gutter_in: 0.10
+  - name: gutter-0-20in
+    spread:
+      is_spread: true
+      gutter_in: 0.20
+  - name: gutter-0-25in
+    spread:
+      is_spread: true
+      gutter_in: 0.25
+  - name: gutter-0-375in
+    spread:
+      is_spread: true
+      gutter_in: 0.375
+  - name: gutter-0-75in
+    spread:
+      is_spread: true
+      gutter_in: 0.75
+  - name: gutter-1-00in
+    spread:
+      is_spread: true
+      gutter_in: 1.00
+  - name: gutter-1-50in
+    spread:
+      is_spread: true
+      gutter_in: 1.50
+  - name: gutter-2-00in
+    spread:
+      is_spread: true
+      gutter_in: 2.00
+

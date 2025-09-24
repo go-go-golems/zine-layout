@@ -1,0 +1,43 @@
+version: "0.1"
+
+defaults:
+  paper:
+    width_in: 8.5
+    height_in: 11
+    orientation: portrait
+    dpi: 300
+  margins:
+    all_in: 0.5
+  spread:
+    is_spread: false
+    gutter_in: 0.3
+  crop:
+    ratio: original
+    to_fill: false
+  scale:
+    user_scale: 1.0
+  position:
+    x: 0
+    y: 0
+    units: normalized
+  export:
+    format: png
+    background: "#ffffff"
+    out_dir: ./out
+    filename_template: "{index:03d}-{name}-{panel}.{ext}"
+
+spreads:
+  - name: cover-single
+    image: ../../../../test.png
+
+  - name: hero-spread
+    image: ../../../../test.png
+    spread:
+      is_spread: true
+      gutter_in: 0.25
+    crop:
+      to_fill: true
+    export:
+      format: jpg
+      quality: 92
+      filename_template: "{name}-{panel}.{ext}"

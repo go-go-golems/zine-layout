@@ -5,8 +5,10 @@ go 1.24.3
 require (
 	dagger.io/dagger v0.18.17
 	github.com/Masterminds/sprig v2.22.0+incompatible
+	github.com/bmatcuk/doublestar/v4 v4.9.0
 	github.com/go-go-golems/glazed v0.6.14
 	github.com/go-go-golems/go-emrichen v0.0.10
+	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.10.1
@@ -30,7 +32,6 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
-	github.com/bmatcuk/doublestar/v4 v4.9.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.2 // indirect

@@ -1,0 +1,58 @@
+version: "0.1"
+
+defaults:
+  paper:
+    width_in: 8.5
+    height_in: 11
+    orientation: portrait
+    dpi: 300
+  margins:
+    all_in: 0.5
+  spread:
+    is_spread: false
+    gutter_in: 0.0
+  crop:
+    ratio: original
+    to_fill: false
+  scale:
+    user_scale: 1.0
+  position:
+    x: 0
+    y: 0
+    units: normalized
+  export:
+    format: png
+    background: "#ffffff"
+    out_dir: ./out
+    filename_template: "{index:03d}-{name}-{panel}.{ext}"
+    png_level: speed
+
+spreads:
+  - name: single-fit
+    crop:
+      ratio: original
+      to_fill: false
+    spread:
+      is_spread: false
+
+  - name: spread-fill-gutter
+    spread:
+      is_spread: true
+      gutter_in: 0.25
+    crop:
+      ratio: 3:2
+      to_fill: true
+    position:
+      x: 0.1
+      y: 0.0
+      units: normalized
+
+  - name: single-crop-4x5-translate
+    crop:
+      ratio: 4:5
+      to_fill: false
+    position:
+      x: 30
+      y: -20
+      units: px
+
