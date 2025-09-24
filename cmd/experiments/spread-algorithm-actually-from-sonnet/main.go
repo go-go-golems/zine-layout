@@ -11,11 +11,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/go-go-golems/zine-layout/cmd/experiments/spread-algorithm-actually-from-sonnet/internal/config"
-	"github.com/go-go-golems/zine-layout/cmd/experiments/spread-algorithm-actually-from-sonnet/internal/engine"
-	"github.com/go-go-golems/zine-layout/cmd/experiments/spread-algorithm-actually-from-sonnet/internal/gallery"
-	"github.com/go-go-golems/zine-layout/cmd/experiments/spread-algorithm-actually-from-sonnet/internal/media"
-	"github.com/go-go-golems/zine-layout/cmd/experiments/spread-algorithm-actually-from-sonnet/internal/namer"
+    "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/config"
+    "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/engine"
+    "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/gallery"
+    "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/media"
+    "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/namer"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )

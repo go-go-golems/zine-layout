@@ -13,6 +13,7 @@ import (
 
     "github.com/pkg/errors"
     "github.com/rs/zerolog/log"
+    simple "github.com/go-go-golems/zine-layout/pkg/spread/simple"
 )
 
 func main() {
@@ -40,7 +41,7 @@ func main() {
     }
 
     // Load config
-    cfg, err := LoadConfig(*cfgPath)
+    cfg, err := simple.LoadConfig(*cfgPath)
     if err != nil {
         panic(errors.Wrap(err, "failed to load config"))
     }
@@ -78,14 +79,14 @@ func main() {
             merged.Paper.DPI = *dpiOverride
         }
 
-        trace := &Trace{EnableStdout: *verbose, UseZerolog: true}
+        trace := &simple.Trace{EnableStdout: *verbose, UseZerolog: true}
 
-        trace.logf("[spread %d] name=%s is_spread=%v gutter_in=%.3f paper=%.2fx%.2f in dpi=%.1f",
+        trace.Logf("[spread %d] name=%s is_spread=%v gutter_in=%.3f paper=%.2fx%.2f in dpi=%.1f",
             idx+1, merged.Name, merged.Spread.IsSpread, merged.Spread.GutterIn, merged.Paper.WidthIn, merged.Paper.HeightIn, merged.Paper.DPI)
 
         inputs := merged.ToInputs(float64(srcW), float64(srcH))
-        trace.logf("[spread %d] computing placement...", idx+1)
-        res := ComputePlacement(inputs, trace)
+        trace.Logf("[spread %d] computing placement...", idx+1)
+        res := simple.ComputePlacement(inputs, trace)
 
         // Render
         exp := merged.Export
@@ -116,13 +117,13 @@ func main() {
         }
 
         if !merged.Spread.IsSpread {
-            trace.logf("[spread %d] rendering single ...", idx+1)
+            trace.Logf("[spread %d] rendering single ...", idx+1)
             filePath, err := RenderSingle(ctx, img, res, info)
             if err != nil {
                 panic(errors.Wrapf(err, "render single failed for spread %q", merged.Name))
             }
             log.Info().Int("spread_index", idx+1).Str("file", filePath).Msg("wrote single")
-            trace.logf("[spread %d] wrote %s", idx+1, filePath)
+            trace.Logf("[spread %d] wrote %s", idx+1, filePath)
             results = append(results, SpreadOutput{
                 Name:      merged.Name,
                 PanelFiles: []string{filePath},
@@ -131,15 +132,15 @@ func main() {
                 Timestamp: time.Now(),
             })
         } else {
-            trace.logf("[spread %d] rendering spread (left/right) ...", idx+1)
+            trace.Logf("[spread %d] rendering spread (left/right) ...", idx+1)
             leftPath, rightPath, err := RenderSpread(ctx, img, res, info)
             if err != nil {
                 panic(errors.Wrapf(err, "render spread failed for spread %q", merged.Name))
             }
             log.Info().Int("spread_index", idx+1).Str("file", leftPath).Msg("wrote left")
             log.Info().Int("spread_index", idx+1).Str("file", rightPath).Msg("wrote right")
-            trace.logf("[spread %d] wrote %s", idx+1, leftPath)
-            trace.logf("[spread %d] wrote %s", idx+1, rightPath)
+            trace.Logf("[spread %d] wrote %s", idx+1, leftPath)
+            trace.Logf("[spread %d] wrote %s", idx+1, rightPath)
             results = append(results, SpreadOutput{
                 Name:       merged.Name,
                 PanelFiles: []string{leftPath, rightPath},

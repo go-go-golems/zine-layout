@@ -16,6 +16,7 @@ import (
     "github.com/rs/zerolog/log"
     "time"
     "math"
+    simple "github.com/go-go-golems/zine-layout/pkg/spread/simple"
 )
 
 type RenderInfo struct {
@@ -90,7 +91,7 @@ func sanitize(s string) string {
     return s
 }
 
-func RenderSingle(ctx context.Context, src image.Image, res Result, info RenderInfo) (string, error) {
+func RenderSingle(ctx context.Context, src image.Image, res simple.Result, info RenderInfo) (string, error) {
     size := res.ExportSingle
     if size == nil {
         return "", fmt.Errorf("ExportSingle is nil")
@@ -123,7 +124,7 @@ func RenderSingle(ctx context.Context, src image.Image, res Result, info RenderI
     return fp, nil
 }
 
-func RenderSpread(ctx context.Context, src image.Image, res Result, info RenderInfo) (string, string, error) {
+func RenderSpread(ctx context.Context, src image.Image, res simple.Result, info RenderInfo) (string, string, error) {
     if res.ExportSpread == nil || res.LeftPanel == nil || res.RightPanel == nil || res.DstRectLeft == nil || res.DstRectRight == nil {
         return "", "", fmt.Errorf("invalid spread result")
     }
@@ -235,7 +236,7 @@ func mapPNGLevel(level string) png.CompressionLevel {
     }
 }
 
-func scaleAndDrawWith(info RenderInfo, src image.Image, dst *image.NRGBA, srcRect Rect, dstRect Rect) {
+func scaleAndDrawWith(info RenderInfo, src image.Image, dst *image.NRGBA, srcRect simple.Rect, dstRect simple.Rect) {
     // Extract crop from source
     // Map float rects to pixel rectangles
     sRect := image.Rect(
@@ -268,7 +269,7 @@ func scaleAndDrawWith(info RenderInfo, src image.Image, dst *image.NRGBA, srcRec
     log.Debug().Int("dx", dRect.Min.X).Int("dy", dRect.Min.Y).Int("dw", dRect.Dx()).Int("dh", dRect.Dy()).Msg("scaleAndDraw done")
 }
 
-func scaleAndDrawWithClip(info RenderInfo, src image.Image, dst *image.NRGBA, srcRect Rect, dstRect Rect, clip image.Rectangle) {
+func scaleAndDrawWithClip(info RenderInfo, src image.Image, dst *image.NRGBA, srcRect simple.Rect, dstRect simple.Rect, clip image.Rectangle) {
     // Intersect destination with clip
     dRect := image.Rect(
         int(dstRect.X+0.5),

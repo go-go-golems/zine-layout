@@ -1,4 +1,4 @@
-package main
+package simple
 
 import (
     "fmt"
@@ -87,7 +87,7 @@ type Trace struct {
     UseZerolog  bool
 }
 
-func (t *Trace) logf(format string, args ...interface{}) {
+func (t *Trace) Logf(format string, args ...interface{}) {
     s := fmt.Sprintf(format, args...)
     t.Lines = append(t.Lines, s)
     if t.EnableStdout {
@@ -155,7 +155,7 @@ func ComputePlacement(inp Inputs, tr *Trace) Result {
     if targetW > 0 && targetH > 0 {
         targetRatio = targetW / targetH
     }
-    tr.logf("[1] page_px=(%.2f,%.2f) spreadW_px=%.2f content=(%.2f,%.2f) gutter=%.2f effectiveSpreadW=%.2f", pageWpx, pageHpx, spreadWpx, contentW, contentH, gutterPx, effectiveSpreadW)
+    tr.Logf("[1] page_px=(%.2f,%.2f) spreadW_px=%.2f content=(%.2f,%.2f) gutter=%.2f effectiveSpreadW=%.2f", pageWpx, pageHpx, spreadWpx, contentW, contentH, gutterPx, effectiveSpreadW)
 
     // 2) Source crop window in S
     W := inp.SrcW
@@ -196,7 +196,7 @@ func ComputePlacement(inp Inputs, tr *Trace) Result {
             sx, sy, sw, sh = 0, 0, W, H
         }
     }
-    tr.logf("[2] crop S: sx=%.2f sy=%.2f sw=%.2f sh=%.2f reqRatio=%.6f srcRatio=%.6f", sx, sy, sw, sh, reqRatio, sourceRatio)
+    tr.Logf("[2] crop S: sx=%.2f sy=%.2f sw=%.2f sh=%.2f reqRatio=%.6f srcRatio=%.6f", sx, sy, sw, sh, reqRatio, sourceRatio)
 
     // 3) Scale and position in L
     scaleX := 0.0
@@ -233,7 +233,7 @@ func ComputePlacement(inp Inputs, tr *Trace) Result {
     cy := targetH / 2
     dx := cx - dw/2 + tx
     dy := cy - dh/2 + ty
-    tr.logf("[3] scale: sx=%.6f sy=%.6f final=%.6f dw=%.2f dh=%.2f dx=%.2f dy=%.2f", scaleX, scaleY, finalScale, dw, dh, dx, dy)
+    tr.Logf("[3] scale: sx=%.6f sy=%.6f final=%.6f dw=%.2f dh=%.2f dx=%.2f dy=%.2f", scaleX, scaleY, finalScale, dw, dh, dx, dy)
 
     srcRectGlobal := Rect{X: sx, Y: sy, W: sw, H: sh}
     dstRectGlobal := Rect{X: dx, Y: dy, W: dw, H: dh}
@@ -256,7 +256,7 @@ func ComputePlacement(inp Inputs, tr *Trace) Result {
         dl := Rect{X: dx - pageLeftX, Y: dy, W: dw, H: dh}
         dr := Rect{X: dx - pageRightX, Y: dy, W: dw, H: dh}
         dstLeft, dstRight = &dl, &dr
-        tr.logf("[4] panels: left=(%.0fx%.0f) right=(%.0fx%.0f) gutter=%.1f pageW=%.0f", l.W, l.H, r.W, r.H, gutterPx, pageW)
+        tr.Logf("[4] panels: left=(%.0fx%.0f) right=(%.0fx%.0f) gutter=%.1f pageW=%.0f", l.W, l.H, r.W, r.H, gutterPx, pageW)
     }
 
     // 5) Export sizes
@@ -264,7 +264,7 @@ func ComputePlacement(inp Inputs, tr *Trace) Result {
     var exportSpread *SpreadSizes
     if !inp.IsSpread {
         exportSingle = &Size{W: int(math.Round(contentW)), H: int(math.Round(contentH))}
-        tr.logf("[5] export single: %dx%d", exportSingle.W, exportSingle.H)
+        tr.Logf("[5] export single: %dx%d", exportSingle.W, exportSingle.H)
     } else {
         // Export each page at page canvas width (includes inner gutter margins)
         lw := int(math.Round(contentW / 2))
@@ -272,7 +272,7 @@ func ComputePlacement(inp Inputs, tr *Trace) Result {
         left := Size{W: lw, H: int(math.Round(contentH))}
         right := Size{W: rw, H: int(math.Round(contentH))}
         exportSpread = &SpreadSizes{Left: left, Right: right}
-        tr.logf("[5] export spread: left=%dx%d right=%dx%d (pageW=%.0f, gutter=%.1f)", left.W, left.H, right.W, right.H, contentW/2, gutterPx)
+        tr.Logf("[5] export spread: left=%dx%d right=%dx%d (pageW=%.0f, gutter=%.1f)", left.W, left.H, right.W, right.H, contentW/2, gutterPx)
     }
 
     return Result{

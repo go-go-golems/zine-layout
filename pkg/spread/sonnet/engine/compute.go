@@ -1,10 +1,10 @@
 package engine
 
 import (
-	"fmt"
-	"math"
+    "fmt"
+    "math"
 
-	"github.com/go-go-golems/zine-layout/cmd/experiments/spread-algorithm-actually-from-sonnet/internal/config"
+    "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/config"
 )
 
 type Rectangle struct {

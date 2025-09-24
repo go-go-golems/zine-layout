@@ -1,13 +1,13 @@
 package media
 
 import (
-	"image"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
-	"os"
+    "image"
+    _ "image/gif"
+    _ "image/jpeg"
+    _ "image/png"
+    "os"
 
-	"github.com/go-go-golems/zine-layout/cmd/experiments/spread-algorithm-actually-from-sonnet/internal/engine"
+    "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/engine"
 )
 
 // Metadata reads dimensions of an image without decoding the full pixel data.
