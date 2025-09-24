@@ -22,6 +22,16 @@ Server uses filesystem semantics over a data-root:
 - Renders are stored in project subdirs
 - API provides project list/create, per-project read/update/delete, image list/upload/reorder/delete, preset application, validation, and render/preview endpoints
 - The web uses RTK Query in web/src/api.ts and presents a BookSpreadDesigner with upload section and preview flow
+- All spread computation/rendering paths have been consolidated around the Simple algorithm; Sonnet code was removed in `pkg/spread/sonnet`. Simple-specific helpers now live in:
+  - `pkg/spread/simple/inputs.go` (builds algorithm inputs straight from `spread.Settings`)
+  - `pkg/spread/yaml.go` (Simple YAML schema v0.2, parsing and whole-book export)
+  - `pkg/spread/defaults.go` (canonical defaults used when exporting data)
+- The server exposes Simple-only REST handlers in `pkg/serve/server.go`:
+  - `POST /api/v1/compute`, `/api/v1/preview`, `/api/v1/render` call `simple.InputsFromSettings` directly
+  - `POST /api/v1/yaml` returns a Simple YAML snippet built by `spread.BuildSimpleYAML`
+  - `POST /api/v1/yaml/render` parses Simple YAML via `spread.ParseSimpleBookYAML`
+  - `GET /api/projects/{id}/yaml/book` assembles a full-book YAML export with `Server.buildProjectBookYAML`
+- The web client (`web/src/api.ts`) gained RTK Query endpoints for the YAML features, including `exportBookYaml`, and `BookSpreadDesigner.tsx` now offers an “Export Book YAML” panel that hits the new endpoint.
 
 Limitations:
 - No relational persistence for image metadata beyond current directory scanning
@@ -114,6 +124,7 @@ IDs: use ULIDs or UUIDv4 strings generated in Go. The rest of the code already u
 
 Files on disk:
 - Keep storing raw image files under data-root uploads or project images directories. assets.rel_path stores the relative file path for retrieval. The API for /uploads can remain, and we add a project asset upload that also writes a DB row.
+- When persisting to SQL, plan for dual-source truth during the migration: render/export endpoints currently derive layout settings from request payloads and Simple YAML. New tables must capture the same `spread.Settings` (JSON) the server consumes so the Simple pathway remains stateless. See `pkg/serve/server.go:701` for how settings/results are bundled today when producing YAML previews.
 
 ## Repository interfaces
 
@@ -199,6 +210,11 @@ type SpreadRepository interface {
   Delete(ctx context.Context, id string) error
 }
 ```
+
+When materializing `SettingsJSON` and `ResultJSON`, follow the structures already emitted in the Simple pipeline:
+- `pkg/spread/simple/inputs.go` defines the fields the preview/render endpoints expect.
+- `pkg/spread/simple/algorithm.go` and `pkg/spread/simple/render.go` describe the `Result` layout you should persist.
+- `pkg/spread/yaml.go` shows how these shapes serialize to YAML; keeping JSON payloads parallel ensures `/api/v1/yaml`, `/api/v1/yaml/render`, and `/api/projects/{id}/yaml/book` can round-trip between SQL rows and exported documents.
 
 Implementation: provide pkg/repo/sqlite with concrete types and a NewSQLiteRepositories(db *sql.DB) factory returning a struct with these repos. Use BEGIN IMMEDIATE transactions where appropriate (reorder, batch upserts).
 
@@ -296,5 +312,3 @@ Migration plan:
 - [ ] Add tests for repository methods and endpoint handlers
 
 Appendix: Using the repository interface pattern allows swapping sqlite for filesystem or future backends and enables unit testing by mocking repositories.
-
-
