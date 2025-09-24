@@ -2,41 +2,46 @@ import React, { useMemo, useState } from 'react';
 import type { SerializedError } from '@reduxjs/toolkit';
 import { useRenderYamlMutation, type YamlRenderSpread } from '../api';
 
-const SAMPLE_YAML = `version: "0.1"
+const SAMPLE_YAML = `version: "0.2"
 
 defaults:
   paper:
-    width_in: 8.5
-    height_in: 11
+    width_in: 8.0
+    height_in: 10.0
     orientation: portrait
     dpi: 300
   margins:
-    top_in: 0.5
-    right_in: 0.5
-    bottom_in: 0.5
-    left_in: 0.5
+    top_in: 0.25
+    right_in: 0.25
+    bottom_in: 0.25
+    left_in: 0.25
   spread:
-    is_spread: true
-    gutter_in: 0.25
+    is_spread: false
+    gutter_in: 0.0
   crop:
     ratio: original
     to_fill: false
   scale:
-    user_scale: 1
+    user_scale: 1.0
   position:
-    x: 0
-    y: 0
-    units: px
+    x: 0.0
+    y: 0.0
+    units: normalized
   export:
     format: png
     quality: 90
-    background: "#ffffff"
+    background: white
     out_dir: ./out
-    filename_template: "{index:03d}-{name}-{panel}.{ext}"
+    filename_template: "{name}-{panel}.{ext}"
 
 spreads:
-  - name: sample
-    image: /tmp/debug-source.png
+  - name: page-0001
+    image: ./projects/PRJ/images/0001.png
+  - name: page-0002
+    image: ./projects/PRJ/images/0002.png
+    spread:
+      is_spread: true
+      gutter_in: 0.25
 `;
 
 const formatError = (error: unknown): string => {
@@ -132,7 +137,7 @@ export const YamlPlayground: React.FC = () => {
           </button>
         </div>
         <p className="text-sm text-gray-600 mb-4">
-          Paste a Sonnet-style YAML configuration below and render it with the simple algorithm.
+          Paste a Simple YAML configuration below and render it with the simple algorithm.
           The server will return metadata and preview panels so you can inspect the output.
         </p>
 
@@ -143,7 +148,7 @@ export const YamlPlayground: React.FC = () => {
               className="w-full h-64 font-mono text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 p-3"
               value={yamlInput}
               onChange={(e) => setYamlInput(e.target.value)}
-              placeholder="Paste Sonnet YAML here"
+              placeholder="Paste Simple YAML here"
             />
           </div>
 

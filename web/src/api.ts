@@ -260,6 +260,14 @@ export const api = createApi({
         body,
       }),
     }),
+    exportBookYaml: b.query<string, { id: string; baseDir?: string }>({
+      query: ({ id, baseDir }) => ({
+        url: `/projects/${id}/yaml/book`,
+        method: 'GET',
+        params: baseDir ? { base_dir: baseDir } : undefined,
+        responseHandler: async (response) => response.text(),
+      }),
+    }),
     getPreviewSpread: b.query<string, ComputeRequest>({
       query: (body) => ({
         url: '/v1/preview',
@@ -298,4 +306,6 @@ export const {
   useGetPreviewSpreadQuery,
   useBuildYamlMutation,
   useRenderYamlMutation,
+  useExportBookYamlQuery,
+  useLazyExportBookYamlQuery,
 } = api;

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,9 +22,7 @@ import (
 	"github.com/go-go-golems/zine-layout/pkg/render"
 	"github.com/go-go-golems/zine-layout/pkg/spread"
 	simple "github.com/go-go-golems/zine-layout/pkg/spread/simple"
-	sonnetCfg "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/config"
 	"github.com/go-go-golems/zine-layout/pkg/validation"
-	"gopkg.in/yaml.v3"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -62,44 +61,6 @@ type yamlRenderSpread struct {
 
 type yamlRenderResponse struct {
 	Spreads []yamlRenderSpread `json:"spreads"`
-}
-
-type simpleRenderData struct {
-	Result simple.Result
-	Trace  []string
-	Panels []panelImage
-}
-
-func toResolved(settings spread.Settings) sonnetCfg.ResolvedSettings {
-	return sonnetCfg.ResolvedSettings{
-		PaperWidthIn:  settings.PaperWidthIn,
-		PaperHeightIn: settings.PaperHeightIn,
-		DPI:           settings.DPI,
-		Orientation:   settings.Orientation,
-		Margins: sonnetCfg.MarginValues{
-			TopIn:    settings.MarginTopIn,
-			RightIn:  settings.MarginRightIn,
-			BottomIn: settings.MarginBottomIn,
-			LeftIn:   settings.MarginLeftIn,
-		},
-		IsSpread:   settings.IsSpread,
-		GutterIn:   settings.GutterIn,
-		CropRatio:  settings.CropRatio,
-		CropToFill: settings.CropToFill,
-		UserScale:  settings.UserScale,
-		Position: sonnetCfg.PositionValues{
-			X:     settings.PositionX,
-			Y:     settings.PositionY,
-			Units: settings.Units,
-		},
-		Export: sonnetCfg.ExportValues{
-			Format:           settings.Export.Format,
-			Quality:          settings.Export.Quality,
-			Background:       settings.Export.Background,
-			OutDir:           settings.Export.OutDir,
-			FilenameTemplate: settings.Export.FilenameTemplate,
-		},
-	}
 }
 
 func makePanelPaths(tempDir, prefix, format string, isSpread bool) map[string]string {
@@ -269,13 +230,12 @@ func (s *Server) Routes() http.Handler {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		resolved := toResolved(req.Settings)
 		meta, err := resolveImageMeta(req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		inputs, err := simple.InputsFromResolved(resolved, meta)
+		inputs, err := simple.InputsFromSettings(req.Settings, meta)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -304,8 +264,7 @@ func (s *Server) Routes() http.Handler {
 			http.Error(w, fmt.Sprintf("load image: %v", err), http.StatusBadRequest)
 			return
 		}
-		resolved := toResolved(req.Settings)
-		inputs, err := simple.InputsFromResolved(resolved, meta)
+		inputs, err := simple.InputsFromSettings(req.Settings, meta)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -320,7 +279,7 @@ func (s *Server) Routes() http.Handler {
 		defer os.RemoveAll(tempDir)
 		imageBase := strings.TrimSuffix(filepath.Base(req.ImagePath), filepath.Ext(req.ImagePath))
 		opts := simple.RenderOptions{PNGLevel: "speed", Scaler: "fast", ParallelEncode: true}
-		info := simple.RenderInfoFromExport(resolved.Export, 1, req.Name, imageBase, opts)
+		info := simple.RenderInfoFromExport(req.Settings.Export, 1, req.Name, imageBase, opts)
 		info.OutputDir = tempDir
 		prefix := sanitizeNameForFile(req.Name)
 		overrides := makePanelPaths(tempDir, prefix, info.Format, req.Settings.IsSpread)
@@ -363,8 +322,7 @@ func (s *Server) Routes() http.Handler {
 			http.Error(w, fmt.Sprintf("load image: %v", err), http.StatusBadRequest)
 			return
 		}
-		resolved := toResolved(req.Settings)
-		inputs, err := simple.InputsFromResolved(resolved, meta)
+		inputs, err := simple.InputsFromSettings(req.Settings, meta)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -381,7 +339,7 @@ func (s *Server) Routes() http.Handler {
 		}
 		imageBase := strings.TrimSuffix(filepath.Base(req.ImagePath), filepath.Ext(req.ImagePath))
 		opts := simple.RenderOptions{}
-		info := simple.RenderInfoFromExport(resolved.Export, 1, req.Name, imageBase, opts)
+		info := simple.RenderInfoFromExport(req.Settings.Export, 1, req.Name, imageBase, opts)
 		info.OutputDir = outDir
 		overrides := makePanelPaths(outDir, sanitizeNameForFile(req.Name), info.Format, req.Settings.IsSpread)
 		info.PathOverrides = overrides
@@ -422,7 +380,7 @@ func (s *Server) Routes() http.Handler {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		yamlText, err := spread.RequestToSonnetYAML(req)
+		yamlText, err := spread.BuildSimpleYAML(req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -449,26 +407,18 @@ func (s *Server) Routes() http.Handler {
 			http.Error(w, "yaml is required", http.StatusBadRequest)
 			return
 		}
-		var cfg sonnetCfg.Config
-		if err := yaml.Unmarshal([]byte(yamlText), &cfg); err != nil {
-			http.Error(w, fmt.Sprintf("parse yaml: %v", err), http.StatusBadRequest)
+		doc, err := spread.ParseSimpleBookYAML(yamlText)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
-		}
-		if strings.TrimSpace(cfg.Version) == "" {
-			cfg.Version = "0.1"
 		}
 		baseDir := strings.TrimSpace(req.BaseDir)
 		if baseDir == "" {
 			baseDir = s.settings.DataRoot
 		}
-		specs, err := cfg.Resolve(baseDir)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("resolve yaml: %v", err), http.StatusBadRequest)
-			return
-		}
-		resp := yamlRenderResponse{Spreads: make([]yamlRenderSpread, 0, len(specs))}
-		for idx, spec := range specs {
-			spreadResp, err := s.renderSpreadFromSpec(r.Context(), idx+1, spec)
+		resp := yamlRenderResponse{Spreads: make([]yamlRenderSpread, 0, len(doc.Spreads))}
+		for idx, spec := range doc.Spreads {
+			spreadResp, err := s.renderSimpleSpreadSpec(r.Context(), idx+1, spec, baseDir)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -489,6 +439,29 @@ func (s *Server) Routes() http.Handler {
 		id := parts[0]
 		if id == "" {
 			http.NotFound(w, r)
+			return
+		}
+
+		// /api/projects/{id}/yaml/book
+		if len(parts) == 3 && parts[1] == "yaml" && parts[2] == "book" {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			baseDirParam := strings.TrimSpace(r.URL.Query().Get("base_dir"))
+			baseDir := baseDirParam
+			if baseDir == "" {
+				baseDir = s.settings.DataRoot
+			} else if !filepath.IsAbs(baseDir) {
+				baseDir = filepath.Join(s.settings.DataRoot, baseDir)
+			}
+			yamlText, err := s.buildProjectBookYAML(id, baseDir)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+			_, _ = w.Write([]byte(yamlText))
 			return
 		}
 
@@ -725,37 +698,27 @@ func (s *Server) Routes() http.Handler {
 	return mux
 }
 
-func (s *Server) renderSpreadFromSpec(ctx context.Context, index int, spec sonnetCfg.SpreadSpec) (yamlRenderSpread, error) {
-	resp := yamlRenderSpread{Name: spec.Name, ImagePath: spec.ImagePath}
-	if strings.TrimSpace(spec.ImagePath) == "" {
+func (s *Server) renderSimpleSpreadSpec(ctx context.Context, index int, spec spread.SimpleSpread, baseDir string) (yamlRenderSpread, error) {
+	resolvedPath := resolveImagePath(baseDir, spec.ImagePath)
+	resp := yamlRenderSpread{Name: spec.Name, ImagePath: resolvedPath}
+	if strings.TrimSpace(resolvedPath) == "" {
 		return resp, fmt.Errorf("spread %q missing image path", spec.Name)
 	}
-	img, err := decodeImage(spec.ImagePath)
+	img, err := decodeImage(resolvedPath)
 	if err != nil {
-		return resp, fmt.Errorf("load image %s: %w", spec.ImagePath, err)
+		return resp, fmt.Errorf("load image %s: %w", resolvedPath, err)
 	}
 	bounds := img.Bounds()
 	meta := spread.ImageMeta{Width: bounds.Dx(), Height: bounds.Dy()}
-	simpleAlg, err := renderSimplePreview(ctx, index, spec, img, meta)
+	inputs, err := simple.InputsFromSettings(spec.Settings, meta)
 	if err != nil {
-		return resp, err
-	}
-	resp.Result = simpleAlg.Result
-	resp.Trace = simpleAlg.Trace
-	resp.Panels = simpleAlg.Panels
-	return resp, nil
-}
-
-func renderSimplePreview(ctx context.Context, index int, spec sonnetCfg.SpreadSpec, img image.Image, meta spread.ImageMeta) (*simpleRenderData, error) {
-	inputs, err := simple.InputsFromResolved(spec.Settings, meta)
-	if err != nil {
-		return nil, fmt.Errorf("inputs simple(%s): %w", spec.Name, err)
+		return resp, fmt.Errorf("inputs simple(%s): %w", spec.Name, err)
 	}
 	trace := &simple.Trace{UseZerolog: true}
 	result := simple.ComputePlacement(inputs, trace)
 	tempDir, err := os.MkdirTemp("", "yaml-simple-")
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
 	defer os.RemoveAll(tempDir)
 	format := normalizeFormat(spec.Settings.Export.Format)
@@ -764,42 +727,162 @@ func renderSimplePreview(ctx context.Context, index int, spec sonnetCfg.SpreadSp
 	}
 	prefix := sanitizeNameForFile(spec.Name) + "-simple"
 	overrides := makePanelPaths(tempDir, prefix, format, spec.Settings.IsSpread)
-	imageBase := strings.TrimSuffix(filepath.Base(spec.ImagePath), filepath.Ext(spec.ImagePath))
+	imageBase := strings.TrimSuffix(filepath.Base(resolvedPath), filepath.Ext(resolvedPath))
 	opts := simple.RenderOptions{}
 	info := simple.RenderInfoFromExport(spec.Settings.Export, index, spec.Name, imageBase, opts)
 	info.OutputDir = tempDir
 	info.PathOverrides = overrides
-	paths := make([]panelImage, 0, len(overrides))
+	panels := make([]panelImage, 0, len(overrides))
 	if !spec.Settings.IsSpread {
 		path, err := simple.RenderSingle(ctx, img, result, info)
 		if err != nil {
-			return nil, fmt.Errorf("render simple(%s): %w", spec.Name, err)
+			return resp, fmt.Errorf("render simple(%s): %w", spec.Name, err)
 		}
 		panel, err := buildPanelImage("single", path)
 		if err != nil {
-			return nil, err
+			return resp, err
 		}
-		paths = append(paths, panel)
+		panels = append(panels, panel)
 	} else {
 		leftPath, rightPath, err := simple.RenderSpread(ctx, img, result, info)
 		if err != nil {
-			return nil, fmt.Errorf("render simple(%s): %w", spec.Name, err)
+			return resp, fmt.Errorf("render simple(%s): %w", spec.Name, err)
 		}
 		leftPanel, err := buildPanelImage("left", leftPath)
 		if err != nil {
-			return nil, err
+			return resp, err
 		}
 		rightPanel, err := buildPanelImage("right", rightPath)
 		if err != nil {
-			return nil, err
+			return resp, err
 		}
-		paths = append(paths, leftPanel, rightPanel)
+		panels = append(panels, leftPanel, rightPanel)
 	}
-	return &simpleRenderData{
-		Result: result,
-		Trace:  append([]string(nil), trace.Lines...),
-		Panels: paths,
-	}, nil
+	resp.Result = result
+	resp.Trace = append([]string(nil), trace.Lines...)
+	resp.Panels = panels
+	return resp, nil
+}
+
+func resolveImagePath(baseDir, imagePath string) string {
+	trimmed := strings.TrimSpace(imagePath)
+	if trimmed == "" {
+		return ""
+	}
+	if filepath.IsAbs(trimmed) || strings.TrimSpace(baseDir) == "" {
+		return filepath.Clean(trimmed)
+	}
+	return filepath.Clean(filepath.Join(baseDir, trimmed))
+}
+
+func (s *Server) buildProjectBookYAML(projectID, baseDir string) (string, error) {
+	project, err := projects.ReadProject(s.projectsRoot, projectID)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("project not found")
+		}
+		return "", err
+	}
+
+	defaults := spread.DefaultSettings()
+	var existingDoc *spread.SimpleBookDocument
+	specPath := filepath.Join(projects.ProjectDir(s.projectsRoot, projectID), "spec.yaml")
+	if data, err := os.ReadFile(specPath); err == nil {
+		if doc, parseErr := spread.ParseSimpleBookYAML(string(data)); parseErr == nil {
+			existingDoc = doc
+			defaults = doc.Defaults
+		}
+	}
+
+	imagesDir := projects.ProjectImagesDir(s.projectsRoot, projectID)
+	nameOrder := orderedImageList(project)
+	if len(nameOrder) == 0 {
+		entries, err := os.ReadDir(imagesDir)
+		if err != nil {
+			return "", fmt.Errorf("list images: %w", err)
+		}
+		files := make([]string, 0, len(entries))
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			files = append(files, e.Name())
+		}
+		sort.Strings(files)
+		nameOrder = files
+	}
+
+	if len(nameOrder) == 0 {
+		return "", fmt.Errorf("project has no images to export")
+	}
+
+	var overrides map[string]spread.SimpleSpread
+	if existingDoc != nil {
+		overrides = make(map[string]spread.SimpleSpread)
+		for _, sp := range existingDoc.Spreads {
+			key := filepath.Base(strings.TrimSpace(sp.ImagePath))
+			if key == "" {
+				continue
+			}
+			overrides[key] = sp
+		}
+	}
+
+	items := make([]spread.BookSpreadItem, 0, len(nameOrder))
+	for idx, name := range nameOrder {
+		baseName := filepath.Base(name)
+		fullPath := filepath.Join(imagesDir, baseName)
+		if _, err := os.Stat(fullPath); err != nil {
+			continue
+		}
+		spreadName := fmt.Sprintf("page-%04d", idx+1)
+		if overrides != nil {
+			if spec, ok := overrides[baseName]; ok {
+				if strings.TrimSpace(spec.Name) != "" {
+					spreadName = spec.Name
+				}
+				overrideSettings := spec.Settings
+				items = append(items, spread.BookSpreadItem{
+					Name:      spreadName,
+					ImagePath: fullPath,
+					Settings:  &overrideSettings,
+				})
+				continue
+			}
+		}
+		items = append(items, spread.BookSpreadItem{
+			Name:      spreadName,
+			ImagePath: fullPath,
+		})
+	}
+
+	if len(items) == 0 {
+		return "", fmt.Errorf("project has no images to export")
+	}
+
+	return spread.BuildBookYAML(defaults, items, baseDir)
+}
+
+func orderedImageList(p *projects.Project) []string {
+	seen := make(map[string]bool)
+	appendList := func(dst *[]string, list []string) {
+		for _, name := range list {
+			clean := strings.TrimSpace(name)
+			if clean == "" {
+				continue
+			}
+			clean = filepath.Base(clean)
+			if seen[clean] {
+				continue
+			}
+			seen[clean] = true
+			*dst = append(*dst, clean)
+		}
+	}
+	var order []string
+	appendList(&order, p.Order)
+	appendList(&order, p.Images)
+	return order
 }
 
 func normalizeExtension(format string) string {
