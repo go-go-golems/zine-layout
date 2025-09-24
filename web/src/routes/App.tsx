@@ -6,6 +6,7 @@ import { ProjectDetail } from '../views/ProjectDetail';
 import { ProjectYamlPage } from '../views/ProjectYamlPage';
 import { Projects } from '../views/Projects';
 import { BookSpreadDesigner } from '../views/BookSpreadDesigner';
+import { YamlPlayground } from '../views/YamlPlayground';
 
 const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -57,6 +58,16 @@ const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 >
                   Book Spread
                 </Link>
+                <Link
+                  to="/yaml-playground"
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                    location.pathname === '/yaml-playground'
+                      ? 'bg-primary-100 text-primary-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  YAML Playground
+                </Link>
               </nav>
             </div>
             
@@ -86,6 +97,7 @@ export const App: React.FC = () => {
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/projects/:id/yaml" element={<ProjectYamlPage />} />
           <Route path="/book-spread" element={<BookSpreadDesigner />} />
+          <Route path="/yaml-playground" element={<YamlPlayground />} />
         </Routes>
       </AppShell>
     </BrowserRouter>

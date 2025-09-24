@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { CSSProperties } from 'react';
 import { ImageUploadSection } from '../components/bookSpread/ImageUploadSection';
 import { PaperSettingsPanel } from '../components/bookSpread/PaperSettingsPanel';
 import { MarginControlsPanel } from '../components/bookSpread/MarginControlsPanel';
@@ -9,10 +9,49 @@ import { AlgorithmDebugPanel } from '../components/bookSpread/AlgorithmDebugPane
 import { useAppSelector } from '../hooks/redux';
 import { useGetPreviewSpreadQuery } from '../api';
 import { usePreviewRequest } from '../utils/spreadRequestBuilder';
+import { getCurrentDimensions } from '../utils/bookSpreadUtils';
+
+const MAX_EDGE_SINGLE = 520;
+const MAX_EDGE_PANEL = 420;
+
+const computeFrameDimensions = (widthIn: number, heightIn: number, maxEdge: number): CSSProperties => {
+  if (widthIn <= 0 || heightIn <= 0) {
+    return { width: maxEdge, height: maxEdge * 1.2 };
+  }
+  if (widthIn >= heightIn) {
+    const frameWidth = maxEdge;
+    const frameHeight = Math.max(maxEdge * (heightIn / widthIn), maxEdge * 0.55);
+    return { width: frameWidth, height: frameHeight };
+  }
+  const frameHeight = maxEdge;
+  const frameWidth = Math.max(maxEdge * (widthIn / heightIn), maxEdge * 0.55);
+  return { width: frameWidth, height: frameHeight };
+};
+
+const frameClassName = 'relative bg-white border-8 border-gray-200 rounded-3xl shadow-lg flex items-center justify-center overflow-hidden transition-all duration-300';
+
+const renderFramedPreview = (label: string, url: string | undefined | null, frameStyle: CSSProperties) => (
+  <div className="text-center">
+    <div className="text-xs text-gray-500 mb-2">{label}</div>
+    <div className={frameClassName} style={frameStyle}>
+      {url ? (
+        <img
+          src={url}
+          alt={`${label} preview`}
+          className="w-full h-full object-contain"
+        />
+      ) : (
+        <div className="flex flex-col items-center justify-center text-gray-400 gap-2">
+          <span className="text-3xl">⏳</span>
+          <span className="text-xs">Rendering…</span>
+        </div>
+      )}
+    </div>
+  </div>
+);
 
 export const BookSpreadDesigner: React.FC = () => {
-  const image = useAppSelector((state) => state.bookSpread.image);
-  const isSpread = useAppSelector((state) => state.bookSpread.isSpread);
+  const { image, isSpread, paperSize, orientation } = useAppSelector((state) => state.bookSpread);
   
   // Get preview requests for different panels
   const leftRequest = usePreviewRequest(600, 'left');
@@ -37,6 +76,10 @@ export const BookSpreadDesigner: React.FC = () => {
   
   const isLoading = isSpread ? (leftLoading || rightLoading) : singleLoading;
   const error = isSpread ? (leftError || rightError) : singleError;
+
+  const pageDimensions = getCurrentDimensions(paperSize, orientation, false);
+  const singleFrameStyle = computeFrameDimensions(pageDimensions.width, pageDimensions.height, MAX_EDGE_SINGLE);
+  const panelFrameStyle = computeFrameDimensions(pageDimensions.width, pageDimensions.height, MAX_EDGE_PANEL);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -82,49 +125,12 @@ export const BookSpreadDesigner: React.FC = () => {
                       {!isLoading && !error && (
                         <div className="preview-container">
                           {isSpread ? (
-                            // Show both panels side by side for spreads
-                            <div className="flex gap-2 items-start">
-                              <div className="text-center">
-                                <div className="text-xs text-gray-500 mb-1">Left Page</div>
-                                {leftPreviewUrl ? (
-                                  <img 
-                                    src={leftPreviewUrl} 
-                                    alt="Left Page Preview" 
-                                    className="border border-gray-300 rounded shadow-lg"
-                                    style={{ maxHeight: '500px' }}
-                                  />
-                                ) : (
-                                  <div className="w-32 h-40 bg-gray-200 border border-gray-300 rounded flex items-center justify-center text-gray-400">
-                                    ⏳
-                                  </div>
-                                )}
-                              </div>
-                              <div className="text-center">
-                                <div className="text-xs text-gray-500 mb-1">Right Page</div>
-                                {rightPreviewUrl ? (
-                                  <img 
-                                    src={rightPreviewUrl} 
-                                    alt="Right Page Preview" 
-                                    className="border border-gray-300 rounded shadow-lg"
-                                    style={{ maxHeight: '500px' }}
-                                  />
-                                ) : (
-                                  <div className="w-32 h-40 bg-gray-200 border border-gray-300 rounded flex items-center justify-center text-gray-400">
-                                    ⏳
-                                  </div>
-                                )}
-                              </div>
+                            <div className="flex flex-wrap gap-6 items-start justify-center">
+                              {renderFramedPreview('Left Page', leftPreviewUrl, panelFrameStyle)}
+                              {renderFramedPreview('Right Page', rightPreviewUrl, panelFrameStyle)}
                             </div>
                           ) : (
-                            // Show single page
-                            singlePreviewUrl && (
-                              <img 
-                                src={singlePreviewUrl} 
-                                alt="Single Page Preview" 
-                                className="max-w-full h-auto border border-gray-300 rounded shadow-lg"
-                                style={{ maxHeight: '600px' }}
-                              />
-                            )
+                            renderFramedPreview('Single Page', singlePreviewUrl, singleFrameStyle)
                           )}
                         </div>
                       )}

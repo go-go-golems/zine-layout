@@ -1,0 +1,198 @@
+import React, { useMemo, useState } from 'react';
+import type { SerializedError } from '@reduxjs/toolkit';
+import { useRenderYamlMutation } from '../api';
+
+const SAMPLE_YAML = `version: "0.1"
+
+defaults:
+  paper:
+    width_in: 8.5
+    height_in: 11
+    orientation: portrait
+    dpi: 300
+  margins:
+    top_in: 0.5
+    right_in: 0.5
+    bottom_in: 0.5
+    left_in: 0.5
+  spread:
+    is_spread: true
+    gutter_in: 0.25
+  crop:
+    ratio: original
+    to_fill: false
+  scale:
+    user_scale: 1
+  position:
+    x: 0
+    y: 0
+    units: px
+  export:
+    format: png
+    quality: 90
+    background: "#ffffff"
+    out_dir: ./out
+    filename_template: "{index:03d}-{name}-{panel}.{ext}"
+
+spreads:
+  - name: sample
+    image: /tmp/debug-source.png
+`;
+
+const formatError = (error: unknown): string => {
+  if (!error) return '';
+  if (typeof error === 'string') return error;
+  if ((error as SerializedError).message) {
+    return (error as SerializedError).message as string;
+  }
+  if (typeof error === 'object') {
+    const maybe = error as Record<string, unknown>;
+    const status = maybe['status'];
+    const data = maybe['data'];
+    if (typeof status !== 'undefined' && typeof data !== 'undefined') {
+      return `${String(status)}: ${String(data)}`;
+    }
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+};
+
+const AlgorithmPreviewView: React.FC<{ title: string; algorithm?: { result?: any; trace?: string[]; panels: { panel: string; mime_type: string; data_url: string; width: number; height: number; }[] } }> = ({ title, algorithm }) => {
+  if (!algorithm) return null;
+  return (
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-lg font-semibold text-gray-800">{title}</h4>
+        <span className="text-xs text-gray-500">{algorithm.panels.length} panel(s)</span>
+      </div>
+      <div className="flex flex-wrap gap-4 mb-4">
+        {algorithm.panels.map((panel) => (
+          <div key={`${title}-${panel.panel}`} className="bg-gray-50 border border-gray-200 rounded-lg p-3 shadow-sm max-w-xs">
+            <div className="text-sm font-medium text-gray-700 mb-2">
+              {panel.panel.toUpperCase()} · {panel.width}×{panel.height}
+            </div>
+            <img
+              src={panel.data_url}
+              alt={`${title} ${panel.panel}`}
+              className="rounded border border-gray-200 max-h-64 object-contain"
+            />
+            <div className="mt-2 text-[11px] text-gray-500">{panel.mime_type}</div>
+          </div>
+        ))}
+      </div>
+      <details className="mb-2">
+        <summary className="cursor-pointer text-sm font-medium text-gray-700">Result JSON</summary>
+        <pre className="bg-gray-900 text-gray-100 text-xs p-3 rounded mt-2 overflow-auto max-h-64">
+          {JSON.stringify(algorithm.result ?? {}, null, 2)}
+        </pre>
+      </details>
+      {algorithm.trace && algorithm.trace.length > 0 && (
+        <details>
+          <summary className="cursor-pointer text-sm font-medium text-gray-700">Trace</summary>
+          <pre className="bg-gray-900 text-gray-100 text-xs p-3 rounded mt-2 overflow-auto max-h-48 whitespace-pre-wrap">
+            {algorithm.trace.join('\n')}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+};
+
+export const YamlPlayground: React.FC = () => {
+  const [yamlInput, setYamlInput] = useState('');
+  const [baseDir, setBaseDir] = useState('');
+  const [renderYaml, { data, isLoading, error }] = useRenderYamlMutation();
+
+  const errorMessage = useMemo(() => formatError(error), [error]);
+
+  const handleRun = () => {
+    if (!yamlInput.trim()) {
+      alert('Please paste YAML before rendering.');
+      return;
+    }
+    renderYaml({ yaml: yamlInput, base_dir: baseDir.trim() || undefined });
+  };
+
+  const handleLoadSample = () => {
+    setYamlInput(SAMPLE_YAML);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-semibold text-gray-900">YAML Playground</h2>
+          <button
+            onClick={handleLoadSample}
+            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded"
+          >
+            Load Sample
+          </button>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">
+          Paste a Sonnet YAML configuration below and render it with both algorithms.
+          The server will return metadata and preview panels so you can compare outputs side-by-side.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">YAML</label>
+            <textarea
+              className="w-full h-64 font-mono text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 p-3"
+              value={yamlInput}
+              onChange={(e) => setYamlInput(e.target.value)}
+              placeholder="Paste Sonnet YAML here"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Base directory (optional)</label>
+              <input
+                className="w-full border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 px-3 py-2 text-sm"
+                value={baseDir}
+                onChange={(e) => setBaseDir(e.target.value)}
+                placeholder="Defaults to server data root"
+              />
+            </div>
+            <div className="flex md:justify-end">
+              <button
+                onClick={handleRun}
+                disabled={isLoading}
+                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg shadow disabled:opacity-50"
+              >
+                {isLoading ? 'Rendering…' : 'Render YAML'}
+              </button>
+            </div>
+          </div>
+
+          {errorMessage && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded">
+              {errorMessage}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {data && data.spreads.length > 0 && (
+        <div className="space-y-6">
+          {data.spreads.map((spread) => (
+            <div key={spread.name} className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Spread: {spread.name}</h3>
+                  <p className="text-sm text-gray-500">Image: {spread.image_path}</p>
+                </div>
+              </div>
+              <AlgorithmPreviewView title="Sonnet" algorithm={spread.sonnet} />
+              <AlgorithmPreviewView title="Simple" algorithm={spread.simple} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};

@@ -76,6 +76,36 @@ export interface ComputeResult {
   result: any; // Sonnet engine result
 }
 
+export interface YamlRenderRequest {
+  yaml: string;
+  base_dir?: string;
+}
+
+export interface PanelPreview {
+  panel: string;
+  mime_type: string;
+  data_url: string;
+  width: number;
+  height: number;
+}
+
+export interface AlgorithmPreview {
+  result?: any;
+  trace?: string[];
+  panels: PanelPreview[];
+}
+
+export interface YamlRenderSpread {
+  name: string;
+  image_path: string;
+  sonnet?: AlgorithmPreview;
+  simple?: AlgorithmPreview;
+}
+
+export interface YamlRenderResponse {
+  spreads: YamlRenderSpread[];
+}
+
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
@@ -228,6 +258,13 @@ export const api = createApi({
         responseHandler: async (response) => response.text(),
       }),
     }),
+    renderYaml: b.mutation<YamlRenderResponse, YamlRenderRequest>({
+      query: (body) => ({
+        url: '/v1/yaml/render',
+        method: 'POST',
+        body,
+      }),
+    }),
     getPreviewSpread: b.query<string, ComputeRequest>({
       query: (body) => ({
         url: '/v1/preview',
@@ -265,4 +302,5 @@ export const {
   usePreviewSpreadMutation,
   useGetPreviewSpreadQuery,
   useBuildYamlMutation,
+  useRenderYamlMutation,
 } = api;

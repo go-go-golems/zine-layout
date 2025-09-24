@@ -2,11 +2,14 @@ package serve
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,9 +20,11 @@ import (
 	"github.com/go-go-golems/zine-layout/pkg/projects"
 	"github.com/go-go-golems/zine-layout/pkg/render"
 	"github.com/go-go-golems/zine-layout/pkg/spread"
+	simple "github.com/go-go-golems/zine-layout/pkg/spread/simple"
 	sonnetCfg "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/config"
 	sonnetEng "github.com/go-go-golems/zine-layout/pkg/spread/sonnet/engine"
 	"github.com/go-go-golems/zine-layout/pkg/validation"
+	"gopkg.in/yaml.v3"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -38,6 +43,31 @@ type Server struct {
 	projectsRoot string
 	presetsRoot  string
 	uploadsRoot  string
+}
+
+type panelImage struct {
+	Panel    string `json:"panel"`
+	MimeType string `json:"mime_type"`
+	DataURL  string `json:"data_url"`
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
+}
+
+type algorithmRender struct {
+	Result any          `json:"result,omitempty"`
+	Trace  []string     `json:"trace,omitempty"`
+	Panels []panelImage `json:"panels"`
+}
+
+type yamlRenderSpread struct {
+	Name      string           `json:"name"`
+	ImagePath string           `json:"image_path"`
+	Sonnet    *algorithmRender `json:"sonnet,omitempty"`
+	Simple    *algorithmRender `json:"simple,omitempty"`
+}
+
+type yamlRenderResponse struct {
+	Spreads []yamlRenderSpread `json:"spreads"`
 }
 
 func New(settings Settings) *Server {
@@ -368,6 +398,53 @@ func (s *Server) Routes() http.Handler {
 		_, _ = w.Write([]byte(yamlText))
 	})
 
+	mux.HandleFunc("/api/v1/yaml/render", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			YAML    string `json:"yaml"`
+			BaseDir string `json:"base_dir"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		yamlText := strings.TrimSpace(req.YAML)
+		if yamlText == "" {
+			http.Error(w, "yaml is required", http.StatusBadRequest)
+			return
+		}
+		var cfg sonnetCfg.Config
+		if err := yaml.Unmarshal([]byte(yamlText), &cfg); err != nil {
+			http.Error(w, fmt.Sprintf("parse yaml: %v", err), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(cfg.Version) == "" {
+			cfg.Version = "0.1"
+		}
+		baseDir := strings.TrimSpace(req.BaseDir)
+		if baseDir == "" {
+			baseDir = s.settings.DataRoot
+		}
+		specs, err := cfg.Resolve(baseDir)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("resolve yaml: %v", err), http.StatusBadRequest)
+			return
+		}
+		resp := yamlRenderResponse{Spreads: make([]yamlRenderSpread, 0, len(specs))}
+		for idx, spec := range specs {
+			spreadResp, err := s.renderSpreadFromSpec(r.Context(), idx+1, spec)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			resp.Spreads = append(resp.Spreads, spreadResp)
+		}
+		writeJSON(w, http.StatusOK, resp)
+	})
+
 	// Project subtree
 	mux.HandleFunc("/api/projects/", func(w http.ResponseWriter, r *http.Request) {
 		rest := strings.TrimPrefix(r.URL.Path, "/api/projects/")
@@ -613,6 +690,207 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/", spaHandler(abs))
 
 	return mux
+}
+
+func (s *Server) renderSpreadFromSpec(ctx context.Context, index int, spec sonnetCfg.SpreadSpec) (yamlRenderSpread, error) {
+	resp := yamlRenderSpread{Name: spec.Name, ImagePath: spec.ImagePath}
+	if strings.TrimSpace(spec.ImagePath) == "" {
+		return resp, fmt.Errorf("spread %q missing image path", spec.Name)
+	}
+	meta, err := readImageMeta(spec.ImagePath)
+	if err != nil {
+		return resp, fmt.Errorf("meta(%s): %w", spec.ImagePath, err)
+	}
+	imgReq := spread.ComputeRequest{ImagePath: spec.ImagePath}
+	img, _, err := loadImage(imgReq)
+	if err != nil {
+		return resp, fmt.Errorf("load image %s: %w", spec.ImagePath, err)
+	}
+	sonnetAlg, err := renderSonnetPreview(ctx, spec, img, meta)
+	if err != nil {
+		return resp, err
+	}
+	resp.Sonnet = sonnetAlg
+	simpleAlg, err := renderSimplePreview(ctx, index, spec, img, meta)
+	if err != nil {
+		return resp, err
+	}
+	resp.Simple = simpleAlg
+	return resp, nil
+}
+
+func renderSonnetPreview(_ context.Context, spec sonnetCfg.SpreadSpec, img image.Image, meta sonnetEng.SourceMeta) (*algorithmRender, error) {
+	result, err := sonnetEng.Compute(spec, meta)
+	if err != nil {
+		return nil, fmt.Errorf("compute sonnet(%s): %w", spec.Name, err)
+	}
+	tempDir, err := os.MkdirTemp("", "yaml-sonnet-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tempDir)
+	format := normalizeFormat(result.Settings.Export.Format)
+	prefix := sanitizeNameForFile(spec.Name) + "-sonnet"
+	outPaths := makePanelPaths(tempDir, prefix, format, result.Settings.IsSpread)
+	outputs, renderTrace, err := sonnetEng.Render(result, img, outPaths)
+	if err != nil {
+		return nil, fmt.Errorf("render sonnet(%s): %w", spec.Name, err)
+	}
+	panels := make([]panelImage, 0, len(outputs))
+	for _, out := range outputs {
+		panel, err := buildPanelImage(out.Panel, out.Path)
+		if err != nil {
+			return nil, fmt.Errorf("panel %s: %w", out.Panel, err)
+		}
+		panels = append(panels, panel)
+	}
+	alg := &algorithmRender{
+		Result: result,
+		Trace:  append(traceEntriesToStrings(result.Trace), traceEntriesToStrings(renderTrace)...),
+		Panels: panels,
+	}
+	return alg, nil
+}
+
+func renderSimplePreview(ctx context.Context, index int, spec sonnetCfg.SpreadSpec, img image.Image, meta sonnetEng.SourceMeta) (*algorithmRender, error) {
+	inputs, err := simple.InputsFromResolved(spec.Settings, meta)
+	if err != nil {
+		return nil, fmt.Errorf("inputs simple(%s): %w", spec.Name, err)
+	}
+	trace := &simple.Trace{UseZerolog: true}
+	result := simple.ComputePlacement(inputs, trace)
+	tempDir, err := os.MkdirTemp("", "yaml-simple-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tempDir)
+	format := normalizeFormat(spec.Settings.Export.Format)
+	if format == "" {
+		format = "png"
+	}
+	prefix := sanitizeNameForFile(spec.Name) + "-simple"
+	overrides := makePanelPaths(tempDir, prefix, format, spec.Settings.IsSpread)
+	imageBase := strings.TrimSuffix(filepath.Base(spec.ImagePath), filepath.Ext(spec.ImagePath))
+	opts := simple.RenderOptions{}
+	info := simple.RenderInfoFromExport(spec.Settings.Export, index, spec.Name, imageBase, opts)
+	info.OutputDir = tempDir
+	info.PathOverrides = overrides
+	paths := make([]panelImage, 0, len(overrides))
+	if !spec.Settings.IsSpread {
+		path, err := simple.RenderSingle(ctx, img, result, info)
+		if err != nil {
+			return nil, fmt.Errorf("render simple(%s): %w", spec.Name, err)
+		}
+		panel, err := buildPanelImage("single", path)
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, panel)
+	} else {
+		leftPath, rightPath, err := simple.RenderSpread(ctx, img, result, info)
+		if err != nil {
+			return nil, fmt.Errorf("render simple(%s): %w", spec.Name, err)
+		}
+		leftPanel, err := buildPanelImage("left", leftPath)
+		if err != nil {
+			return nil, err
+		}
+		rightPanel, err := buildPanelImage("right", rightPath)
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, leftPanel, rightPanel)
+	}
+	alg := &algorithmRender{
+		Result: result,
+		Trace:  append([]string(nil), trace.Lines...),
+		Panels: paths,
+	}
+	return alg, nil
+}
+
+func makePanelPaths(tempDir, prefix, format string, isSpread bool) map[string]string {
+	paths := map[string]string{}
+	ext := normalizeExtension(format)
+	if !isSpread {
+		paths["single"] = filepath.Join(tempDir, fmt.Sprintf("%s-single%s", prefix, ext))
+		return paths
+	}
+	paths["left"] = filepath.Join(tempDir, fmt.Sprintf("%s-left%s", prefix, ext))
+	paths["right"] = filepath.Join(tempDir, fmt.Sprintf("%s-right%s", prefix, ext))
+	return paths
+}
+
+func normalizeExtension(format string) string {
+	format = normalizeFormat(format)
+	if format == "" {
+		format = "png"
+	}
+	if strings.HasPrefix(format, ".") {
+		return format
+	}
+	return "." + format
+}
+
+func normalizeFormat(format string) string {
+	fmtStr := strings.ToLower(strings.TrimSpace(format))
+	switch fmtStr {
+	case "", "png":
+		return "png"
+	case "jpeg":
+		return "jpg"
+	default:
+		return fmtStr
+	}
+}
+
+func sanitizeNameForFile(name string) string {
+	clean := strings.TrimSpace(name)
+	if clean == "" {
+		return "spread"
+	}
+	replacer := strings.NewReplacer(" ", "-", "/", "-", "\\", "-", ":", "-", "\t", "-", "\n", "-")
+	clean = replacer.Replace(clean)
+	return clean
+}
+
+func buildPanelImage(panel, filePath string) (panelImage, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return panelImage{}, err
+	}
+	mt := mime.TypeByExtension(strings.ToLower(filepath.Ext(filePath)))
+	if mt == "" {
+		mt = "image/png"
+	}
+	encoded := base64.StdEncoding.EncodeToString(data)
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		cfg.Width = 0
+		cfg.Height = 0
+	}
+	return panelImage{
+		Panel:    panel,
+		MimeType: mt,
+		DataURL:  fmt.Sprintf("data:%s;base64,%s", mt, encoded),
+		Width:    cfg.Width,
+		Height:   cfg.Height,
+	}, nil
+}
+
+func traceEntriesToStrings(entries []sonnetEng.TraceEntry) []string {
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]string, len(entries))
+	for i, entry := range entries {
+		if entry.Stage != "" {
+			out[i] = fmt.Sprintf("[%s] %s", entry.Stage, entry.Message)
+		} else {
+			out[i] = entry.Message
+		}
+	}
+	return out
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
