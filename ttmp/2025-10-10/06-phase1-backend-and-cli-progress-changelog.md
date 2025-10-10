@@ -7,6 +7,7 @@
 - Rebuilt the HTTP server to operate solely on the SQL repositories and introduced REST routes for projects, assets, and image sequences/items.
 - Reorganised the CLI under an `image-sequences` verb group with individual subcommands (`list`, `get`, `create`, `update`, `delete`, `add-item`, `reorder`, `delete-item`).
 - Simplified the React UI to match the new workflow (projects → assets → image sequences), removing legacy YAML/spread tooling and adding sequence management panels.
+- Added drag-and-drop sequencing, inline previews, and slideshow controls to the project detail view for quick proofing of image ordering.
 
 ## What Worked
 - Database migrations run cleanly against an empty DB and align with the new repository methods.

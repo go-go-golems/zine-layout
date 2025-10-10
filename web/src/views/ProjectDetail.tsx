@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   useAddImageSequenceItemMutation,
@@ -10,8 +10,12 @@ import {
   useGetImageSequenceDetailQuery,
   useGetImageSequencesQuery,
   useGetProjectsQuery,
+  useReorderImageSequenceItemsMutation,
 } from '../api';
-import { ProjectAssetsPanel, type AssetSummary } from '../components/bookSpread/ProjectAssetsPanel';
+import {
+  ProjectAssetsPanel,
+  type AssetSummary,
+} from '../components/bookSpread/ProjectAssetsPanel';
 import { Button, Card, CardBody, CardHeader, Input } from '../components/ui';
 
 const formatDateTime = (iso?: string) => {
@@ -24,6 +28,14 @@ const formatDateTime = (iso?: string) => {
   });
 };
 
+const mapItemsToPayload = (
+  items: Array<{ asset_id?: string; is_gap: boolean }>
+) =>
+  items.map((item) => ({
+    assetId: item.is_gap ? undefined : item.asset_id,
+    isGap: item.is_gap,
+  }));
+
 export const ProjectDetail: React.FC = () => {
   const { id = '' } = useParams();
   const { data: projects } = useGetProjectsQuery();
@@ -31,6 +43,8 @@ export const ProjectDetail: React.FC = () => {
 
   const assetsQuery = useGetAssetsQuery({ projectId: id }, { skip: !id });
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [dragAssetId, setDragAssetId] = useState<string | null>(null);
+  const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
 
   const assets = useMemo<AssetSummary[]>(() => {
     if (!assetsQuery.data || !id) return [];
@@ -74,14 +88,59 @@ export const ProjectDetail: React.FC = () => {
     { skip: !selectedSequenceId }
   );
 
+  const sortedItems = useMemo(() => {
+    if (!sequenceDetailQuery.data?.items) return [];
+    return [...sequenceDetailQuery.data.items].sort(
+      (a, b) => a.position - b.position
+    );
+  }, [sequenceDetailQuery.data?.items]);
+
+  const [slideIndex, setSlideIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const playTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    setSlideIndex((prev) =>
+      sortedItems.length ? Math.min(prev, sortedItems.length - 1) : 0
+    );
+    if (sortedItems.length <= 1) {
+      setIsPlaying(false);
+    }
+  }, [sortedItems.length]);
+
+  useEffect(() => {
+    if (!isPlaying || sortedItems.length === 0) {
+      if (playTimer.current !== null) {
+        window.clearInterval(playTimer.current);
+        playTimer.current = null;
+      }
+      return;
+    }
+    playTimer.current = window.setInterval(() => {
+      setSlideIndex((prev) => (prev + 1) % sortedItems.length);
+    }, 2500);
+    return () => {
+      if (playTimer.current !== null) {
+        window.clearInterval(playTimer.current);
+        playTimer.current = null;
+      }
+    };
+  }, [isPlaying, sortedItems.length]);
+
   const [createSequence, createState] = useCreateImageSequenceMutation();
   const [addSequenceItem, addItemState] = useAddImageSequenceItemMutation();
   const [deleteSequence] = useDeleteImageSequenceMutation();
   const [deleteSequenceItem] = useDeleteImageSequenceItemMutation();
   const [deleteAsset] = useDeleteAssetMutation();
+  const [reorderItems, reorderState] = useReorderImageSequenceItemsMutation();
 
   const [newSequenceName, setNewSequenceName] = useState('');
   const [newSequenceDescription, setNewSequenceDescription] = useState('');
+
+  useEffect(() => {
+    setSlideIndex(0);
+    setIsPlaying(false);
+  }, [selectedSequenceId]);
 
   const handleCreateSequence = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -94,19 +153,6 @@ export const ProjectDetail: React.FC = () => {
     setNewSequenceName('');
     setNewSequenceDescription('');
     setSelectedSequenceId(sequence.id);
-  };
-
-  const handleAppendSelectedAsset = async () => {
-    if (!selectedSequenceId || !selectedAssetId) return;
-    await addSequenceItem({
-      sequenceId: selectedSequenceId,
-      assetId: selectedAssetId,
-    }).unwrap();
-  };
-
-  const handleAppendGap = async () => {
-    if (!selectedSequenceId) return;
-    await addSequenceItem({ sequenceId: selectedSequenceId }).unwrap();
   };
 
   const handleDeleteSequence = async (sequenceId: string) => {
@@ -127,6 +173,7 @@ export const ProjectDetail: React.FC = () => {
   const handleDeleteItem = async (position: number) => {
     if (!selectedSequenceId) return;
     await deleteSequenceItem({ sequenceId: selectedSequenceId, position }).unwrap();
+    setIsPlaying(false);
   };
 
   const handleDeleteAsset = async (assetId: string) => {
@@ -139,8 +186,91 @@ export const ProjectDetail: React.FC = () => {
     ) {
       await deleteAsset({ assetId, projectId: id }).unwrap();
       if (selectedAssetId === assetId) setSelectedAssetId(null);
+      setIsPlaying(false);
     }
   };
+
+  const handleAppendGap = async () => {
+    if (!selectedSequenceId) return;
+    await addSequenceItem({ sequenceId: selectedSequenceId }).unwrap();
+    setIsPlaying(false);
+  };
+
+  const handleAppendAsset = async (assetId: string, insertIndex: number | null) => {
+    if (!selectedSequenceId) return;
+    const addedItems = await addSequenceItem({
+      sequenceId: selectedSequenceId,
+      assetId,
+    }).unwrap();
+    const itemsSorted = [...addedItems].sort((a, b) => a.position - b.position);
+    const newItemIndex = itemsSorted.findIndex(
+      (item) => !item.is_gap && item.asset_id === assetId
+    );
+    if (newItemIndex === -1) return;
+    const [newItem] = itemsSorted.splice(newItemIndex, 1);
+    const targetIndex =
+      insertIndex === null
+        ? itemsSorted.length
+        : Math.max(0, Math.min(insertIndex, itemsSorted.length));
+    itemsSorted.splice(targetIndex, 0, newItem);
+    await reorderItems({
+      sequenceId: selectedSequenceId,
+      items: mapItemsToPayload(itemsSorted),
+    }).unwrap();
+    setSlideIndex(targetIndex);
+    setIsPlaying(false);
+  };
+
+  const handleReorder = async (sourceIndex: number, targetIndex: number | null) => {
+    if (!selectedSequenceId) return;
+    const itemsCopy = [...sortedItems];
+    if (sourceIndex < 0 || sourceIndex >= itemsCopy.length) return;
+    if (targetIndex !== null) {
+      if (targetIndex < 0 || targetIndex > itemsCopy.length) return;
+      if (targetIndex === sourceIndex || targetIndex === sourceIndex + 1) return;
+    }
+    const [moved] = itemsCopy.splice(sourceIndex, 1);
+    if (!moved) return;
+    let destination =
+      targetIndex === null ? itemsCopy.length : Math.max(0, targetIndex);
+    if (destination > itemsCopy.length) destination = itemsCopy.length;
+    if (sourceIndex < destination) {
+      destination = destination - 1;
+    }
+    itemsCopy.splice(destination, 0, moved);
+    await reorderItems({
+      sequenceId: selectedSequenceId,
+      items: mapItemsToPayload(itemsCopy),
+    }).unwrap();
+    setSlideIndex(destination);
+    setIsPlaying(false);
+  };
+
+  const handleDrop = async (
+    event: React.DragEvent,
+    targetIndex: number | null
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (dragAssetId) {
+      await handleAppendAsset(dragAssetId, targetIndex);
+    } else if (dragSourceIndex !== null) {
+      await handleReorder(dragSourceIndex, targetIndex);
+    }
+    setDragAssetId(null);
+    setDragSourceIndex(null);
+  };
+
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = dragAssetId ? 'copy' : 'move';
+  };
+
+  const currentItem = sortedItems[slideIndex];
+  const currentAsset =
+    currentItem && !currentItem.is_gap && currentItem.asset_id
+      ? assetLookup.get(currentItem.asset_id)
+      : undefined;
 
   return (
     <div className="space-y-8">
@@ -156,8 +286,8 @@ export const ProjectDetail: React.FC = () => {
           {project?.name ?? 'Project'}
         </h1>
         <p className="text-sm text-gray-500">
-          Created {project ? formatDateTime(project.created_at) : '…'} · Updated{' '}
-          {project ? formatDateTime(project.updated_at) : '…'}
+          Created {formatDateTime(project?.created_at)} · Updated{' '}
+          {formatDateTime(project?.updated_at)}
         </p>
         {project?.description && (
           <p className="mt-4 max-w-2xl text-gray-700">{project.description}</p>
@@ -176,6 +306,11 @@ export const ProjectDetail: React.FC = () => {
                 assets={assets}
                 selectedAssetId={selectedAssetId}
                 onSelectAsset={(asset) => setSelectedAssetId(asset.id)}
+                onAssetDragStart={(asset) => {
+                  setDragAssetId(asset.id);
+                  setDragSourceIndex(null);
+                }}
+                onAssetDragEnd={() => setDragAssetId(null)}
               />
             </CardBody>
           </Card>
@@ -248,11 +383,11 @@ export const ProjectDetail: React.FC = () => {
                     <Button
                       variant="secondary"
                       type="button"
-                      onClick={() => {
+                      onClick={() =>
                         setSelectedSequenceId(
                           sequencesQuery.data?.[0]?.id ?? null
-                        );
-                      }}
+                        )
+                      }
                     >
                       Cancel
                     </Button>
@@ -305,72 +440,193 @@ export const ProjectDetail: React.FC = () => {
               )}
 
               {selectedSequenceId && (
-                <div className="border rounded-lg p-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">
-                        Sequence Items
+                <div className="space-y-4">
+                  <div className="border rounded-lg p-4 bg-white">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-semibold text-gray-900">
+                        Sequence Preview
                       </h3>
-                      <p className="text-sm text-gray-500">
-                        Append the selected asset or insert gap placeholders.
-                      </p>
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button
-                        size="sm"
-                        disabled={!selectedAssetId}
-                        isLoading={addItemState.isLoading}
-                        onClick={handleAppendSelectedAsset}
-                      >
-                        Add Selected Asset
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={handleAppendGap}
-                        disabled={addItemState.isLoading}
-                      >
-                        Insert Gap
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {sequenceDetailQuery.data?.items.length ? (
-                      sequenceDetailQuery.data.items.map((item) => (
-                        <div
-                          key={item.position}
-                          className="flex items-center justify-between border rounded-md px-3 py-2 bg-white"
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() =>
+                            setSlideIndex((prev) =>
+                              sortedItems.length
+                                ? (prev - 1 + sortedItems.length) %
+                                  sortedItems.length
+                                : 0
+                            )
+                          }
+                          disabled={sortedItems.length === 0}
                         >
-                          <div>
-                            <div className="text-sm font-medium text-gray-800">
-                              Position {item.position + 1}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {item.is_gap
-                                ? 'Gap'
-                                : assetLookup.get(item.asset_id ?? '')?.name ??
-                                  item.asset_id ??
-                                  'Unknown asset'}
-                            </div>
+                          ‹ Prev
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={isPlaying ? 'danger' : 'primary'}
+                          onClick={() => setIsPlaying((prev) => !prev)}
+                          disabled={sortedItems.length <= 1}
+                        >
+                          {isPlaying ? 'Stop' : 'Play'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() =>
+                            setSlideIndex((prev) =>
+                              sortedItems.length ? (prev + 1) % sortedItems.length : 0
+                            )
+                          }
+                          disabled={sortedItems.length === 0}
+                        >
+                          Next ›
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="border rounded-md overflow-hidden bg-gray-50 flex items-center justify-center h-72">
+                      {currentItem ? (
+                        currentItem.is_gap ? (
+                          <div className="text-gray-500 text-sm">Gap</div>
+                        ) : currentAsset ? (
+                          <img
+                            src={currentAsset.src}
+                            alt={currentAsset.name}
+                            className="max-h-full max-w-full object-contain"
+                          />
+                        ) : (
+                          <div className="text-gray-500 text-sm">
+                            Asset not found
                           </div>
-                          <button
-                            type="button"
-                            className="text-gray-400 hover:text-red-600"
-                            onClick={() => handleDeleteItem(item.position)}
-                          >
-                            Remove
-                          </button>
+                        )
+                      ) : (
+                        <div className="text-gray-500 text-sm">
+                          Sequence is empty
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-gray-500">
-                        This sequence is empty. Select an asset to add it or add a
-                        gap.
-                      </p>
+                      )}
+                    </div>
+                    {currentAsset && (
+                      <div className="mt-3 text-sm text-gray-600">
+                        {currentAsset.name} · {currentAsset.width} ×{' '}
+                        {currentAsset.height}px
+                      </div>
                     )}
                   </div>
+
+                  <div className="border rounded-lg p-4 bg-white">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">
+                          Sequence Items
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          Drag assets from the left to add them, or drag items to
+                          reorder.
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          disabled={!selectedAssetId}
+                          isLoading={addItemState.isLoading}
+                          onClick={() => {
+                            if (selectedAssetId) {
+                              void handleAppendAsset(selectedAssetId, null);
+                            }
+                          }}
+                        >
+                          Add Selected Asset
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => void handleAppendGap()}
+                          disabled={addItemState.isLoading}
+                        >
+                          Insert Gap
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div
+                      className="space-y-2"
+                      onDragOver={handleDragOver}
+                      onDrop={(event) => handleDrop(event, null)}
+                    >
+                      {sortedItems.length ? (
+                        sortedItems.map((item, index) => {
+                          const asset =
+                            !item.is_gap && item.asset_id
+                              ? assetLookup.get(item.asset_id)
+                              : undefined;
+                          const isActive = index === slideIndex;
+                          return (
+                            <div
+                              key={`${item.position}-${item.asset_id ?? 'gap'}`}
+                              className={`flex items-center justify-between border rounded-md px-3 py-2 bg-white transition-colors ${
+                                isActive
+                                  ? 'border-primary-500 ring-1 ring-primary-300'
+                                  : 'border-gray-200 hover:border-primary-300'
+                              }`}
+                              draggable
+                              onDragStart={(event) => {
+                                event.dataTransfer.effectAllowed = 'move';
+                                setDragSourceIndex(index);
+                                setDragAssetId(null);
+                              }}
+                              onDragEnd={() => setDragSourceIndex(null)}
+                              onDragOver={handleDragOver}
+                              onDrop={(event) => handleDrop(event, index)}
+                              onClick={() => setSlideIndex(index)}
+                            >
+                              <div className="flex items-center space-x-3">
+                                <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
+                                  {asset ? (
+                                    <img
+                                      src={asset.src}
+                                      alt={asset.name}
+                                      className="object-cover w-full h-full"
+                                    />
+                                  ) : (
+                                    <span className="text-xs text-gray-500">Gap</span>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-gray-800">
+                                    Position {index + 1}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {item.is_gap
+                                      ? 'Gap'
+                                      : asset?.name ?? item.asset_id ?? 'Unknown asset'}
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="text-gray-400 hover:text-red-600"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleDeleteItem(item.position);
+                                }}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-sm text-gray-500">
+                          This sequence is empty. Drag assets here or add gaps.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {(addItemState.isLoading || reorderState.isLoading) && (
+                <div className="text-sm text-gray-500">Updating sequence…</div>
               )}
             </CardBody>
           </Card>

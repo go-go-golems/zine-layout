@@ -15,6 +15,8 @@ interface ProjectAssetsPanelProps {
   assets: AssetSummary[];
   selectedAssetId: string | null;
   onSelectAsset: (asset: AssetSummary) => void;
+  onAssetDragStart?: (asset: AssetSummary) => void;
+  onAssetDragEnd?: () => void;
 }
 
 export const ProjectAssetsPanel: React.FC<ProjectAssetsPanelProps> = ({
@@ -22,6 +24,8 @@ export const ProjectAssetsPanel: React.FC<ProjectAssetsPanelProps> = ({
   assets,
   selectedAssetId,
   onSelectAsset,
+  onAssetDragStart,
+  onAssetDragEnd,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadAssets, { isLoading: isUploading }] = useUploadAssetsMutation();
@@ -112,6 +116,15 @@ export const ProjectAssetsPanel: React.FC<ProjectAssetsPanelProps> = ({
                   className={`border rounded-lg overflow-hidden flex flex-col items-center p-2 text-sm transition-colors ${
                     asset.id === selectedAssetId ? 'border-primary-500 ring-2 ring-primary-200' : 'border-gray-200 hover:border-primary-300'
                   }`}
+                  draggable={Boolean(projectId)}
+                  onDragStart={(event) => {
+                    if (!projectId) return;
+                    event.dataTransfer.effectAllowed = 'copyMove';
+                    onAssetDragStart?.(asset);
+                  }}
+                  onDragEnd={() => {
+                    onAssetDragEnd?.();
+                  }}
                 >
                   <div className="w-full h-24 bg-gray-100 flex items-center justify-center overflow-hidden mb-2">
                     <img

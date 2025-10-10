@@ -84,6 +84,7 @@ func NewAPICobraCommand() (*cobra.Command, error) {
             if jsonFile == "" {
                 return fmt.Errorf("--json-file is required")
             }
+            
             b, err := os.ReadFile(jsonFile)
             if err != nil {
                 return err
