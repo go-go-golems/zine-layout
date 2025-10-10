@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { useUploadImagesMutation } from '../../api';
+import { useUploadAssetsMutation } from '../../api';
 
 export interface AssetSummary {
   id: string;
@@ -24,7 +24,7 @@ export const ProjectAssetsPanel: React.FC<ProjectAssetsPanelProps> = ({
   onSelectAsset,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadImages, { isLoading: isUploading }] = useUploadImagesMutation();
+  const [uploadAssets, { isLoading: isUploading }] = useUploadAssetsMutation();
 
   const handleFiles = async (files: FileList | File[]) => {
     if (!projectId) return;
@@ -32,16 +32,18 @@ export const ProjectAssetsPanel: React.FC<ProjectAssetsPanelProps> = ({
     if (fileArray.length === 0) return;
 
     try {
-      const result = await uploadImages({ id: projectId, files: fileArray }).unwrap();
-      if (result.images?.length) {
-        const latest = result.images[result.images.length - 1];
+      const uploaded = await uploadAssets({ projectId, files: fileArray }).unwrap();
+      if (uploaded.length) {
+        const latest = uploaded[uploaded.length - 1];
         const summary: AssetSummary = {
           id: latest.id,
-          name: latest.name,
+          name: latest.filename,
           width: latest.width,
           height: latest.height,
-          src: `/api/projects/${projectId}/images/${latest.id}?t=${Date.now()}`,
-          uploadedPath: `/projects/${projectId}/images/${latest.id}`,
+          src:
+            (latest.url && `${latest.url}?t=${Date.now()}`) ||
+            `/projects/${projectId}/images/${latest.filename}?t=${Date.now()}`,
+          uploadedPath: latest.url ?? `/projects/${projectId}/images/${latest.filename}`,
         };
         onSelectAsset(summary);
       }

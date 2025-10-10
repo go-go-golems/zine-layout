@@ -4,28 +4,36 @@ import { Link } from 'react-router-dom';
 import {
   useCreateProjectMutation,
   useDeleteProjectMutation,
-  useGetPresetsQuery,
   useGetProjectsQuery,
 } from '../api';
 import { Button, Input, Card, CardBody } from '../components/ui';
+
+const formatTimestamp = (iso?: string) => {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+};
 
 export const Projects: React.FC = () => {
   const { data, isLoading, refetch } = useGetProjectsQuery();
   const [createProject, { isLoading: isCreating }] = useCreateProjectMutation();
   const [deleteProject] = useDeleteProjectMutation();
   const [name, setName] = useState('');
-  const [presetId, setPresetId] = useState('');
+  const [description, setDescription] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const { data: presetsData } = useGetPresetsQuery();
 
   const onCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     await createProject({
       name: name.trim() || undefined,
-      presetId: presetId || undefined,
+      description: description.trim() || undefined,
     }).unwrap();
     setName('');
-    setPresetId('');
+    setDescription('');
     setShowCreateForm(false);
     refetch();
   };
@@ -76,23 +84,12 @@ export const Projects: React.FC = () => {
                   placeholder="My Zine Project"
                   required
                 />
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Preset (Optional)
-                  </label>
-                  <select 
-                    value={presetId} 
-                    onChange={(e) => setPresetId(e.target.value)}
-                    className="input"
-                  >
-                    <option value="">No preset</option>
-                    {presetsData?.presets?.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <Input
+                  label="Description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Optional notes about this project"
+                />
               </div>
               <div className="flex justify-end space-x-3">
                 <Button 
@@ -112,7 +109,7 @@ export const Projects: React.FC = () => {
       )}
 
       {/* Projects Grid */}
-      {data?.projects?.length === 0 ? (
+      {(data?.length ?? 0) === 0 ? (
         <Card>
           <CardBody className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -129,12 +126,12 @@ export const Projects: React.FC = () => {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {data?.projects?.map((project) => (
+          {data?.map((project) => (
             <Card key={project.id} className="hover:shadow-medium transition-shadow duration-200">
               <CardBody>
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate">
                       <Link 
                         to={`/projects/${project.id}`}
                         className="hover:text-primary-600 transition-colors duration-200"
@@ -143,7 +140,8 @@ export const Projects: React.FC = () => {
                       </Link>
                     </h3>
                     <p className="text-sm text-gray-500">
-                      Updated {new Date(project.updatedAt).toLocaleDateString()}
+                      Created {formatTimestamp(project.created_at)} · Updated{' '}
+                      {formatTimestamp(project.updated_at)}
                     </p>
                   </div>
                   <div className="flex-shrink-0">
@@ -159,26 +157,16 @@ export const Projects: React.FC = () => {
                   </div>
                 </div>
                 
-                {project.presetId && (
-                  <div className="mb-4">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
-                      {presetsData?.presets?.find(p => p.id === project.presetId)?.name || project.presetId}
-                    </span>
-                  </div>
+                {project.description && (
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                    {project.description}
+                  </p>
                 )}
 
                 <div className="flex justify-between items-center">
                   <Link to={`/projects/${project.id}`}>
                     <Button size="sm">Open Project</Button>
                   </Link>
-                  <div className="flex space-x-2">
-                    <Link 
-                      to={`/projects/${project.id}/yaml`}
-                      className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
-                    >
-                      Edit YAML
-                    </Link>
-                  </div>
                 </div>
               </CardBody>
             </Card>

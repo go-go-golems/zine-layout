@@ -1,339 +1,230 @@
-import type { FetchBaseQueryError } from '@reduxjs/toolkit/query';
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 export interface Project {
   id: string;
   name: string;
-  createdAt: string;
-  updatedAt: string;
-  presetId?: string;
-}
-
-export interface ImageItem {
-  id: string;
-  name: string;
-  width: number;
-  height: number;
-}
-
-export interface PersistedPage {
-  page_number: number;
-  asset_id?: string;
-  settings: SpreadSettings;
-  result?: any;
+  description?: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface PersistedSpread {
-  spread_number: number;
-  left_page_number?: number;
-  right_page_number?: number;
-  settings: SpreadSettings;
-  result?: any;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PresetInfo {
+export interface Asset {
   id: string;
-  name: string;
+  project_id: string;
   filename: string;
-}
-
-export interface ValidationDetails {
-  count: number;
-  width: number;
-  height: number;
-  rows: number;
-  columns: number;
-  pages: number;
-  multiple: number;
-}
-
-export interface UploadResponse {
-  name: string;
-  url: string;
+  rel_path: string;
+  content_type: string;
   bytes: number;
-}
-
-export interface SpreadSettings {
-  paper_width_in: number;
-  paper_height_in: number;
-  dpi: number;
-  orientation: string;
-  margin_top_in: number;
-  margin_right_in: number;
-  margin_bottom_in: number;
-  margin_left_in: number;
-  is_spread: boolean;
-  gutter_in: number;
-  crop_ratio?: number;
-  crop_to_fill: boolean;
-  user_scale: number;
-  position_x: number;
-  position_y: number;
-  units: string;
-  export: {
-    format: string;
-    quality: number;
-    background: string;
-    out_dir: string;
-    filename_template: string;
-  };
-}
-
-export interface ComputeRequest {
-  image_path?: string;
-  meta?: { width: number; height: number };
-  name?: string;
-  settings: SpreadSettings;
-}
-
-export interface ComputeResult {
-  result: any;
-  trace?: string[];
-}
-
-export interface YamlRenderRequest {
-  yaml: string;
-  base_dir?: string;
-}
-
-export interface PanelPreview {
-  panel: string;
-  mime_type: string;
-  data_url: string;
   width: number;
   height: number;
+  uploaded_at: string;
+  metadata?: Record<string, unknown>;
+  url?: string;
 }
 
-export interface YamlRenderSpread {
+export interface ImageSequence {
+  id: string;
+  project_id: string;
   name: string;
-  image_path: string;
-  result: any;
-  trace?: string[];
-  panels: PanelPreview[];
+  description?: string;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface YamlRenderResponse {
-  spreads: YamlRenderSpread[];
+export interface ImageSequenceItem {
+  sequence_id: string;
+  position: number;
+  asset_id?: string;
+  is_gap: boolean;
 }
+
+const baseQuery = fetchBaseQuery({ baseUrl: '/api' });
+
+const asFileArray = (files: FileList | File[]) => Array.from(files as FileList);
 
 export const api = createApi({
   reducerPath: 'api',
-  baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Project', 'Image', 'Preset'],
-  endpoints: (b) => ({
-    getProjects: b.query<{ projects: Project[] }, void>({
+  baseQuery,
+  tagTypes: ['Project', 'Asset', 'Sequence', 'SequenceItems'],
+  endpoints: (builder) => ({
+    getProjects: builder.query<Project[], void>({
       query: () => '/projects',
-      providesTags: ['Project'],
+      transformResponse: (response: { projects: Project[] }) => response.projects ?? [],
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((proj) => ({ type: 'Project' as const, id: proj.id })),
+              { type: 'Project' as const, id: 'LIST' },
+            ]
+          : [{ type: 'Project', id: 'LIST' }],
     }),
-    createProject: b.mutation<{ project: Project }, { name?: string; presetId?: string }>({
+    createProject: builder.mutation<Project, { name?: string; description?: string }>({
       query: (body) => ({ url: '/projects', method: 'POST', body }),
-      invalidatesTags: ['Project'],
+      transformResponse: (response: { project: Project }) => response.project,
+      invalidatesTags: [{ type: 'Project', id: 'LIST' }],
     }),
-    deleteProject: b.mutation<{ ok: boolean }, { id: string }>({
-      query: ({ id }) => ({ url: `/projects/${id}`, method: 'DELETE' }),
-      invalidatesTags: ['Project'],
+    deleteProject: builder.mutation<void, { id: string }>({
+      query: ({ id }) => ({ url: `/projects/${encodeURIComponent(id)}`, method: 'DELETE' }),
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'Project', id },
+        { type: 'Project', id: 'LIST' },
+      ],
     }),
-    getImages: b.query<{ images: ImageItem[]; order: string[] }, { id: string }>({
-      query: ({ id }) => `/projects/${id}/images`,
-      providesTags: ['Image'],
-    }),
-    uploadImages: b.mutation<{ images: ImageItem[] }, { id: string; files: FileList | File[] }>({
-      query: ({ id, files }) => {
-        const fd = new FormData();
-        const list = Array.from(files as FileList);
-        for (const f of list) fd.append('images[]', f);
-        return { url: `/projects/${id}/images`, method: 'POST', body: fd };
+
+    getAssets: builder.query<Asset[], { projectId: string }>({
+      query: ({ projectId }) => `/projects/${encodeURIComponent(projectId)}/assets`,
+      transformResponse: (response: { assets: Asset[] }) => response.assets ?? [],
+      providesTags: (result, _error, { projectId }) => {
+        const base = [{ type: 'Asset' as const, id: `LIST-${projectId}` }];
+        if (!result) return base;
+        return [
+          ...result.map((asset) => ({ type: 'Asset' as const, id: asset.id })),
+          ...base,
+        ];
       },
-      invalidatesTags: ['Image'],
     }),
-    deleteImage: b.mutation<{ ok: boolean }, { id: string; imageId: string }>({
-      query: ({ id, imageId }) => ({
-        url: `/projects/${id}/images/${encodeURIComponent(imageId)}`,
+    uploadAssets: builder.mutation<
+      Asset[],
+      { projectId: string; files: FileList | File[] }
+    >({
+      query: ({ projectId, files }) => {
+        const fd = new FormData();
+        for (const file of asFileArray(files)) {
+          fd.append('images[]', file);
+        }
+        return {
+          url: `/projects/${encodeURIComponent(projectId)}/images`,
+          method: 'POST',
+          body: fd,
+        };
+      },
+      transformResponse: (response: { assets: Asset[] }) => response.assets ?? [],
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: 'Asset', id: `LIST-${projectId}` },
+      ],
+    }),
+    deleteAsset: builder.mutation<void, { assetId: string; projectId: string }>({
+      query: ({ assetId }) => ({ url: `/assets/${encodeURIComponent(assetId)}`, method: 'DELETE' }),
+      invalidatesTags: (_result, _error, { assetId, projectId }) => [
+        { type: 'Asset', id: assetId },
+        { type: 'Asset', id: `LIST-${projectId}` },
+      ],
+    }),
+
+    getImageSequences: builder.query<ImageSequence[], { projectId: string }>({
+      query: ({ projectId }) => `/projects/${encodeURIComponent(projectId)}/image-sequences`,
+      transformResponse: (response: { sequences: ImageSequence[] }) => response.sequences ?? [],
+      providesTags: (result, _error, { projectId }) => {
+        const base = [{ type: 'Sequence' as const, id: `LIST-${projectId}` }];
+        if (!result) return base;
+        return [
+          ...result.map((seq) => ({ type: 'Sequence' as const, id: seq.id })),
+          ...base,
+        ];
+      },
+    }),
+    createImageSequence: builder.mutation<
+      ImageSequence,
+      { projectId: string; name: string; description?: string }
+    >({
+      query: ({ projectId, ...body }) => ({
+        url: `/projects/${encodeURIComponent(projectId)}/image-sequences`,
+        method: 'POST',
+        body,
+      }),
+      transformResponse: (response: { sequence: ImageSequence }) => response.sequence,
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: 'Sequence', id: `LIST-${projectId}` },
+      ],
+    }),
+    updateImageSequence: builder.mutation<
+      ImageSequence,
+      { sequenceId: string; name?: string; description?: string }
+    >({
+      query: ({ sequenceId, ...body }) => ({
+        url: `/image-sequences/${encodeURIComponent(sequenceId)}`,
+        method: 'PATCH',
+        body,
+      }),
+      transformResponse: (response: { sequence: ImageSequence }) => response.sequence,
+      invalidatesTags: (_result, _error, { sequenceId }) => [
+        { type: 'Sequence', id: sequenceId },
+        { type: 'SequenceItems', id: sequenceId },
+      ],
+    }),
+    deleteImageSequence: builder.mutation<void, { sequenceId: string; projectId: string }>({
+      query: ({ sequenceId }) => ({
+        url: `/image-sequences/${encodeURIComponent(sequenceId)}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Image'],
+      invalidatesTags: (_result, _error, { sequenceId, projectId }) => [
+        { type: 'Sequence', id: sequenceId },
+        { type: 'Sequence', id: `LIST-${projectId}` },
+        { type: 'SequenceItems', id: sequenceId },
+      ],
     }),
-    reorderImages: b.mutation<{ ok: boolean }, { id: string; order: string[] }>({
-      query: ({ id, order }) => ({
-        url: `/projects/${id}/images/reorder`,
-        method: 'POST',
-        body: { order },
+
+    getImageSequenceDetail: builder.query<
+      { sequence: ImageSequence; items: ImageSequenceItem[] },
+      { sequenceId: string }
+    >({
+      query: ({ sequenceId }) => `/image-sequences/${encodeURIComponent(sequenceId)}`,
+      transformResponse: (response: {
+        sequence: ImageSequence;
+        items: ImageSequenceItem[];
+      }) => ({
+        sequence: response.sequence,
+        items: response.items ?? [],
       }),
-      invalidatesTags: ['Image'],
+      providesTags: (_result, _error, { sequenceId }) => [
+        { type: 'Sequence', id: sequenceId },
+        { type: 'SequenceItems', id: sequenceId },
+      ],
     }),
-    getYaml: b.query<string, { id: string }>({
-      // fetch raw text via queryFn
-      async queryFn({ id }) {
-        try {
-          const resp = await fetch(`/api/projects/${id}/yaml`);
-          if (!resp.ok) {
-            const err: FetchBaseQueryError = {
-              status: resp.status,
-              data: await resp.text(),
-            } as unknown as FetchBaseQueryError;
-            return { error: err };
-          }
-          const text = await resp.text();
-          return { data: text };
-        } catch (e) {
-          const err: FetchBaseQueryError = {
-            status: 'FETCH_ERROR',
-            data: String(e),
-          } as unknown as FetchBaseQueryError;
-          return { error: err };
-        }
-      },
+    addImageSequenceItem: builder.mutation<
+      ImageSequenceItem[],
+      { sequenceId: string; assetId?: string }
+    >({
+      query: ({ sequenceId, assetId }) => ({
+        url: `/image-sequences/${encodeURIComponent(sequenceId)}/items`,
+        method: 'POST',
+        body: { asset_id: assetId, is_gap: !assetId },
+      }),
+      transformResponse: (response: { items: ImageSequenceItem[] }) => response.items ?? [],
+      invalidatesTags: (_result, _error, { sequenceId }) => [
+        { type: 'SequenceItems', id: sequenceId },
+      ],
     }),
-    putYaml: b.mutation<{ ok: boolean }, { id: string; yaml: string }>({
-      query: ({ id, yaml }) => ({
-        url: `/projects/${id}/yaml`,
+    reorderImageSequenceItems: builder.mutation<
+      ImageSequenceItem[],
+      { sequenceId: string; items: { assetId?: string; isGap?: boolean }[] }
+    >({
+      query: ({ sequenceId, items }) => ({
+        url: `/image-sequences/${encodeURIComponent(sequenceId)}/items`,
         method: 'PUT',
-        body: yaml,
-        headers: { 'Content-Type': 'text/plain' },
-      }),
-    }),
-    getPresets: b.query<{ presets: PresetInfo[] }, void>({
-      query: () => '/presets',
-      providesTags: ['Preset'],
-    }),
-    getPresetYaml: b.query<string, { id: string }>({
-      async queryFn({ id }) {
-        try {
-          const resp = await fetch(`/api/presets/${encodeURIComponent(id)}`);
-          if (!resp.ok) {
-            const err: FetchBaseQueryError = {
-              status: resp.status,
-              data: await resp.text(),
-            } as unknown as FetchBaseQueryError;
-            return { error: err };
-          }
-          const text = await resp.text();
-          return { data: text };
-        } catch (e) {
-          const err: FetchBaseQueryError = {
-            status: 'FETCH_ERROR',
-            data: String(e),
-          } as unknown as FetchBaseQueryError;
-          return { error: err };
-        }
-      },
-      providesTags: (_r, _e, arg) => [{ type: 'Preset' as const, id: arg.id }],
-    }),
-    applyPreset: b.mutation<{ ok: boolean }, { id: string; presetId: string }>({
-      query: ({ id, presetId }) => ({
-        url: `/projects/${id}/preset`,
-        method: 'POST',
-        body: { presetId },
-      }),
-      invalidatesTags: ['Project'],
-    }),
-    validateProject: b.query<
-      { ok: boolean; issues: string[]; details?: ValidationDetails },
-      { id: string }
-    >({
-      query: ({ id }) => ({ url: `/projects/${id}/validate`, method: 'POST', body: {} }),
-    }),
-    renderProject: b.mutation<
-      { renderId: string; files: string[] },
-      { id: string; test?: boolean; test_bw?: boolean; test_dimensions?: string }
-    >({
-      query: ({ id, ...body }) => ({ url: `/projects/${id}/render`, method: 'POST', body }),
-    }),
-    getRenders: b.query<{ renders: { id: string; files: string[] }[] }, { id: string }>({
-      query: ({ id }) => `/projects/${id}/renders`,
-    }),
-    uploadFile: b.mutation<UploadResponse, File>({
-      query: (file) => {
-        const fd = new FormData();
-        fd.append('file', file);
-        return { url: '/uploads', method: 'POST', body: fd };
-      },
-    }),
-    computeSpread: b.mutation<ComputeResult, ComputeRequest>({
-      query: (body) => ({ url: '/v1/compute', method: 'POST', body }),
-    }),
-    previewSpread: b.mutation<Blob, ComputeRequest>({
-      query: (body) => ({
-        url: '/v1/preview',
-        method: 'POST',
-        body,
-        responseHandler: (response) => response.blob(),
-      }),
-    }),
-    buildYaml: b.mutation<string, ComputeRequest>({
-      query: (body) => ({
-        url: '/v1/yaml',
-        method: 'POST',
-        body,
-        responseHandler: async (response) => response.text(),
-      }),
-    }),
-    renderYaml: b.mutation<YamlRenderResponse, YamlRenderRequest>({
-      query: (body) => ({
-        url: '/v1/yaml/render',
-        method: 'POST',
-        body,
-      }),
-    }),
-    exportBookYaml: b.query<string, { id: string; baseDir?: string }>({
-      query: ({ id, baseDir }) => ({
-        url: `/projects/${id}/yaml/book`,
-        method: 'GET',
-        params: baseDir ? { base_dir: baseDir } : undefined,
-        responseHandler: async (response) => response.text(),
-      }),
-    }),
-    getPages: b.query<{ pages: PersistedPage[] }, { id: string }>({
-      query: ({ id }) => `/projects/${id}/pages`,
-    }),
-    putPage: b.mutation<{ page: PersistedPage }, { id: string; pageNumber: number; page: { asset_id?: string; settings: SpreadSettings; result?: any } }>(
-      {
-        query: ({ id, pageNumber, page }) => ({
-          url: `/projects/${id}/pages/${pageNumber}`,
-          method: 'PUT',
-          body: page,
-        }),
-      },
-    ),
-    deletePage: b.mutation<{ ok: boolean }, { id: string; pageNumber: number }>({
-      query: ({ id, pageNumber }) => ({
-        url: `/projects/${id}/pages/${pageNumber}`,
-        method: 'DELETE',
-      }),
-    }),
-    getSpreads: b.query<{ spreads: PersistedSpread[] }, { id: string }>({
-      query: ({ id }) => `/projects/${id}/spreads`,
-    }),
-    putSpread: b.mutation<{ spread: PersistedSpread }, { id: string; spreadNumber: number; spread: { left_page_number?: number; right_page_number?: number; settings: SpreadSettings; result?: any } }>(
-      {
-        query: ({ id, spreadNumber, spread }) => ({
-          url: `/projects/${id}/spreads/${spreadNumber}`,
-          method: 'PUT',
-          body: spread,
-        }),
-      },
-    ),
-    deleteSpread: b.mutation<{ ok: boolean }, { id: string; spreadNumber: number }>({
-      query: ({ id, spreadNumber }) => ({
-        url: `/projects/${id}/spreads/${spreadNumber}`,
-        method: 'DELETE',
-      }),
-    }),
-    getPreviewSpread: b.query<string, ComputeRequest>({
-      query: (body) => ({
-        url: '/v1/preview',
-        method: 'POST',
-        body,
-        responseHandler: async (response) => {
-          const blob = await response.blob();
-          return URL.createObjectURL(blob);
+        body: {
+          items: items.map((item) => ({
+            asset_id: item.assetId,
+            is_gap: item.isGap ?? !item.assetId,
+          })),
         },
       }),
-      keepUnusedDataFor: 30, // Cache preview for 30 seconds
+      transformResponse: (response: { items: ImageSequenceItem[] }) => response.items ?? [],
+      invalidatesTags: (_result, _error, { sequenceId }) => [
+        { type: 'SequenceItems', id: sequenceId },
+      ],
+    }),
+    deleteImageSequenceItem: builder.mutation<
+      void,
+      { sequenceId: string; position: number }
+    >({
+      query: ({ sequenceId, position }) => ({
+        url: `/image-sequences/${encodeURIComponent(sequenceId)}/items/${position}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_result, _error, { sequenceId }) => [
+        { type: 'SequenceItems', id: sequenceId },
+      ],
     }),
   }),
 });
@@ -342,31 +233,15 @@ export const {
   useGetProjectsQuery,
   useCreateProjectMutation,
   useDeleteProjectMutation,
-  useGetImagesQuery,
-  useUploadImagesMutation,
-  useDeleteImageMutation,
-  useReorderImagesMutation,
-  useGetPresetsQuery,
-  useGetPresetYamlQuery,
-  useApplyPresetMutation,
-  useGetYamlQuery,
-  usePutYamlMutation,
-  useValidateProjectQuery,
-  useLazyValidateProjectQuery,
-  useRenderProjectMutation,
-  useGetRendersQuery,
-  useUploadFileMutation,
-  useComputeSpreadMutation,
-  usePreviewSpreadMutation,
-  useGetPreviewSpreadQuery,
-  useBuildYamlMutation,
-  useRenderYamlMutation,
-  useExportBookYamlQuery,
-  useLazyExportBookYamlQuery,
-  useGetPagesQuery,
-  usePutPageMutation,
-  useDeletePageMutation,
-  useGetSpreadsQuery,
-  usePutSpreadMutation,
-  useDeleteSpreadMutation,
+  useGetAssetsQuery,
+  useUploadAssetsMutation,
+  useDeleteAssetMutation,
+  useGetImageSequencesQuery,
+  useCreateImageSequenceMutation,
+  useUpdateImageSequenceMutation,
+  useDeleteImageSequenceMutation,
+  useGetImageSequenceDetailQuery,
+  useAddImageSequenceItemMutation,
+  useReorderImageSequenceItemsMutation,
+  useDeleteImageSequenceItemMutation,
 } = api;

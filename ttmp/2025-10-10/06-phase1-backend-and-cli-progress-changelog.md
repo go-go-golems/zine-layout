@@ -6,6 +6,7 @@
 - Simplified the filesystem helper layer to just handle image persistence and dimensions.
 - Rebuilt the HTTP server to operate solely on the SQL repositories and introduced REST routes for projects, assets, and image sequences/items.
 - Reorganised the CLI under an `image-sequences` verb group with individual subcommands (`list`, `get`, `create`, `update`, `delete`, `add-item`, `reorder`, `delete-item`).
+- Simplified the React UI to match the new workflow (projects → assets → image sequences), removing legacy YAML/spread tooling and adding sequence management panels.
 
 ## What Worked
 - Database migrations run cleanly against an empty DB and align with the new repository methods.
