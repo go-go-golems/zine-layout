@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
+	"time"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -44,16 +44,15 @@ func (c *ProjectsListCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
 
-	var result struct {
-		Projects []struct {
-			ID        string   `json:"id"`
-			Name      string   `json:"name"`
-			CreatedAt string   `json:"createdAt"`
-			UpdatedAt string   `json:"updatedAt"`
-			Images    []string `json:"images"`
-			Order     []string `json:"order"`
-		} `json:"projects"`
-	}
+var result struct {
+	Projects []struct {
+		ID          string    `json:"id"`
+		Name        string    `json:"name"`
+		Description string    `json:"description"`
+		CreatedAt   time.Time `json:"created_at"`
+		UpdatedAt   time.Time `json:"updated_at"`
+	} `json:"projects"`
+}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
@@ -63,10 +62,9 @@ func (c *ProjectsListCommand) RunIntoGlazeProcessor(
 		row := types.NewRow(
 			types.MRP("id", project.ID),
 			types.MRP("name", project.Name),
-			types.MRP("created_at", project.CreatedAt),
-			types.MRP("updated_at", project.UpdatedAt),
-			types.MRP("image_count", len(project.Images)),
-			types.MRP("images", strings.Join(project.Images, ", ")),
+			types.MRP("description", project.Description),
+			types.MRP("created_at", project.CreatedAt.Format(time.RFC3339)),
+			types.MRP("updated_at", project.UpdatedAt.Format(time.RFC3339)),
 		)
 		if err := gp.AddRow(ctx, row); err != nil {
 			return err

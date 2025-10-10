@@ -2,58 +2,62 @@ package sqlite
 
 const schemaSQL = `
 PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
+
+DROP TABLE IF EXISTS image_sequence_items;
+DROP TABLE IF EXISTS image_sequences;
+DROP TABLE IF EXISTS assets;
+DROP TABLE IF EXISTS spreads;
+DROP TABLE IF EXISTS pages;
+DROP TABLE IF EXISTS projects;
 
 CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    description TEXT,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    preset_id TEXT,
-    cover_asset_id TEXT
+    updated_at INTEGER NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS idx_projects_updated ON projects(updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS assets (
+    id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
-    id TEXT NOT NULL,
     filename TEXT NOT NULL,
     rel_path TEXT NOT NULL,
-    content_type TEXT,
+    content_type TEXT NOT NULL,
     bytes INTEGER NOT NULL,
     width INTEGER NOT NULL,
     height INTEGER NOT NULL,
-    sort_index INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL,
-    PRIMARY KEY (project_id, id),
+    uploaded_at INTEGER NOT NULL,
+    metadata_json TEXT,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_assets_project_order ON assets(project_id, sort_index, created_at);
+CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id, uploaded_at DESC);
 
-CREATE TABLE IF NOT EXISTS pages (
+CREATE TABLE IF NOT EXISTS image_sequences (
+    id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
-    page_number INTEGER NOT NULL,
-    asset_id TEXT,
-    settings_json TEXT NOT NULL,
-    result_json TEXT,
+    name TEXT NOT NULL,
+    description TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    PRIMARY KEY (project_id, page_number),
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    FOREIGN KEY (project_id, asset_id) REFERENCES assets(project_id, id) ON DELETE SET NULL
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS spreads (
-    project_id TEXT NOT NULL,
-    spread_number INTEGER NOT NULL,
-    left_page_number INTEGER,
-    right_page_number INTEGER,
-    settings_json TEXT NOT NULL,
-    result_json TEXT,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    PRIMARY KEY (project_id, spread_number),
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    FOREIGN KEY (project_id, left_page_number) REFERENCES pages(project_id, page_number) ON DELETE SET NULL,
-    FOREIGN KEY (project_id, right_page_number) REFERENCES pages(project_id, page_number) ON DELETE SET NULL
+CREATE INDEX IF NOT EXISTS idx_sequences_project ON image_sequences(project_id, name);
+
+CREATE TABLE IF NOT EXISTS image_sequence_items (
+    sequence_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    asset_id TEXT,
+    is_gap INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (sequence_id, position),
+    FOREIGN KEY (sequence_id) REFERENCES image_sequences(id) ON DELETE CASCADE,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL,
+    CHECK (is_gap IN (0, 1)),
+    CHECK (is_gap = 1 OR asset_id IS NOT NULL)
 );
 `

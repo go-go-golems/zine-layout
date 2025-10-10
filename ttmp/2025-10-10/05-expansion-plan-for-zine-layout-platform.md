@@ -1634,26 +1634,27 @@ echo "✓ All tests passed"
 ### Phase 1: Projects + Images + Image Sequences
 
 **Goal:** Build foundation for project and asset management with sequencing support.
+> Status: Backend + CLI layers complete; frontend and automated validation still outstanding.
 
 **Backend:**
-- [ ] 1.1 Update database schema in `pkg/repo/sqlite/migrations.go`
+- [x] 1.1 Update database schema in `pkg/repo/sqlite/migrations.go`
   - Add `projects`, `assets`, `image_sequences`, `image_sequence_items` tables
   - Remove old `pages` and `spreads` tables for now
-- [ ] 1.2 Add entity types to `pkg/repo/types.go`
+- [x] 1.2 Add entity types to `pkg/repo/types.go`
   - `Project` (simplified: id, name, description, timestamps)
   - `Asset` (with metadata_json for EXIF/date/ratio)
   - `ImageSequence`, `ImageSequenceItem`
-- [ ] 1.3 Implement SQLite repositories
+- [x] 1.3 Implement SQLite repositories
   - `pkg/repo/sqlite/projects.go` – Create/Get/List/Update/Delete
   - `pkg/repo/sqlite/assets.go` – Create/Get/ListByProject/Delete, capture metadata on upload
   - `pkg/repo/sqlite/image_sequences.go` – CRUD + item management (Add/Get/Reorder/Delete items)
-- [ ] 1.4 Update `pkg/repo/sqlite/sqlite.go`
+- [x] 1.4 Update `pkg/repo/sqlite/sqlite.go`
   - Wire up new repositories in `NewRepositories()`
   - Add `generateID()` helper for ID generation
-- [ ] 1.5 Gut `pkg/projects/projects.go`
+- [x] 1.5 Gut `pkg/projects/projects.go`
   - Remove JSON manifest read/write functions
   - Keep only `ProjectDir`, `ProjectImagesDir`, updated `SavePNGImage` (returns assetID, w, h)
-- [ ] 1.6 Update `pkg/serve/server.go`
+- [x] 1.6 Update `pkg/serve/server.go`
   - Refactor `/api/projects` to use repos only (no filesystem manifests)
   - Refactor `/api/projects/{id}/images` upload handler to create Asset records with metadata
   - Add `/api/projects/{id}/image-sequences` endpoints (list, create)
@@ -1661,15 +1662,8 @@ echo "✓ All tests passed"
   - Add `/api/image-sequences/{id}/items` endpoints (get, reorder)
 
 **CLI:**
-- [ ] 1.7 Add Glazed commands in `cmd/zine-layout/cmds/api/`
-  - `image-sequences/list.go`
-  - `image-sequences/create.go`
-  - `image-sequences/get.go`
-  - `image-sequences/update.go`
-  - `image-sequences/delete.go`
-  - `image-sequences/add-item.go`
-  - `image-sequences/reorder.go`
-- [ ] 1.8 Register commands in `cmd/zine-layout/cmds/api/commands.go`
+- [x] 1.7 Add Glazed commands in `cmd/zine-layout/cmds/api/image_sequences/` (verb group with `list|get|create|update|delete|add-item|reorder|delete-item`)
+- [x] 1.8 Register commands in `cmd/zine-layout/cmds/api/commands.go`
 
 **Frontend:**
 - [ ] 1.9 Extend `web/src/api.ts`
@@ -1948,4 +1942,3 @@ echo "✓ All tests passed"
 5. **Test incrementally**: Don't write all repositories before testing. Get one working, then move to the next.
 
 Good luck! 🚀
-

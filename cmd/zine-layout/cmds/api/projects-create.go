@@ -20,6 +20,7 @@ type ProjectsCreateCommand struct {
 type ProjectsCreateSettings struct {
 	Server string `glazed.parameter:"server"`
 	Name   string `glazed.parameter:"name"`
+	Description string `glazed.parameter:"description"`
 }
 
 func (c *ProjectsCreateCommand) RunIntoGlazeProcessor(
@@ -32,40 +33,43 @@ func (c *ProjectsCreateCommand) RunIntoGlazeProcessor(
 		return err
 	}
 
-	if settings.Name == "" {
-		return fmt.Errorf("project name is required")
-	}
+if settings.Name == "" {
+	return fmt.Errorf("project name is required")
+}
 
-	body := map[string]string{
-		"name": settings.Name,
-	}
+body := map[string]string{
+	"name":        settings.Name,
+	"description": settings.Description,
+}
 
 	respBytes, err := httpPostJSON(fmt.Sprintf("%s/api/projects", settings.Server), body)
 	if err != nil {
 		return fmt.Errorf("failed to create project: %w", err)
 	}
 
-	var result struct {
-		Project struct {
-			ID        string `json:"id"`
-			Name      string `json:"name"`
-			CreatedAt string `json:"createdAt"`
-			UpdatedAt string `json:"updatedAt"`
-		} `json:"project"`
-	}
+var result struct {
+	Project struct {
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		CreatedAt   string `json:"created_at"`
+		UpdatedAt   string `json:"updated_at"`
+	} `json:"project"`
+}
 
 	if err := json.Unmarshal(respBytes, &result); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	project := result.Project
-	row := types.NewRow(
-		types.MRP("id", project.ID),
-		types.MRP("name", project.Name),
-		types.MRP("created_at", project.CreatedAt),
-		types.MRP("updated_at", project.UpdatedAt),
-		types.MRP("status", "created"),
-	)
+row := types.NewRow(
+	types.MRP("id", project.ID),
+	types.MRP("name", project.Name),
+	types.MRP("description", project.Description),
+	types.MRP("created_at", project.CreatedAt),
+	types.MRP("updated_at", project.UpdatedAt),
+	types.MRP("status", "created"),
+)
 
 	return gp.AddRow(ctx, row)
 }
@@ -96,14 +100,20 @@ Examples:
 					parameters.WithHelp("Server base URL"),
 					parameters.WithShortFlag("s"),
 				),
-				parameters.NewParameterDefinition(
-					"name",
-					parameters.ParameterTypeString,
-					parameters.WithDefault(""),
-					parameters.WithHelp("Project name (required)"),
-					parameters.WithShortFlag("n"),
-					parameters.WithRequired(true),
-				),
+			parameters.NewParameterDefinition(
+				"name",
+				parameters.ParameterTypeString,
+				parameters.WithDefault(""),
+				parameters.WithHelp("Project name (required)"),
+				parameters.WithShortFlag("n"),
+				parameters.WithRequired(true),
+			),
+			parameters.NewParameterDefinition(
+				"description",
+				parameters.ParameterTypeString,
+				parameters.WithDefault(""),
+				parameters.WithHelp("Optional project description"),
+			),
 			),
 			cmds.WithLayersList(glazedLayer),
 		),

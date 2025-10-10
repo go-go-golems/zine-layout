@@ -4,12 +4,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
 
 	"github.com/go-go-golems/zine-layout/pkg/repo"
 )
+
+var _ = func() bool {
+	rand.Seed(time.Now().UnixNano())
+	return true
+}()
 
 // RunMigrations ensures the SQLite schema is created.
 func RunMigrations(db *sql.DB) error {
@@ -30,14 +37,12 @@ func NewRepositories(db *sql.DB) (*repo.Repositories, error) {
 
 	projects := &projectRepo{db: db}
 	assets := &assetRepo{db: db}
-	pages := &pageRepo{db: db}
-	spreads := &spreadRepo{db: db}
+	imageSequences := &imageSequenceRepo{db: db}
 
 	return &repo.Repositories{
-		Projects: projects,
-		Assets:   assets,
-		Pages:    pages,
-		Spreads:  spreads,
+		Projects:       projects,
+		Assets:         assets,
+		ImageSequences: imageSequences,
 	}, nil
 }
 
@@ -63,21 +68,6 @@ func nullStringPtr(v *string) sql.NullString {
 	return sql.NullString{Valid: true, String: *v}
 }
 
-func scanNullableInt(src sql.NullInt64) *int {
-	if !src.Valid {
-		return nil
-	}
-	v := int(src.Int64)
-	return &v
-}
-
-func nullIntPtr(v *int) sql.NullInt64 {
-	if v == nil {
-		return sql.NullInt64{}
-	}
-	return sql.NullInt64{Valid: true, Int64: int64(*v)}
-}
-
 func toUnix(t time.Time) int64 {
 	if t.IsZero() {
 		return 0
@@ -97,4 +87,29 @@ func errNotFound(err error) error {
 		return sql.ErrNoRows
 	}
 	return err
+}
+
+func nullString(value string) sql.NullString {
+	if strings.TrimSpace(value) == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{Valid: true, String: value}
+}
+
+func boolToInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+// generateID creates a unique ID with timestamp and random suffix.
+func generateID(prefix string) string {
+	ts := time.Now().UTC().Format("20060102T150405Z")
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 6)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return fmt.Sprintf("%s-%s-%s", prefix, ts, string(b))
 }

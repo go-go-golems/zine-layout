@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -37,7 +38,7 @@ func (c *ImagesListCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("project ID is required")
 	}
 
-	url := fmt.Sprintf("%s/api/projects/%s/images", settings.Server, settings.ProjectID)
+url := fmt.Sprintf("%s/api/projects/%s/assets", settings.Server, settings.ProjectID)
 	resp, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to get images: %w", err)
@@ -51,56 +52,42 @@ func (c *ImagesListCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
 
-	var result struct {
-		Images []struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			Width  int    `json:"width"`
-			Height int    `json:"height"`
-		} `json:"images"`
-		Order []string `json:"order"`
-	}
+var result struct {
+	Assets []struct {
+		ID          string            `json:"id"`
+		ProjectID   string            `json:"project_id"`
+		Filename    string            `json:"filename"`
+		Width       int               `json:"width"`
+		Height      int               `json:"height"`
+		ContentType string            `json:"content_type"`
+		Bytes       int64             `json:"bytes"`
+		UploadedAt  time.Time         `json:"uploaded_at"`
+		Metadata    map[string]any    `json:"metadata"`
+		URL         string            `json:"url"`
+	} `json:"assets"`
+}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Create a map for easy lookup
-	imageMap := make(map[string]struct {
-		ID     string `json:"id"`
-		Name   string `json:"name"`
-		Width  int    `json:"width"`
-		Height int    `json:"height"`
-	})
-	for _, img := range result.Images {
-		imageMap[img.ID] = img
+for _, asset := range result.Assets {
+	row := types.NewRow(
+		types.MRP("project_id", asset.ProjectID),
+		types.MRP("asset_id", asset.ID),
+		types.MRP("filename", asset.Filename),
+		types.MRP("width", asset.Width),
+		types.MRP("height", asset.Height),
+		types.MRP("bytes", asset.Bytes),
+		types.MRP("content_type", asset.ContentType),
+		types.MRP("uploaded_at", asset.UploadedAt.Format(time.RFC3339)),
+		types.MRP("metadata", asset.Metadata),
+		types.MRP("url", asset.URL),
+	)
+	if err := gp.AddRow(ctx, row); err != nil {
+		return err
 	}
-
-	// Output images in order
-	order := result.Order
-	if len(order) == 0 {
-		// If no order specified, use the images array order
-		for _, img := range result.Images {
-			order = append(order, img.ID)
-		}
-	}
-
-	for i, imgID := range order {
-		if img, found := imageMap[imgID]; found {
-			row := types.NewRow(
-				types.MRP("project_id", settings.ProjectID),
-				types.MRP("id", img.ID),
-				types.MRP("name", img.Name),
-				types.MRP("width", img.Width),
-				types.MRP("height", img.Height),
-				types.MRP("order", i+1),
-				types.MRP("url", fmt.Sprintf("%s/api/projects/%s/images/%s", settings.Server, settings.ProjectID, img.ID)),
-			)
-			if err := gp.AddRow(ctx, row); err != nil {
-				return err
-			}
-		}
-	}
+}
 
 	return nil
 }

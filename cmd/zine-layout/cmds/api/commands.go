@@ -1,6 +1,7 @@
 package api
 
 import (
+	imagesequences "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/api/image_sequences"
 	"github.com/spf13/cobra"
 )
 
@@ -30,25 +31,11 @@ func AddAllAPICommands(rootCmd *cobra.Command) error {
 	if err := AddImagesUploadDirCommand(rootCmd); err != nil {
 		return err
 	}
-	if err := AddImagesSyncCommand(rootCmd); err != nil {
+	seqCmd, err := imagesequences.NewCommand()
+	if err != nil {
 		return err
 	}
-
-	// Presets commands
-	if err := AddPresetsListCommand(rootCmd); err != nil {
-		return err
-	}
-
-	// Pages commands
-	if err := AddPagesListCommand(rootCmd); err != nil {
-		return err
-	}
-	if err := AddPagesGetCommand(rootCmd); err != nil {
-		return err
-	}
-	if err := AddPagesPutCommand(rootCmd); err != nil {
-		return err
-	}
+	rootCmd.AddCommand(seqCmd)
 
 	return nil
 }
@@ -165,82 +152,4 @@ func AddImagesUploadDirCommand(cmd *cobra.Command) error {
 	return nil
 }
 
-// AddImagesSyncCommand adds the images-sync command
-func AddImagesSyncCommand(cmd *cobra.Command) error {
-	imagesSyncCmd, err := NewImagesSyncCommand()
-	if err != nil {
-		return err
-	}
-
-	cobraCmd, err := buildAPICommand(imagesSyncCmd)
-	if err != nil {
-		return err
-	}
-
-	cmd.AddCommand(cobraCmd)
-	return nil
-}
-
-// AddPresetsListCommand adds the presets-list command
-func AddPresetsListCommand(cmd *cobra.Command) error {
-	presetsListCmd, err := NewPresetsListCommand()
-	if err != nil {
-		return err
-	}
-
-	cobraCmd, err := buildAPICommand(presetsListCmd)
-	if err != nil {
-		return err
-	}
-
-	cmd.AddCommand(cobraCmd)
-	return nil
-}
-
-// AddPagesListCommand adds the pages-list command
-func AddPagesListCommand(cmd *cobra.Command) error {
-	pagesListCmd, err := NewPagesListCommand()
-	if err != nil {
-		return err
-	}
-
-	cobraCmd, err := buildAPICommand(pagesListCmd)
-	if err != nil {
-		return err
-	}
-
-	cmd.AddCommand(cobraCmd)
-	return nil
-}
-
-// AddPagesGetCommand adds the pages-get command
-func AddPagesGetCommand(cmd *cobra.Command) error {
-	pagesGetCmd, err := NewPagesGetCommand()
-	if err != nil {
-		return err
-	}
-
-	cobraCmd, err := buildAPICommand(pagesGetCmd)
-	if err != nil {
-		return err
-	}
-
-	cmd.AddCommand(cobraCmd)
-	return nil
-}
-
-// AddPagesPutCommand adds the pages-put command
-func AddPagesPutCommand(cmd *cobra.Command) error {
-	pagesPutCmd, err := NewPagesPutCommand()
-	if err != nil {
-		return err
-	}
-
-	cobraCmd, err := buildAPICommand(pagesPutCmd)
-	if err != nil {
-		return err
-	}
-
-	cmd.AddCommand(cobraCmd)
-	return nil
-}
+// legacy commands removed in new workflow

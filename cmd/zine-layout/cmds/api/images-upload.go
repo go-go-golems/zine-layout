@@ -72,30 +72,31 @@ func (c *ImagesUploadCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("failed to upload files: %w", err)
 	}
 
-	var result struct {
-		Images []struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			Width  int    `json:"width"`
-			Height int    `json:"height"`
-		} `json:"images"`
-	}
+var result struct {
+	Assets []struct {
+		ID        string `json:"id"`
+		Filename  string `json:"filename"`
+		Width     int    `json:"width"`
+		Height    int    `json:"height"`
+		URL       string `json:"url"`
+	} `json:"assets"`
+}
 
 	if err := json.Unmarshal(respBytes, &result); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	for i, image := range result.Images {
-		originalFile := validFiles[i] // Assuming server returns images in same order
+	for i, asset := range result.Assets {
+		originalFile := validFiles[i]
 		row := types.NewRow(
 			types.MRP("project_id", settings.ProjectID),
 			types.MRP("original_file", originalFile),
-			types.MRP("id", image.ID),
-			types.MRP("name", image.Name),
-			types.MRP("width", image.Width),
-			types.MRP("height", image.Height),
+			types.MRP("asset_id", asset.ID),
+			types.MRP("filename", asset.Filename),
+			types.MRP("width", asset.Width),
+			types.MRP("height", asset.Height),
 			types.MRP("status", "uploaded"),
-			types.MRP("url", fmt.Sprintf("%s/api/projects/%s/images/%s", settings.Server, settings.ProjectID, image.ID)),
+			types.MRP("url", asset.URL),
 		)
 		if err := gp.AddRow(ctx, row); err != nil {
 			return err

@@ -2,51 +2,45 @@ package repo
 
 import "time"
 
-// Project represents a zine project persisted in SQL.
+// Project is the top-level workspace for assets and layout artifacts.
 type Project struct {
-	ID           string
-	Name         string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	PresetID     *string
-	CoverAssetID *string
+	ID          string
+	Name        string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
-// Asset represents a project image/asset stored on disk.
+// Asset represents a raw uploaded image stored on disk.
 type Asset struct {
+	ID           string
+	ProjectID    string
+	Filename     string
+	RelPath      string
+	ContentType  string
+	Bytes        int64
+	Width        int
+	Height       int
+	UploadedAt   time.Time
+	MetadataJSON string
+}
+
+// ImageSequence captures a named ordering of assets within a project.
+type ImageSequence struct {
 	ID          string
 	ProjectID   string
-	Filename    string
-	RelPath     string
-	ContentType string
-	Bytes       int64
-	Width       int
-	Height      int
-	SortIndex   int
+	Name        string
+	Description string
 	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
-// Page captures layout settings/result for a single page.
-type Page struct {
-	ProjectID    string
-	PageNumber   int
-	AssetID      *string
-	SettingsJSON string
-	ResultJSON   *string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-}
-
-// Spread captures layout settings/result for a spread (pair of facing pages).
-type Spread struct {
-	ProjectID       string
-	SpreadNumber    int
-	LeftPageNumber  *int
-	RightPageNumber *int
-	SettingsJSON    string
-	ResultJSON      *string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+// ImageSequenceItem defines a single position inside an image sequence.
+type ImageSequenceItem struct {
+	SequenceID string
+	Position   int
+	AssetID    *string
+	IsGap      bool
 }
 
 // ProjectRepository manages project metadata persistence.
@@ -58,35 +52,32 @@ type ProjectRepository interface {
 	Delete(id string) error
 }
 
-// AssetRepository manages project assets.
+// AssetRepository manages raw asset storage metadata.
 type AssetRepository interface {
 	Create(asset *Asset) error
-	Get(projectID, assetID string) (*Asset, error)
+	Update(asset *Asset) error
+	Get(id string) (*Asset, error)
 	ListByProject(projectID string) ([]*Asset, error)
-	UpdateOrder(projectID string, orderedIDs []string) error
-	Delete(projectID, assetID string) error
+	Delete(id string) error
 }
 
-// PageRepository manages project pages.
-type PageRepository interface {
-	Upsert(page *Page) error
-	GetByNumber(projectID string, pageNumber int) (*Page, error)
-	List(projectID string) ([]*Page, error)
-	Delete(projectID string, pageNumber int) error
+// ImageSequenceRepository manages named asset orderings.
+type ImageSequenceRepository interface {
+	Create(sequence *ImageSequence) error
+	Update(sequence *ImageSequence) error
+	Get(id string) (*ImageSequence, error)
+	ListByProject(projectID string) ([]*ImageSequence, error)
+	Delete(id string) error
+
+	AddItem(item *ImageSequenceItem) error
+	ListItems(sequenceID string) ([]*ImageSequenceItem, error)
+	ReplaceItems(sequenceID string, items []*ImageSequenceItem) error
+	DeleteItem(sequenceID string, position int) error
 }
 
-// SpreadRepository manages project spreads.
-type SpreadRepository interface {
-	Upsert(spread *Spread) error
-	GetByNumber(projectID string, spreadNumber int) (*Spread, error)
-	List(projectID string) ([]*Spread, error)
-	Delete(projectID string, spreadNumber int) error
-}
-
-// Repositories bundles individual repositories together.
+// Repositories aggregates all persistence adapters.
 type Repositories struct {
-	Projects ProjectRepository
-	Assets   AssetRepository
-	Pages    PageRepository
-	Spreads  SpreadRepository
+	Projects       ProjectRepository
+	Assets         AssetRepository
+	ImageSequences ImageSequenceRepository
 }

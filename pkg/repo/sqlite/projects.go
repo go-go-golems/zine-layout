@@ -16,20 +16,22 @@ func (r *projectRepo) Create(project *repo.Project) error {
 	if project == nil {
 		return fmt.Errorf("project is nil")
 	}
+	if project.ID == "" {
+		project.ID = generateID("prj")
+	}
 	if project.CreatedAt.IsZero() {
 		project.CreatedAt = time.Now().UTC()
 	}
 	if project.UpdatedAt.IsZero() {
 		project.UpdatedAt = project.CreatedAt
 	}
-	_, err := r.db.Exec(`INSERT INTO projects (id, name, created_at, updated_at, preset_id, cover_asset_id)
-VALUES (?, ?, ?, ?, ?, ?)`,
+	_, err := r.db.Exec(`INSERT INTO projects (id, name, description, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?)`,
 		project.ID,
 		project.Name,
+		project.Description,
 		toUnix(project.CreatedAt),
 		toUnix(project.UpdatedAt),
-		nullStringPtr(project.PresetID),
-		nullStringPtr(project.CoverAssetID),
 	)
 	if err != nil {
 		return fmt.Errorf("insert project: %w", err)
@@ -44,11 +46,10 @@ func (r *projectRepo) Update(project *repo.Project) error {
 	if project.UpdatedAt.IsZero() {
 		project.UpdatedAt = time.Now().UTC()
 	}
-	res, err := r.db.Exec(`UPDATE projects SET name = ?, updated_at = ?, preset_id = ?, cover_asset_id = ? WHERE id = ?`,
+	res, err := r.db.Exec(`UPDATE projects SET name = ?, description = ?, updated_at = ? WHERE id = ?`,
 		project.Name,
+		project.Description,
 		toUnix(project.UpdatedAt),
-		nullStringPtr(project.PresetID),
-		nullStringPtr(project.CoverAssetID),
 		project.ID,
 	)
 	if err != nil {
@@ -62,25 +63,21 @@ func (r *projectRepo) Update(project *repo.Project) error {
 }
 
 func (r *projectRepo) Get(id string) (*repo.Project, error) {
-	row := r.db.QueryRow(`SELECT id, name, created_at, updated_at, preset_id, cover_asset_id FROM projects WHERE id = ?`, id)
+	row := r.db.QueryRow(`SELECT id, name, description, created_at, updated_at FROM projects WHERE id = ?`, id)
 	var (
 		project          repo.Project
 		created, updated int64
-		preset           sql.NullString
-		cover            sql.NullString
 	)
-	if err := row.Scan(&project.ID, &project.Name, &created, &updated, &preset, &cover); err != nil {
+	if err := row.Scan(&project.ID, &project.Name, &project.Description, &created, &updated); err != nil {
 		return nil, errNotFound(err)
 	}
 	project.CreatedAt = fromUnix(created)
 	project.UpdatedAt = fromUnix(updated)
-	project.PresetID = scanNullableString(preset)
-	project.CoverAssetID = scanNullableString(cover)
 	return &project, nil
 }
 
 func (r *projectRepo) List() ([]*repo.Project, error) {
-	rows, err := r.db.Query(`SELECT id, name, created_at, updated_at, preset_id, cover_asset_id FROM projects ORDER BY updated_at DESC, name ASC`)
+	rows, err := r.db.Query(`SELECT id, name, description, created_at, updated_at FROM projects ORDER BY updated_at DESC, name ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("list projects: %w", err)
 	}
@@ -91,16 +88,12 @@ func (r *projectRepo) List() ([]*repo.Project, error) {
 		var (
 			project          repo.Project
 			created, updated int64
-			preset           sql.NullString
-			cover            sql.NullString
 		)
-		if err := rows.Scan(&project.ID, &project.Name, &created, &updated, &preset, &cover); err != nil {
+		if err := rows.Scan(&project.ID, &project.Name, &project.Description, &created, &updated); err != nil {
 			return nil, fmt.Errorf("scan project: %w", err)
 		}
 		project.CreatedAt = fromUnix(created)
 		project.UpdatedAt = fromUnix(updated)
-		project.PresetID = scanNullableString(preset)
-		project.CoverAssetID = scanNullableString(cover)
 		projects = append(projects, &project)
 	}
 	if err := rows.Err(); err != nil {
