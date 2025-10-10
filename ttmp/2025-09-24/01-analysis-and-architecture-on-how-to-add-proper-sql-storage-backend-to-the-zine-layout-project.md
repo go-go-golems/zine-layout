@@ -383,3 +383,5 @@ For new feature work, start by wiring the BookSpreadDesigner to these hooks so s
 - Use `make serve-tmux` (or `tmux new -s zine-layout -- make serve`) to keep the Go API and Vite dev server running side-by-side while tailing the sqlite-backed logs.
 - The SQLite database lives at `data/zine-layout.db`; remove it to rebuild from the filesystem if you need a clean slate during development.
 
+
+
