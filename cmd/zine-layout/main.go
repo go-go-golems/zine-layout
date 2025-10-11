@@ -6,11 +6,16 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
+<<<<<<< HEAD
 	apicmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/api"
 	imagelayoutcmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/imagelayout"
 	rendercmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/render"
 	servecmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/serve"
 	workflowcmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/workflow"
+=======
+	"github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds"
+    pagescmds "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/pages"
+>>>>>>> upstream/main
 	zldoc "github.com/go-go-golems/zine-layout/pkg/doc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -76,6 +81,7 @@ func main() {
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(cobraServeCmd)
 
+<<<<<<< HEAD
 	// api group commands
 	apiCmd, err := apicmd.NewCommand()
 	cobra.CheckErr(err)
@@ -88,6 +94,20 @@ func main() {
 	workflowCmd, err := workflowcmd.NewCommand()
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(workflowCmd)
+=======
+    // Register pages-render command
+    pageRenderCmd, err := pagescmds.NewPageRenderCommand()
+    cobra.CheckErr(err)
+    cobraPageRenderCmd, err := cli.BuildCobraCommandFromCommand(
+        pageRenderCmd,
+        cli.WithParserConfig(cli.CobraParserConfig{
+            ShortHelpLayers: []string{layers.DefaultSlug},
+            MiddlewaresFunc: cli.CobraCommandDefaultMiddlewares,
+        }),
+    )
+    cobra.CheckErr(err)
+    rootCmd.AddCommand(cobraPageRenderCmd)
+>>>>>>> upstream/main
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal().Err(err).Msg("Error executing root command")
