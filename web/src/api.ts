@@ -52,7 +52,10 @@ export interface ImageLayoutTemplate {
 export interface LayoutComputation {
   settings: Record<string, unknown>;
   result: Record<string, unknown>;
-  placement_trace?: Record<string, unknown>;
+  trace?: {
+    inputs?: Record<string, unknown>;
+    steps?: Array<{ label: string; data: Record<string, unknown> }>;
+  };
 }
 
 export interface LaidOutImage {

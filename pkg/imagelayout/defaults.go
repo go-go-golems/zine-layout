@@ -1,8 +1,9 @@
-package spread
+package imagelayout
 
-// DefaultSettings returns the canonical defaults for the Simple algorithm.
-func DefaultSettings() Settings {
-	return Settings{
+// DefaultSettings returns baseline viewport settings used when
+// no explicit template values are provided.
+func DefaultSettings() ViewportSettings {
+	return ViewportSettings{
 		PaperWidthIn:   8.0,
 		PaperHeightIn:  10.0,
 		DPI:            300,
@@ -11,20 +12,18 @@ func DefaultSettings() Settings {
 		MarginRightIn:  0.25,
 		MarginBottomIn: 0.25,
 		MarginLeftIn:   0.25,
-		IsSpread:       false,
-		GutterIn:       0,
 		CropRatio:      nil,
 		CropToFill:     false,
 		UserScale:      1.0,
 		PositionX:      0,
 		PositionY:      0,
 		Units:          "normalized",
-		Export: Export{
+		Export: ExportOptions{
 			Format:           "png",
 			Quality:          90,
 			Background:       "white",
+			FilenameTemplate: "{name}-{index}.{ext}",
 			OutDir:           "./out",
-			FilenameTemplate: "{name}-{panel}.{ext}",
 		},
 	}
 }

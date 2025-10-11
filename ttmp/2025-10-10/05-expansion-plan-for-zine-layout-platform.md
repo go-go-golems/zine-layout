@@ -1,7 +1,7 @@
 # Expansion Plan: Transition to First-Class Zine Layout Entities
 *Detailed Implementation Guide for New Contributors*
 
-This document provides step-by-step instructions for refactoring the zine-layout codebase to support first-class entities for image sequences, layout templates, laid-out images/pages, and complete zines. Since we're not maintaining backwards compatibility, we can start fresh with a clean database schema.
+This document provides step-by-step instructions for refactoring the zine-layout codebase to support first-class entities for image sequences, layout templates, laid-out images/pages, and complete zines. Since we're not maintaining backwards compatibility, we can start fresh with a clean database schema. Phase planning now derives from `ttmp/2025-10-10/09-system-specification-after-phase1-and-phase2.md`, and future work must replace the legacy `pkg/spread` module with the new `pkg/imagelayout` stack described there.
 
 ---
 
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS image_sequence_items (
 );
 
 -- Image Layout Templates: Reusable resize/crop/position settings
--- Stores spread.Settings as JSON
+-- Stores imagelayout.ViewportSettings as JSON
 CREATE TABLE IF NOT EXISTS image_layout_templates (
     id TEXT PRIMARY KEY,
     project_id TEXT,  -- NULL = global template
@@ -109,8 +109,8 @@ CREATE TABLE IF NOT EXISTS laid_out_images (
     project_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
     template_id TEXT NOT NULL,
-    overrides_json TEXT,  -- Partial spread.Settings to override template
-    result_json TEXT,  -- simple.Result from computation
+    overrides_json TEXT,  -- Partial imagelayout.ViewportSettings overrides
+    result_json TEXT,  -- imagelayout.ComputationResult JSON payload
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -262,7 +262,7 @@ type ImageLayoutTemplate struct {
     ProjectID    *string  // NULL for global templates
     Name         string
     Description  string
-    SettingsJSON string   // Serialized spread.Settings
+    SettingsJSON string   // Serialized imagelayout.ViewportSettings
     CreatedAt    time.Time
     UpdatedAt    time.Time
 }
@@ -273,8 +273,8 @@ type LaidOutImage struct {
     ProjectID     string
     AssetID       string
     TemplateID    string
-    OverridesJSON *string  // Partial spread.Settings overrides
-    ResultJSON    *string  // simple.Result from computation
+    OverridesJSON *string  // Partial imagelayout.ViewportSettings overrides
+    ResultJSON    *string  // imagelayout.ComputationResult payload
     CreatedAt     time.Time
     UpdatedAt     time.Time
 }
@@ -782,9 +782,9 @@ package services
 import (
     "encoding/json"
     "fmt"
+    "github.com/go-go-golems/zine-layout/pkg/imagelayout"
+    "github.com/go-go-golems/zine-layout/pkg/imagelayout/engine"
     "github.com/go-go-golems/zine-layout/pkg/repo"
-    "github.com/go-go-golems/zine-layout/pkg/spread"
-    "github.com/go-go-golems/zine-layout/pkg/spread/simple"
 )
 
 type LayoutService struct {
@@ -798,7 +798,7 @@ func NewLayoutService(repos *repo.Repositories) *LayoutService {
 // CreateLaidOutImage takes an asset + template and computes the layout
 func (s *LayoutService) CreateLaidOutImage(
     projectID, assetID, templateID string,
-    overrides *spread.Settings,
+    overrides *imagelayout.ViewportSettings,
 ) (*repo.LaidOutImage, error) {
     // Fetch asset for dimensions
     asset, err := s.repos.Assets.Get(projectID, assetID)
@@ -813,7 +813,7 @@ func (s *LayoutService) CreateLaidOutImage(
     }
     
     // Parse template settings
-    var settings spread.Settings
+    var settings imagelayout.ViewportSettings
     if err := json.Unmarshal([]byte(tmpl.SettingsJSON), &settings); err != nil {
         return nil, fmt.Errorf("invalid template settings: %w", err)
     }
@@ -822,19 +822,20 @@ func (s *LayoutService) CreateLaidOutImage(
     if overrides != nil {
         settings = mergeSettings(settings, *overrides)
     }
-    
+
     // Run computation
-    meta := spread.ImageMeta{Width: asset.Width, Height: asset.Height}
-    inputs, err := simple.InputsFromSettings(settings, meta)
+    meta := imagelayout.ImageMeta{Width: asset.Width, Height: asset.Height}
+    inputs, err := engine.InputsFromSettings(settings, meta)
     if err != nil {
         return nil, fmt.Errorf("invalid settings: %w", err)
     }
     
-    trace := &simple.Trace{}
-    result := simple.ComputePlacement(inputs, trace)
+    trace := &engine.Trace{}
+    result := engine.ComputeViewport(inputs, trace)
     
-    // Serialize result
-    resultJSON, err := json.Marshal(result)
+    // Serialize result (settings + trace + placement)
+    payload := imagelayout.ResultEnvelope{Settings: settings, Result: result, Trace: trace.Structured()}
+    resultJSON, err := json.Marshal(payload)
     if err != nil {
         return nil, err
     }
@@ -867,7 +868,7 @@ func (s *LayoutService) CreateLaidOutImage(
     return laidOut, nil
 }
 
-func mergeSettings(base, override spread.Settings) spread.Settings {
+func mergeSettings(base, override imagelayout.ViewportSettings) imagelayout.ViewportSettings {
     // Apply non-zero overrides to base
     result := base
     if override.UserScale != 0 {
@@ -1702,7 +1703,7 @@ echo "✓ All tests passed"
   - `pkg/repo/sqlite/laid_out_images.go` – CRUD + ListByAsset
   - `pkg/repo/sqlite/layout_sequences.go` – CRUD + item management
 - [x] 2.4 Create service layer in `pkg/services/layout.go`
-  - `CreateLaidOutImage(projectID, assetID, templateID, overrides)` – fetches asset/template, runs `simple.ComputePlacement`, stores result
+  - `CreateLaidOutImage(projectID, assetID, templateID, overrides)` – fetches asset/template, runs `imagelayout/engine.ComputeViewport`, stores result
   - `ApplyTemplateToSequence(projectID, sequenceID, templateID)` – batch-creates laid-out images for all assets in sequence
   - `mergeSettings(base, override)` – helper to apply overrides to template settings
 - [x] 2.5 Add REST endpoints in `pkg/serve/server.go`
@@ -1718,55 +1719,57 @@ echo "✓ All tests passed"
   - ✅ `/api/laid-out-images/{id}/preview` – serves the persisted layout computation payload for quick client previews.
   - 🚧 `/api/laid-out-images/{id}/export` – stubbed (`501 Not Implemented`); needs renderer wiring in a later iteration.
 
-**Algorithms Implementation:**
-- [ ] 2.7 Adapt `pkg/spread/simple/algorithm.go` to support all modes from `01-algorithm-for-resizing.md`
-  - Current: covers Page+margins and basic spread
-  - Add: Fixed crop format mode, Fit to width/height mode, Spread with gutter position/overlap
-  - Update `Inputs` struct with new fields (gutter position, overlap, mode selector)
-  - Update `Result` struct to capture all output variants
-- [ ] 2.8 Extend `spread.Settings` type in `pkg/spread/types.go`
-  - Add fields for mode selection, gutter position, overlap
-  - Maintain backwards compatibility with existing Simple YAML
-- [ ] 2.9 Update rendering in `pkg/spread/simple/render.go`
-  - Support new output modes (crop-only, fit, spread with overlap)
-  - Generate all required export variants per mode
+**Algorithms Implementation (New Layout Engine):**
+- [ ] 2.7 Build `pkg/imagelayout/types.go`
+  - Define `ViewportSettings`, `ViewportComputation`, `ExportOptions`, `ImageMeta`
+  - Document structure inline referencing `ttmp/2025-10-10/09-system-specification-after-phase1-and-phase2.md`
+- [ ] 2.8 Implement placement core in `pkg/imagelayout/engine`
+  - Port existing math from `pkg/spread/simple` into `ComputeViewport`
+  - Expand support for crop + fit modes, anchor positioning, focus point
+  - Expose deterministic traces for UI debugging
+- [ ] 2.9 Provide render helpers in `pkg/imagelayout/renderer`
+  - Prepare preview canvas dimensions + export naming
+  - Stub file rendering until export workflow is defined
+- [ ] 2.10 Remove `pkg/spread` once the new layout modules ship
+  - Delete old types/algorithms and update imports across the codebase
+  - Migrate any remaining YAML helpers into `pkg/imagelayout/dsl` if still needed
 
 **CLI:**
-- [x] 2.10 Add Glazed commands
+- [x] 2.11 Add Glazed commands
   - `image-layout-templates/*` (list, get, create, update, delete)
   - `laid-out-images/*` (list, get, create, delete, preview, export)
   - `layout-sequences/*` (list, create, get, update, delete, add-item, reorder)
-- [ ] 2.11 Add batch operation commands
+- [ ] 2.12 Add batch operation commands
   - `apply-template-to-sequence` – create laid-out images for entire sequence
   - `preview-template` – preview template settings on sample image
 
 **Frontend:**
-- [ ] 2.12 Extend `web/src/api.ts`
+- [ ] 2.13 Extend `web/src/api.ts`
   - Add types: `ImageLayoutTemplate`, `LaidOutImage`, `LayoutSequence`
   - Add all CRUD endpoints and preview/export endpoints
-- [ ] 2.13 Create `web/src/views/LayoutTemplateManager.tsx`
+- [ ] 2.14 Create `web/src/views/LayoutTemplateManager.tsx`
   - List templates (global + project-specific)
   - Create/edit templates using settings from `bookSpreadSlice`
   - Preview template on selected asset
   - Save current Book Spread Designer settings as new template
-- [ ] 2.14 Create `web/src/views/LaidOutImageViewer.tsx`
+- [ ] 2.15 Create `web/src/views/LaidOutImageViewer.tsx`
   - Grid view of laid-out images
   - Preview panel showing result
   - Edit overrides (zoom, position) without changing template
   - Re-compute button
-- [ ] 2.15 Create `web/src/views/LayoutSequenceEditor.tsx`
+- [ ] 2.16 Create `web/src/views/LayoutSequenceEditor.tsx`
   - Similar to ImageSequenceEditor but for laid-out images
   - Preview panel showing sequence in order
   - Drag-and-drop reordering
 
 **Testing:**
-- [ ] 2.16 Write service layer tests in `pkg/services/layout_test.go`
-- [ ] 2.17 Write algorithm tests for new modes in `pkg/spread/simple/algorithm_test.go`
-- [ ] 2.18 Integration test: create template → apply to asset → verify result dimensions
-- [ ] 2.19 CLI smoke test covering template creation and application
+- [ ] 2.17 Write service layer tests in `pkg/services/layout_test.go`
+- [ ] 2.18 Write algorithm tests for new modes in `pkg/imagelayout/engine/engine_test.go`
+- [ ] 2.19 Integration test: create template → apply to asset → verify result dimensions
+- [ ] 2.20 CLI smoke test covering template creation and application
 
 **Validation:**
-- [ ] 2.20 Test workflow: create template → apply to image → preview → create layout sequence → export
+- [ ] 2.21 Test workflow: create template → apply to image → preview → create layout sequence → export
 
 ---
 

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-go-golems/zine-layout/pkg/imagelayout"
+	"github.com/go-go-golems/zine-layout/pkg/imagelayout/engine"
 	"github.com/go-go-golems/zine-layout/pkg/repo"
-	"github.com/go-go-golems/zine-layout/pkg/spread"
-	"github.com/go-go-golems/zine-layout/pkg/spread/simple"
 )
 
 // LayoutService orchestrates template application and laid-out image persistence.
@@ -23,9 +23,9 @@ func NewLayoutService(repos *repo.Repositories) *LayoutService {
 
 // LayoutComputation captures the canonical persisted payload for a laid-out image.
 type LayoutComputation struct {
-	Settings       spread.Settings        `json:"settings"`
-	Result         simple.Result          `json:"result"`
-	PlacementTrace *simple.PlacementTrace `json:"placement_trace,omitempty"`
+	Settings imagelayout.ViewportSettings `json:"settings"`
+	Result   imagelayout.ViewportResult   `json:"result"`
+	Trace    *imagelayout.Trace           `json:"trace,omitempty"`
 }
 
 // CreateLaidOutImage renders placement metadata for an asset/template pair and persists the record.
@@ -55,19 +55,17 @@ func (s *LayoutService) CreateLaidOutImage(projectID, assetID, templateID string
 		return nil, fmt.Errorf("merge settings: %w", err)
 	}
 
-	meta := spread.ImageMeta{Width: asset.Width, Height: asset.Height}
-	inputs, err := simple.InputsFromSettings(settings, meta)
+	meta := imagelayout.ImageMeta{Width: asset.Width, Height: asset.Height}
+	inputs, err := engine.InputsFromSettings(settings, meta)
 	if err != nil {
 		return nil, fmt.Errorf("build inputs: %w", err)
 	}
 
-	trace := &simple.Trace{}
-	result := simple.ComputePlacement(inputs, trace)
-
+	result, trace := engine.ComputeViewport(inputs)
 	payload := LayoutComputation{
-		Settings:       settings,
-		Result:         result,
-		PlacementTrace: trace.Structured,
+		Settings: settings,
+		Result:   result,
+		Trace:    trace,
 	}
 	resultBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -121,18 +119,17 @@ func (s *LayoutService) RecomputeLaidOutImage(record *repo.LaidOutImage) error {
 		return fmt.Errorf("merge settings: %w", err)
 	}
 
-	meta := spread.ImageMeta{Width: asset.Width, Height: asset.Height}
-	inputs, err := simple.InputsFromSettings(settings, meta)
+	meta := imagelayout.ImageMeta{Width: asset.Width, Height: asset.Height}
+	inputs, err := engine.InputsFromSettings(settings, meta)
 	if err != nil {
 		return fmt.Errorf("build inputs: %w", err)
 	}
 
-	trace := &simple.Trace{}
-	result := simple.ComputePlacement(inputs, trace)
+	result, trace := engine.ComputeViewport(inputs)
 	payload := LayoutComputation{
-		Settings:       settings,
-		Result:         result,
-		PlacementTrace: trace.Structured,
+		Settings: settings,
+		Result:   result,
+		Trace:    trace,
 	}
 	resultBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -181,23 +178,23 @@ func (s *LayoutService) ApplyTemplateToSequence(projectID, sequenceID, templateI
 }
 
 // mergeTemplateSettings applies override JSON onto base template settings and returns canonical override JSON.
-func mergeTemplateSettings(baseJSON string, overridesJSON *string) (spread.Settings, *string, error) {
+func mergeTemplateSettings(baseJSON string, overridesJSON *string) (imagelayout.ViewportSettings, *string, error) {
 	var baseMap map[string]any
 	if err := json.Unmarshal([]byte(baseJSON), &baseMap); err != nil {
-		return spread.Settings{}, nil, fmt.Errorf("decode template settings: %w", err)
+		return imagelayout.ViewportSettings{}, nil, fmt.Errorf("decode template settings: %w", err)
 	}
 
 	var normalizedOverrides *string
 	if overridesJSON != nil && *overridesJSON != "" {
 		var overridesMap map[string]any
 		if err := json.Unmarshal([]byte(*overridesJSON), &overridesMap); err != nil {
-			return spread.Settings{}, nil, fmt.Errorf("decode overrides: %w", err)
+			return imagelayout.ViewportSettings{}, nil, fmt.Errorf("decode overrides: %w", err)
 		}
 		baseMap = deepMerge(baseMap, overridesMap)
 		if len(overridesMap) > 0 {
 			buf, err := json.Marshal(overridesMap)
 			if err != nil {
-				return spread.Settings{}, nil, fmt.Errorf("encode overrides: %w", err)
+				return imagelayout.ViewportSettings{}, nil, fmt.Errorf("encode overrides: %w", err)
 			}
 			str := strings.TrimSpace(string(buf))
 			if str != "" && str != "null" && str != "{}" {
@@ -209,12 +206,12 @@ func mergeTemplateSettings(baseJSON string, overridesJSON *string) (spread.Setti
 
 	mergedBytes, err := json.Marshal(baseMap)
 	if err != nil {
-		return spread.Settings{}, nil, fmt.Errorf("encode merged settings: %w", err)
+		return imagelayout.ViewportSettings{}, nil, fmt.Errorf("encode merged settings: %w", err)
 	}
 
-	var settings spread.Settings
+	var settings imagelayout.ViewportSettings
 	if err := json.Unmarshal(mergedBytes, &settings); err != nil {
-		return spread.Settings{}, nil, fmt.Errorf("decode merged settings: %w", err)
+		return imagelayout.ViewportSettings{}, nil, fmt.Errorf("decode merged settings: %w", err)
 	}
 	return settings, normalizedOverrides, nil
 }
