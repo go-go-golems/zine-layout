@@ -1720,17 +1720,17 @@ echo "✓ All tests passed"
   - 🚧 `/api/laid-out-images/{id}/export` – stubbed (`501 Not Implemented`); needs renderer wiring in a later iteration.
 
 **Algorithms Implementation (New Layout Engine):**
-- [ ] 2.7 Build `pkg/imagelayout/types.go`
+- [x] 2.7 Build `pkg/imagelayout/types.go`
   - Define `ViewportSettings`, `ViewportComputation`, `ExportOptions`, `ImageMeta`
   - Document structure inline referencing `ttmp/2025-10-10/09-system-specification-after-phase1-and-phase2.md`
-- [ ] 2.8 Implement placement core in `pkg/imagelayout/engine`
+- [x] 2.8 Implement placement core in `pkg/imagelayout/engine`
   - Port existing math from `pkg/spread/simple` into `ComputeViewport`
   - Expand support for crop + fit modes, anchor positioning, focus point
   - Expose deterministic traces for UI debugging
 - [ ] 2.9 Provide render helpers in `pkg/imagelayout/renderer`
   - Prepare preview canvas dimensions + export naming
   - Stub file rendering until export workflow is defined
-- [ ] 2.10 Remove `pkg/spread` once the new layout modules ship
+- [x] 2.10 Remove `pkg/spread` once the new layout modules ship
   - Delete old types/algorithms and update imports across the codebase
   - Migrate any remaining YAML helpers into `pkg/imagelayout/dsl` if still needed
 
@@ -1742,34 +1742,36 @@ echo "✓ All tests passed"
 - [ ] 2.12 Add batch operation commands
   - `apply-template-to-sequence` – create laid-out images for entire sequence
   - `preview-template` – preview template settings on sample image
+- [x] 2.13 Add local helpers for viewport specs
+  - `zine-layout imagelayout compute --spec layout.yaml` → print placement JSON/trace
 
 **Frontend:**
-- [ ] 2.13 Extend `web/src/api.ts`
+- [ ] 2.14 Extend `web/src/api.ts`
   - Add types: `ImageLayoutTemplate`, `LaidOutImage`, `LayoutSequence`
   - Add all CRUD endpoints and preview/export endpoints
-- [ ] 2.14 Create `web/src/views/LayoutTemplateManager.tsx`
+- [ ] 2.15 Create `web/src/views/LayoutTemplateManager.tsx`
   - List templates (global + project-specific)
   - Create/edit templates using settings from `bookSpreadSlice`
   - Preview template on selected asset
   - Save current Book Spread Designer settings as new template
-- [ ] 2.15 Create `web/src/views/LaidOutImageViewer.tsx`
+- [ ] 2.16 Create `web/src/views/LaidOutImageViewer.tsx`
   - Grid view of laid-out images
   - Preview panel showing result
   - Edit overrides (zoom, position) without changing template
   - Re-compute button
-- [ ] 2.16 Create `web/src/views/LayoutSequenceEditor.tsx`
+- [ ] 2.17 Create `web/src/views/LayoutSequenceEditor.tsx`
   - Similar to ImageSequenceEditor but for laid-out images
   - Preview panel showing sequence in order
   - Drag-and-drop reordering
 
 **Testing:**
-- [ ] 2.17 Write service layer tests in `pkg/services/layout_test.go`
-- [ ] 2.18 Write algorithm tests for new modes in `pkg/imagelayout/engine/engine_test.go`
-- [ ] 2.19 Integration test: create template → apply to asset → verify result dimensions
-- [ ] 2.20 CLI smoke test covering template creation and application
+- [ ] 2.18 Write service layer tests in `pkg/services/layout_test.go`
+- [x] 2.19 Write algorithm tests for new modes in `pkg/imagelayout/engine/engine_test.go`
+- [ ] 2.20 Integration test: create template → apply to asset → verify result dimensions
+- [ ] 2.21 CLI smoke test covering template creation and application
 
 **Validation:**
-- [ ] 2.21 Test workflow: create template → apply to image → preview → create layout sequence → export
+- [ ] 2.22 Test workflow: create template → apply to image → preview → create layout sequence → export
 
 ---
 

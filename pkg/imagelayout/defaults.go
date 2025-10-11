@@ -4,6 +4,7 @@ package imagelayout
 // no explicit template values are provided.
 func DefaultSettings() ViewportSettings {
 	return ViewportSettings{
+		Mode:           "page",
 		PaperWidthIn:   8.0,
 		PaperHeightIn:  10.0,
 		DPI:            300,
@@ -18,6 +19,7 @@ func DefaultSettings() ViewportSettings {
 		PositionX:      0,
 		PositionY:      0,
 		Units:          "normalized",
+		AnchorPreset:   "center",
 		Export: ExportOptions{
 			Format:           "png",
 			Quality:          90,

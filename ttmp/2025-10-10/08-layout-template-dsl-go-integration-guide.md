@@ -59,6 +59,8 @@ margins:
 fit:
   strategy: cover     # cover | contain | fitWidth | fitHeight
   crop_to_fill: true  # maps to CropToFill
+  width: 1600         # optional fit target width (px)
+  height: 1200        # optional fit target height (px)
 
 position:
   mode: anchor        # anchor | drag | focus
@@ -73,6 +75,8 @@ position:
     target: { x: 960, y: 540 }
   units: normalized   # normalized | px
 
+anchor_preset: center   # center|top-left|bottom-right etc.
+
 adjustments:
   zoom: 1.0           # maps to imagelayout.ViewportSettings.UserScale
 
@@ -80,6 +84,10 @@ crop:
   aspect: "16:9"          # matches TSX dropdown
   width: 1000             # optional override (px)
   height: 562
+
+focus:
+  source: { x: 3200, y: 1400 }  # pixel in source image
+  target: { x: 0.25, y: 0.2 }   # normalized position inside viewport
 
 output:
   format: png
@@ -94,14 +102,14 @@ output:
 |---------|--------------------------------------------------|--------------------|---------------------------|
 | `page`  | Single viewport with margins                     | Use `canvas`, `margins`, `fit`, `position`, `adjustments`. | `IsSpread=false`, `GutterIn=0`. Margins become `Margin*In`. |
 | `crop`  | Fixed crop frame with anchor/focus controls       | Use `crop.aspect/width/height` to derive `CropRatio`; `fit.strategy` toggles cover/contain. | Set `CropRatio` and `CropToFill`. Viewport size comes from `canvas`. |
-| `fit`   | Fit-to-dimension viewport                         | Same as `page` but margins default to zero; `fit.strategy` chooses axis. | `IsSpread=false`; adjust `CropToFill` (e.g. `fitWidth` ⇒ `CropToFill=false`). |
+| `fit`   | Fit-to-dimension viewport                         | Same as `page` but margins default to zero; `fit.strategy` + `fit.width/height` define canvas size. | Sets `FitMode`, `FitWidthPx`, `FitHeightPx`; engine keeps `IsSpread=false`. |
 
 ### 4.3 Conversion Rules
 - **Units** – Allow `px` or `in` on `canvas` and `margins`. When `px`, convert to inches via `value / dpi`.
-- **Anchors** – Named anchors map to numeric fractions (left=0, center=0.5, right=1; top=0, middle=0.5, bottom=1). Combined with drag offsets (converted to normalized if units == `normalized`).
-- **Focus mode** – Translate to `position.mode="focus"` by computing equivalent anchor offsets inside `imagelayout.ViewportSettings.PositionX/Y`. The helper uses source/target points to compute normalized displacements.
+- **Anchors** – `anchor_preset` resolves to normalized offsets (left=-1, center=0, right=1; top=-1, middle=0, bottom=1). Additional drag offsets are applied afterward (converted if units=`normalized`).
+- **Focus point** – Convert the `focus` block into `imagelayout.FocusPoint`. Source values are clamped to the image bounds; target values treat `0..1` as normalized and `>1` as pixels inside the viewport.
 - **Crop aspect** – Parse strings like `16:9`; store as `CropRatio`. If `width/height` explicit, compute ratio = width/height.
-- **Fit strategy** – Map to algorithm decisions in the upcoming `pkg/imagelayout/engine` module: `cover` ⇒ `CropToFill=true`; `contain` ⇒ `CropToFill=false`; `fitWidth`/`fitHeight` adjust `CropRatio` and `Position`.
+- **Fit strategy** – `fit.strategy` guides placement: `cover` ⇒ `CropToFill=true`; `contain` ⇒ `CropToFill=false`; `fitWidth`/`fitHeight` populate `FitMode` + `FitWidthPx`/`FitHeightPx` for the engine.
 - **Zoom** – Directly assign to `UserScale`.
 - **Drag limits** – The UI enforces limits; backend simply accepts computed offsets.
 
@@ -130,6 +138,7 @@ func Compile(doc *TemplateDocument) (TemplateCompilation, error) {
 
     conv := newUnitConverter(dpi)
     settings := imagelayout.ViewportSettings{
+        Mode:         doc.Mode,
         DPI:          chooseDPI(doc.Canvas, defaults),
         PaperWidthIn: conv.ToInches(doc.Canvas.Width, doc.Canvas.Units),
         PaperHeightIn: conv.ToInches(doc.Canvas.Height, doc.Canvas.Units),
@@ -146,11 +155,15 @@ func Compile(doc *TemplateDocument) (TemplateCompilation, error) {
     ratio, err := resolveCropRatio(doc)
     if err != nil { return TemplateCompilation{}, err }
     settings.CropRatio = ratio
+    settings.CropWidthPx, settings.CropHeightPx = doc.Crop.OutputDimensions()
+    settings.FitMode, settings.FitWidthPx, settings.FitHeightPx = doc.Fit.OutputDimensions()
 
     posX, posY, err := resolvePosition(doc.Position, doc.Mode, doc.Canvas, conv)
     if err != nil { return TemplateCompilation{}, err }
     settings.PositionX = posX
     settings.PositionY = posY
+    settings.AnchorPreset = doc.Position.AnchorPreset
+    settings.Focus = doc.Position.FocusPointer()
 
     export := imagelayout.ExportOptions{
         Format:           firstNonEmpty(doc.Output.Format, "png"),
@@ -176,7 +189,10 @@ func Compile(doc *TemplateDocument) (TemplateCompilation, error) {
 ### 5.3 Helper Strategies
 - `unitConverter` – centralize inch/pixel conversion to avoid drift.
 - `resolvePosition` – Mirror the math in `anchorToTranslation` and related helpers from `02-image-resizer-code.tsx` so anchor + drag behaviour matches the UI.
+- `resolveAnchorPreset` – Translate `position.anchor.preset` (or DSL shorthand) to normalized offsets.
+- `resolveFocus` – Convert DSL focus blocks into `imagelayout.FocusPoint`, clamping targets and source coords.
 - `resolveCropRatio` – Accept numeric, `"w:h"` string, or fallback to canvas aspect.
+- `resolveFitDimensions` – Derive fit width/height defaults when DSL omits explicit values.
 - `inferOrientation` – Use width/height ratio or explicit override.
 - Validation should echo friendly errors: `fmt.Errorf("margins.left requires non-negative number, got %v", doc.Margins.Left)`.
 
@@ -259,7 +275,10 @@ func Compile(doc *TemplateDocument) (TemplateCompilation, error) {
 | `dragX`, `dragY`                            | `position.drag` | `PositionX`, `PositionY` adjustments |
 | `zoom`                                      | `adjustments.zoom` | `UserScale` |
 | Crop ratio dropdown                         | `crop.aspect` | `CropRatio` |
-| `fitMode` / `cropFitMode`                   | `fit.strategy` | `CropToFill`, ratio logic |
+| `fitMode` / `cropFitMode`                   | `fit.strategy` | `CropToFill`, `FitMode` |
+| Fit width / height inputs                   | `fit.width`, `fit.height` | `FitWidthPx`, `FitHeightPx` |
+| Anchor preset dropdown                      | `anchor_preset` | `AnchorPreset` |
+| Focus picker                                | `focus.{source,target}` | `Focus` |
 | Export panel (future UI)                    | `output.*` | `imagelayout.ExportOptions` |
 
 Use this table when wiring the new React controls and when writing unit tests for the compiler.
@@ -296,6 +315,12 @@ Roll out in feature flags if necessary: accept DSL first, keep JSON fallback, th
 - `pkg/serve/layout_templates_routes.go` – API entry-point to hook DSL compilation.
 - `cmd/zine-layout/cmds/image-layout-templates/*` – CLI verbs to extend with DSL support.
 - `web/src/views/LayoutTemplateManager.tsx` – UI component to replace with the new designer.
+
+---
+
+## 11. CLI Helpers
+- Local sanity check: `go run ./cmd/zine-layout imagelayout compute --source-width 4000 --source-height 3000 --mode crop --crop-width 1600 --crop-height 1600 --focus-source-x 2800 --focus-source-y 1500 --focus-target-x 0.3 --focus-target-y 0.4`
+- From YAML: `zine-layout imagelayout compute --spec viewport.yaml` emits the merged `imagelayout.Computation` (settings + result + trace).
 
 ---
 

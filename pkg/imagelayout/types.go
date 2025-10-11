@@ -25,6 +25,8 @@ type ExportOptions struct {
 
 // ViewportSettings represents the canonical input for positioning an image inside a viewport.
 type ViewportSettings struct {
+	Mode string `json:"mode,omitempty"` // page | crop | fit
+
 	PaperWidthIn  float64 `json:"paper_width_in"`
 	PaperHeightIn float64 `json:"paper_height_in"`
 	DPI           float64 `json:"dpi"`
@@ -35,15 +37,32 @@ type ViewportSettings struct {
 	MarginBottomIn float64 `json:"margin_bottom_in"`
 	MarginLeftIn   float64 `json:"margin_left_in"`
 
-	CropRatio  *float64 `json:"crop_ratio,omitempty"`
-	CropToFill bool     `json:"crop_to_fill"`
+	CropRatio    *float64 `json:"crop_ratio,omitempty"`
+	CropToFill   bool     `json:"crop_to_fill"`
+	CropWidthPx  *float64 `json:"crop_width_px,omitempty"`
+	CropHeightPx *float64 `json:"crop_height_px,omitempty"`
+
+	FitMode     string   `json:"fit_mode,omitempty"`      // width|height|auto
+	FitWidthPx  *float64 `json:"fit_width_px,omitempty"`  // target width in pixels
+	FitHeightPx *float64 `json:"fit_height_px,omitempty"` // target height in pixels
 
 	UserScale float64 `json:"user_scale"`
 	PositionX float64 `json:"position_x"`
 	PositionY float64 `json:"position_y"`
 	Units     string  `json:"units"` // normalized|px
 
+	AnchorPreset string      `json:"anchor_preset,omitempty"` // e.g. center, top-right
+	Focus        *FocusPoint `json:"focus,omitempty"`
+
 	Export ExportOptions `json:"export"`
+}
+
+// FocusPoint aligns a source coordinate with a target location in the viewport.
+type FocusPoint struct {
+	SourceX float64 `json:"source_x"`
+	SourceY float64 `json:"source_y"`
+	TargetX float64 `json:"target_x"`
+	TargetY float64 `json:"target_y"`
 }
 
 // ViewportResult describes the geometry outcome of placement.

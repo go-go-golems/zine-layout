@@ -250,6 +250,7 @@ type ImageLayoutTemplate struct {
 **Settings Structure (JSON):**
 ```typescript
 {
+  mode: "page",
   paper_width_in: 8.0,
   paper_height_in: 10.0,
   dpi: 300,
@@ -258,13 +259,24 @@ type ImageLayoutTemplate struct {
   margin_right_in: 0.25,
   margin_bottom_in: 0.25,
   margin_left_in: 0.25,
-  // Viewport templates no longer encode spreads or gutters
   crop_ratio: null,     // or numeric (e.g., 1.5 for 3:2)
   crop_to_fill: false,
+  crop_width_px: null,
+  crop_height_px: null,
+  fit_mode: "width",
+  fit_width_px: 1600,
+  fit_height_px: 1200,
   user_scale: 1.0,
   position_x: 0,
   position_y: 0,
   units: "normalized",
+  anchor_preset: "center",
+  focus: {
+    source_x: 3200,
+    source_y: 1400,
+    target_x: 0.25,
+    target_y: 0.4
+  },
   export: {
     format: "png",
     quality: 90,
@@ -984,6 +996,19 @@ $ zine-layout api laid-out-images create \
 - `add-item --sequence-id <id> --laid-out-image-id <id> --position <n>`
 - `reorder --sequence-id <id> --items <json>`
 - `delete-item --sequence-id <id> --position <n>`
+
+#### `zine-layout imagelayout compute`
+- Local engine check: `--source-width`, `--source-height` plus optional overrides (`--mode`, `--fit-width`, `--crop-width`, `--focus-*`) or a YAML spec via `--spec file.yaml`.
+
+**Example:**
+```bash
+$ zine-layout imagelayout compute \
+    --source-width 4032 --source-height 3024 \
+    --mode fit --fit-mode width --fit-width 1600 \
+    --focus-source-x 3200 --focus-source-y 1400 \
+    --focus-target-x 0.25 --focus-target-y 0.4
+```
+Outputs an `imagelayout.Computation` JSON payload (settings + result + trace) without hitting the server.
 
 ---
 

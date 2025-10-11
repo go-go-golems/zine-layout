@@ -102,3 +102,29 @@
 ### Attention Points
 - Add richer form validation and drag-and-drop ergonomics in a future iteration.
 - Display global vs project template scope more prominently to prevent accidental edits.
+
+---
+
+## 2025-10-10T06:15Z – Image Layout Engine Refresh + CLI Sanity Tool
+- Replaced the legacy `pkg/spread` module with a focused `pkg/imagelayout` stack (`types`, `defaults`, `engine`) that now supports crop mode, fit-to-width/height, anchor presets, and focus-point alignment—matching the behaviours in `02-image-resizer-code.tsx`.
+- Updated `LayoutService` and API payloads to persist the new computation shape (`settings`, `result`, `trace`) and added unit coverage in `pkg/imagelayout/engine/engine_test.go` for contain/cover, crop, fit, anchor, and focus scenarios.
+- Introduced a local helper command `zine-layout imagelayout compute` that accepts either YAML specs or CLI flags, executes the engine directly, and prints the resulting computation JSON for quick debugging.
+- Refreshed docs (`05-expansion-plan`, `08-layout-template-dsl-guide`, `09-system-spec`) to document the new settings fields, CLI workflow, and outstanding roadmap items.
+
+### What Worked
+- The new engine mirrors the TSX resizer math for page/crop/fit modes, keeping UI previews and backend results in sync.
+- Reusing the service layer meant the API/CLI plumbing only needed minimal changes—existing verbs now emit the richer trace payload without breaking callers.
+- The standalone CLI compute command made it easy to validate YAML templates locally before wiring them through the server.
+
+### What Didn't Work
+- Dual-page/spread handling remains unimplemented; templates still can’t express gutters or panel splitting.
+- No renderer helpers yet, so export endpoints and CLI verbs still return `501` placeholders.
+
+### What I Learned
+- Normalising anchor presets and focus points in the engine drastically simplifies the DSL compiler requirements—TSX controls translate cleanly into `ViewportSettings`.
+- Having a local CLI shortcut encourages rapid iteration on DSL changes without spinning up the full API stack.
+
+### Attention Points
+- Backfill service-level tests (`pkg/services/layout_test.go`) now that the engine is stable, and add integration coverage for template→laid-out image workflows.
+- Implement renderer helpers (`pkg/imagelayout/renderer`) so export endpoints can graduate from stubs.
+- Extend the DSL compiler to surface validation errors for the new fit/crop/focus fields, keeping UI feedback tight.
