@@ -292,7 +292,7 @@ type ImageLayoutTemplate struct {
 - **Project-specific:** `project_id = 'prj-...'` — custom templates for one project
 
 **Lifecycle:**
-- Created from Book Spread Designer UI or CLI
+- Created via Layout Template Manager UI or CLI verbs
 - Captures current UI state (margins, crop, scale, position)
 - Applied to assets to generate laid-out images
 - Deletion restricted if referenced by laid-out images
@@ -777,10 +777,10 @@ type LayoutSequenceItem struct {
 
 ### Process 2: Template Creation & Application
 
-**Actors:** User, Book Spread Designer UI, Server, LayoutService
+**Actors:** User, Layout Template Manager UI, Server, LayoutService
 
 **Flow (Template Creation):**
-1. User opens Book Spread Designer
+1. User opens Layout Template Manager
 2. Selects project and asset
 3. Adjusts settings (paper size, margins, crop ratio, scale, position)
 4. Clicks "Save as Template"
@@ -789,7 +789,7 @@ type LayoutSequenceItem struct {
    ```json
    {
      "name": "8x10 Portrait Crop",
-     "settings": { /* current bookSpreadSlice state */ }
+     "settings": { /* current template editor state */ }
    }
    ```
 7. Server creates template record
@@ -1418,17 +1418,15 @@ filepath.Join(projectsRoot, projectID, "images", filepath.Base(filename))
 
 ### Phase 3: Page Templates + Laid Out Pages + Zines
 
-**Missing entities:**
-- `page_templates` table (ZineLayout DSL storage)
-- `laid_out_pages` table (rendered page metadata)
-- `laid_out_page_inputs` table (image-to-page mappings)
-- `zines` table
-- `zine_pages` table
+**Persistence status:** ✅
+- Schema now includes `page_templates`, `laid_out_pages`, `laid_out_page_inputs`, `zines`, and `zine_pages`.
+- SQLite repositories expose CRUD plus sequencing helpers (SetInputs / SetPages).
+- Service layer orchestrates laid-out page creation and zine ordering.
 
-**Missing processes:**
-- Multi-image page composition using `pkg/zinelayout`
-- Zine assembly workflows
-- Server-side page rendering
+**Still outstanding:**
+- Page rendering flow (`PagesService.RenderPage`) — currently returns `ErrPageRendererNotImplemented`.
+- REST API + UI for page templates, laid-out pages, and zines.
+- End-to-end workflows once renderer/output exporters land.
 
 ### Phase 4: Zine Export & Imposition
 
@@ -1607,7 +1605,7 @@ zine-layout serve \
 }
 ```
 
-**No separate Redux slices needed:** RTK Query manages all server state.
+**Minimal Redux usage:** RTK Query manages all server state; the only additional slice is `ui` for local toasts.
 
 **Local component state only for:**
 - Form inputs before submission
@@ -1770,7 +1768,12 @@ zine-layout api <entity> <verb> [--flags]
 - `layout-sequences reorder --sequence-id <id> --items <json>`
 - `layout-sequences delete-item --sequence-id <id> --position <n>`
 
-**Total:** 38 CLI commands operational
+**Workflow Helpers (direct DB access, Phase 3 scaffolding):**
+- `workflow page-templates list|create|get|delete`
+- `workflow laid-out-pages create|list|get|set-inputs|delete`
+- `workflow zines create|list|get|set-pages|delete`
+
+**Total:** 38 API-oriented commands + 14 workflow helpers operational
 
 ---
 
@@ -1790,9 +1793,7 @@ zine-layout api <entity> <verb> [--flags]
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `ProjectAssetsPanel.tsx` | `components/` | Upload, gallery, drag-and-drop |
-| `ImageSequencePanel.tsx` | `components/` | Sequence list, item editor |
-| `TemplatePreview.tsx` | `components/` | Canvas preview of layout |
+| `ProjectAssetsPanel.tsx` | `components/ProjectAssetsPanel.tsx` | Upload, gallery, drag-and-drop |
 | `Card, Button, Input` | `components/ui/` | Reusable UI primitives |
 
 ---
@@ -1808,7 +1809,7 @@ zine-layout api <entity> <verb> [--flags]
 6. Reorders via drag-and-drop
 
 ### Day 2: Template Creation
-1. Opens Book Spread Designer
+1. Opens Layout Template Manager
 2. Selects first asset from sequence
 3. Configures: 8×10" paper, 0.25" margins, crop to 2:3, fill
 4. Previews in real-time

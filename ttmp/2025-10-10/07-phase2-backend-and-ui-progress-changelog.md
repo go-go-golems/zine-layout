@@ -149,3 +149,45 @@
 ### Attention Points
 - Coordinate with the frontend implementer to adopt the new hooks and retire the temporary aliases.
 - Backfill automated checks (typecheck/lint) once the UI migrates, ensuring the stricter typings catch regressions early.
+
+## 2025-10-10T08:30Z – Removed Legacy Book Spread Frontend State
+- Deleted the Redux `bookSpread` slice, supporting helpers, and the old spread designer components; kept only the assets panel (now `components/ProjectAssetsPanel.tsx`).
+- Simplified the store to RTK Query plus the lightweight UI toast slice, reinforcing the API-driven data flow.
+- Dropped the unused `SpreadSettings` alias from the frontend API typings to avoid reintroducing the retired surface.
+
+### What Worked
+- Pruning the unused slice removed Redux-specific TypeScript noise and clarified that image layout state now comes from backend computations.
+
+### What Didn't Work
+- UI scenes still need TSX refactors to fill the gap left by the deleted panels; awaiting the dedicated frontend pass.
+
+### What I Learned
+- Keeping asset uploads independent of Redux made the extraction painless—future components should follow similar patterns.
+
+### Attention Points
+- Partner with the UI owner to rebuild the designer views using the new hooks.
+- Re-run `pnpm typecheck` once the TSX overhaul lands to clear the remaining component prop errors.
+
+---
+
+## 2025-10-11T04:07Z – Page/Zine Persistence & Workflow CLI
+- Extended the SQLite schema with `page_templates`, `laid_out_pages`, `laid_out_page_inputs`, `zines`, and `zine_pages`, wiring corresponding repo adapters and service layers (`pkg/services/pages.go`, `pkg/services/zines.go`).
+- Introduced the `zine-layout workflow` Glazed command group for direct testing: `page-templates`, `laid-out-pages`, and `zines` verbs now operate via repositories/services without needing REST.
+- Added Go service helpers for laid-out page creation/reordering and zine page sequencing; `RenderPage` currently returns `ErrPageRendererNotImplemented` pending renderer hookup.
+- Verified compilation with `go test ./...`.
+
+### What Worked
+- Reusing the repository patterns from Phase 2 kept the new SQLite adapters concise and consistent.
+- Glazed commands made it straightforward to pipe results into other tooling while bypassing the unfinished HTTP layer.
+
+### What Didn't Work
+- The rendering path remains stubbed—no PNG export yet, so CLI consumers must handle the `ErrPageRendererNotImplemented` sentinel.
+
+### What I Learned
+- Keeping the workflow CLI separate from the API commands provides a safe playground for future backend changes without blocking on REST contract decisions.
+
+### Attention Points
+- Implement the actual renderer/export pipeline so `RenderPage` and future zine exports can return artefacts.
+- Mirror the new CLI capabilities in forthcoming REST handlers and frontend views.
+
+---

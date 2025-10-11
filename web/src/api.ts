@@ -128,7 +128,6 @@ export interface ImageLayoutComputation {
 }
 
 export type LayoutComputation = ImageLayoutComputation;
-export type SpreadSettings = ImageLayoutViewportSettings;
 
 export interface LaidOutImage {
   id: string;

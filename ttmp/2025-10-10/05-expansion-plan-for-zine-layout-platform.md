@@ -1755,9 +1755,10 @@ echo "✓ All tests passed"
     - full CRUD for `/api/image-layout-templates/:id`.
   - Provide React Query hooks for laid-out images and image layout sequences, including preview/export stubs and recompute/update verbs.
   - Align cache tag names with the “image layout” terminology to avoid confusion with future page/zine layout DSLs.
+  - Retire the legacy “book spread” Redux slice/components so the frontend relies on RTK Query outputs going forward.
 - [ ] 2.15 Create `web/src/views/LayoutTemplateManager.tsx`
   - List templates (global + project-specific)
-  - Create/edit templates using settings from `bookSpreadSlice`
+  - Create/edit templates using RTK Query data and local component state (no global slice)
   - Preview template on selected asset
   - Save current Book Spread Designer settings as new template
 - [ ] 2.16 Create `web/src/views/LaidOutImageViewer.tsx`
@@ -1786,24 +1787,24 @@ echo "✓ All tests passed"
 **Goal:** Implement multi-image page composition and zine assembly.
 
 **Backend:**
-- [ ] 3.1 Add tables to schema
+- [x] 3.1 Add tables to schema
   - `page_templates`
   - `laid_out_pages`
   - `laid_out_page_inputs`
   - `zines`
   - `zine_pages`
-- [ ] 3.2 Add entity types to `pkg/repo/types.go`
+- [x] 3.2 Add entity types to `pkg/repo/types.go`
   - `PageTemplate`
   - `LaidOutPage`, `LaidOutPageInput`
   - `Zine`, `ZinePage`
-- [ ] 3.3 Implement repositories
+- [x] 3.3 Implement repositories
   - `pkg/repo/sqlite/page_templates.go`
   - `pkg/repo/sqlite/laid_out_pages.go` – include SetInputs/GetInputs for page-to-image mappings
   - `pkg/repo/sqlite/zines.go` – include SetPages/GetPages for zine-to-page ordering
-- [ ] 3.4 Create service layer in `pkg/services/pages.go`
-  - `CreateLaidOutPage(projectID, pageTemplateID, laidOutImageIDs)` – validates inputs, renders page using `pkg/zinelayout`
-  - `RenderPage(pageID)` – fetches page + inputs + template, calls `ZineLayout.CreateOutputImage()`
-- [ ] 3.5 Create service layer in `pkg/services/zines.go`
+- [x] 3.4 Create service layer in `pkg/services/pages.go`
+  - `CreateLaidOutPage(projectID, pageTemplateID, laidOutImageIDs)` – validates inputs, stubs renderer until exporter lands
+  - `RenderPage(pageID)` – placeholder returning `ErrPageRendererNotImplemented` (renderer wiring tracked separately)
+- [x] 3.5 Create service layer in `pkg/services/zines.go`
   - `CreateZine(projectID, name, pageIDs)` – creates zine record and page ordering
   - `AddPageToZine(zineID, pageID, position)` – insert page at position
   - `ReorderZinePages(zineID, pageIDs)` – update page order
@@ -1819,10 +1820,10 @@ echo "✓ All tests passed"
   - `/api/zines/{id}/pages` (get, set order)
 
 **CLI:**
-- [ ] 3.7 Add Glazed commands
-  - `page-templates/*` (list, get, create, update, delete)
-  - `laid-out-pages/*` (list, get, create, delete, preview)
-  - `zines/*` (list, get, create, update, delete, add-page, reorder-pages)
+- [x] 3.7 Add Glazed commands
+  - Added `zine-layout workflow page-templates` (list, create, get, delete) for direct repo access
+  - Added `zine-layout workflow laid-out-pages` (create, list, get, set-inputs, delete)
+  - Added `zine-layout workflow zines` (create, list, get, set-pages, delete)
 
 **Frontend:**
 - [ ] 3.8 Extend `web/src/api.ts`

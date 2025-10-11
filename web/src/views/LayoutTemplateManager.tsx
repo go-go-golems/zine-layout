@@ -184,7 +184,7 @@ export const LayoutTemplateManager: React.FC<LayoutTemplateManagerProps> = ({ pr
                 className="font-mono text-sm w-full border border-gray-300 rounded-md shadow-sm focus:border-primary-500 focus:ring-primary-500"
               />
               <p className="mt-1 text-xs text-gray-500">
-                Settings map directly to the backend `spread.Settings` structure. Ensure valid JSON before saving.
+                Settings map directly to the backend `imagelayout.ViewportSettings` structure. Ensure valid JSON before saving.
               </p>
             </div>
             <div className="flex justify-end space-x-3">

@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { useUploadAssetsMutation } from '../../api';
+import { useUploadAssetsMutation } from '../api';
 
 export interface AssetSummary {
   id: string;
@@ -72,7 +72,9 @@ export const ProjectAssetsPanel: React.FC<ProjectAssetsPanelProps> = ({
     <div className="bg-white p-6 rounded-lg shadow space-y-4">
       <div>
         <h3 className="text-lg font-semibold">📁 Project Assets</h3>
-        <p className="text-sm text-gray-500">Upload images or pick an existing asset to drive previews.</p>
+        <p className="text-sm text-gray-500">
+          Upload images or pick an existing asset to drive previews.
+        </p>
       </div>
 
       <div
@@ -85,7 +87,11 @@ export const ProjectAssetsPanel: React.FC<ProjectAssetsPanelProps> = ({
       >
         <div className="text-3xl mb-2">{isUploading ? '⏳' : '⬆️'}</div>
         <p className="text-sm text-gray-600">
-          {projectId ? (isUploading ? 'Uploading…' : 'Drop images here or click to select') : 'Select a project to enable uploads'}
+          {projectId
+            ? isUploading
+              ? 'Uploading…'
+              : 'Drop images here or click to select'
+            : 'Select a project to enable uploads'}
         </p>
         <input
           ref={fileInputRef}
@@ -114,7 +120,9 @@ export const ProjectAssetsPanel: React.FC<ProjectAssetsPanelProps> = ({
                   type="button"
                   onClick={() => onSelectAsset(asset)}
                   className={`border rounded-lg overflow-hidden flex flex-col items-center p-2 text-sm transition-colors ${
-                    asset.id === selectedAssetId ? 'border-primary-500 ring-2 ring-primary-200' : 'border-gray-200 hover:border-primary-300'
+                    asset.id === selectedAssetId
+                      ? 'border-primary-500 ring-2 ring-primary-200'
+                      : 'border-gray-200 hover:border-primary-300'
                   }`}
                   draggable={Boolean(projectId)}
                   onDragStart={(event) => {
@@ -127,11 +135,7 @@ export const ProjectAssetsPanel: React.FC<ProjectAssetsPanelProps> = ({
                   }}
                 >
                   <div className="w-full h-24 bg-gray-100 flex items-center justify-center overflow-hidden mb-2">
-                    <img
-                      src={asset.src}
-                      alt={asset.name}
-                      className="object-contain max-h-full"
-                    />
+                    <img src={asset.src} alt={asset.name} className="object-contain max-h-full" />
                   </div>
                   <div className="text-gray-800 truncate w-full text-left">{asset.name}</div>
                   <div className="text-xs text-gray-500 w-full text-left">
