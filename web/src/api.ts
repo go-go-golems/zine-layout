@@ -159,6 +159,41 @@ export interface LayoutSequenceItem {
 
 export type ImageLayoutSequenceItem = LayoutSequenceItem;
 
+export interface PageTemplate {
+  id: string;
+  project_id?: string | null;
+  scope: 'global' | 'project';
+  name: string;
+  description?: string;
+  template: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LaidOutPage {
+  id: string;
+  project_id: string;
+  page_template_id: string;
+  laid_out_image_id: string;
+  result?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Zine {
+  id: string;
+  project_id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ZinePage {
+  position: number;
+  laid_out_page_id: string;
+}
+
 const baseQuery = fetchBaseQuery({ baseUrl: '/api' });
 
 const asFileArray = (files: FileList | File[]) => Array.from(files as FileList);
@@ -175,6 +210,10 @@ export const api = createApi({
     'LaidOutImage',
     'ImageLayoutSequence',
     'ImageLayoutSequenceItems',
+    'PageTemplate',
+    'LaidOutPage',
+    'Zine',
+    'ZinePages',
   ],
   endpoints: (builder) => ({
     getProjects: builder.query<Project[], void>({
@@ -473,6 +512,120 @@ export const api = createApi({
       ],
     }),
 
+    getGlobalPageTemplates: builder.query<PageTemplate[], void>({
+      query: () => `/page-templates`,
+      transformResponse: (response: { page_templates: PageTemplate[] }) =>
+        response.page_templates ?? [],
+      providesTags: (result) => {
+        const base = [{ type: 'PageTemplate' as const, id: 'LIST-global' }];
+        if (!result) return base;
+        return [
+          ...result.map((tpl) => ({ type: 'PageTemplate' as const, id: tpl.id })),
+          ...base,
+        ];
+      },
+    }),
+    getPageTemplates: builder.query<PageTemplate[], { projectId: string }>({
+      query: ({ projectId }) =>
+        `/projects/${encodeURIComponent(projectId)}/page-templates`,
+      transformResponse: (response: { page_templates: PageTemplate[] }) =>
+        response.page_templates ?? [],
+      providesTags: (result, _error, { projectId }) => {
+        const base = [
+          { type: 'PageTemplate' as const, id: `LIST-${projectId}` },
+          { type: 'PageTemplate' as const, id: 'LIST-global' },
+        ];
+        if (!result) return base;
+        return [
+          ...result.map((tpl) => ({ type: 'PageTemplate' as const, id: tpl.id })),
+          ...base,
+        ];
+      },
+    }),
+    getPageTemplate: builder.query<PageTemplate, { templateId: string }>({
+      query: ({ templateId }) => `/page-templates/${encodeURIComponent(templateId)}`,
+      transformResponse: (response: { page_template: PageTemplate }) => response.page_template,
+      providesTags: (result) =>
+        result ? [{ type: 'PageTemplate', id: result.id }] : [],
+    }),
+    createGlobalPageTemplate: builder.mutation<
+      PageTemplate,
+      { name: string; description?: string; template: Record<string, unknown> }
+    >({
+      query: (body) => ({
+        url: `/page-templates`,
+        method: 'POST',
+        body,
+      }),
+      transformResponse: (response: { page_template: PageTemplate }) =>
+        response.page_template,
+      invalidatesTags: [{ type: 'PageTemplate', id: 'LIST-global' }],
+    }),
+    createPageTemplate: builder.mutation<
+      PageTemplate,
+      {
+        projectId: string;
+        name: string;
+        description?: string;
+        template: Record<string, unknown>;
+      }
+    >({
+      query: ({ projectId, ...body }) => ({
+        url: `/projects/${encodeURIComponent(projectId)}/page-templates`,
+        method: 'POST',
+        body,
+      }),
+      transformResponse: (response: { page_template: PageTemplate }) =>
+        response.page_template,
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: 'PageTemplate', id: `LIST-${projectId}` },
+      ],
+    }),
+    updatePageTemplate: builder.mutation<
+      PageTemplate,
+      {
+        templateId: string;
+        name?: string;
+        description?: string;
+        template?: Record<string, unknown>;
+        projectId?: string | null;
+      }
+    >({
+      query: ({ templateId, ...body }) => ({
+        url: `/page-templates/${encodeURIComponent(templateId)}`,
+        method: 'PATCH',
+        body,
+      }),
+      transformResponse: (response: { page_template: PageTemplate }) =>
+        response.page_template,
+      invalidatesTags: (result) => {
+        if (!result) return [];
+        const tags: { type: 'PageTemplate'; id: string }[] = [
+          { type: 'PageTemplate', id: result.id },
+        ];
+        const scopeKey = result.project_id ?? 'global';
+        tags.push({ type: 'PageTemplate', id: `LIST-${scopeKey}` });
+        if (scopeKey !== 'global') {
+          tags.push({ type: 'PageTemplate', id: 'LIST-global' });
+        }
+        return tags;
+      },
+    }),
+    deletePageTemplate: builder.mutation<
+      void,
+      { templateId: string; scopeKey: string }
+    >({
+      query: ({ templateId }) => ({
+        url: `/page-templates/${encodeURIComponent(templateId)}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_result, _error, { templateId, scopeKey }) => [
+        { type: 'PageTemplate', id: templateId },
+        { type: 'PageTemplate', id: `LIST-${scopeKey}` },
+        { type: 'PageTemplate', id: 'LIST-global' },
+      ],
+    }),
+
     getLaidOutImages: builder.query<LaidOutImage[], { projectId: string }>({
       query: ({ projectId }) =>
         `/projects/${encodeURIComponent(projectId)}/laid-out-images`,
@@ -557,6 +710,74 @@ export const api = createApi({
     previewLaidOutImage: builder.query<ImageLayoutComputation, { id: string }>({
       query: ({ id }) => `/laid-out-images/${encodeURIComponent(id)}/preview`,
       transformResponse: (response: { result: ImageLayoutComputation }) => response.result,
+    }),
+
+    getLaidOutPages: builder.query<LaidOutPage[], { projectId: string }>({
+      query: ({ projectId }) =>
+        `/projects/${encodeURIComponent(projectId)}/laid-out-pages`,
+      transformResponse: (response: { laid_out_pages: LaidOutPage[] }) =>
+        response.laid_out_pages ?? [],
+      providesTags: (result, _error, { projectId }) => {
+        const base = [{ type: 'LaidOutPage' as const, id: `LIST-${projectId}` }];
+        if (!result) return base;
+        return [
+          ...result.map((page) => ({ type: 'LaidOutPage' as const, id: page.id })),
+          ...base,
+        ];
+      },
+    }),
+    getLaidOutPage: builder.query<LaidOutPage, { id: string }>({
+      query: ({ id }) => `/laid-out-pages/${encodeURIComponent(id)}`,
+      transformResponse: (response: { laid_out_page: LaidOutPage }) => response.laid_out_page,
+      providesTags: (_result, _error, { id }) => [{ type: 'LaidOutPage', id }],
+    }),
+    createLaidOutPage: builder.mutation<
+      LaidOutPage,
+      { projectId: string; pageTemplateId: string; laidOutImageId: string }
+    >({
+      query: ({ projectId, pageTemplateId, laidOutImageId }) => ({
+        url: `/projects/${encodeURIComponent(projectId)}/laid-out-pages`,
+        method: 'POST',
+        body: {
+          page_template_id: pageTemplateId,
+          laid_out_image_id: laidOutImageId,
+        },
+      }),
+      transformResponse: (response: { laid_out_page: LaidOutPage }) => response.laid_out_page,
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: 'LaidOutPage', id: `LIST-${projectId}` },
+      ],
+    }),
+    updateLaidOutPage: builder.mutation<
+      LaidOutPage,
+      { pageId: string; laidOutImageId: string }
+    >({
+      query: ({ pageId, laidOutImageId }) => ({
+        url: `/laid-out-pages/${encodeURIComponent(pageId)}`,
+        method: 'PATCH',
+        body: { laid_out_image_id: laidOutImageId },
+      }),
+      transformResponse: (response: { laid_out_page: LaidOutPage }) => response.laid_out_page,
+      invalidatesTags: (result) =>
+        result
+          ? [
+              { type: 'LaidOutPage', id: result.id },
+              { type: 'LaidOutPage', id: `LIST-${result.project_id}` },
+            ]
+          : [],
+    }),
+    deleteLaidOutPage: builder.mutation<
+      void,
+      { pageId: string; projectId: string }
+    >({
+      query: ({ pageId }) => ({
+        url: `/laid-out-pages/${encodeURIComponent(pageId)}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_result, _error, { pageId, projectId }) => [
+        { type: 'LaidOutPage', id: pageId },
+        { type: 'LaidOutPage', id: `LIST-${projectId}` },
+      ],
     }),
 
     getLayoutSequences: builder.query<LayoutSequence[], { projectId: string }>({
@@ -679,6 +900,104 @@ export const api = createApi({
         { type: 'ImageLayoutSequenceItems', id: sequenceId },
       ],
     }),
+    getZines: builder.query<Zine[], { projectId: string }>({
+      query: ({ projectId }) => `/projects/${encodeURIComponent(projectId)}/zines`,
+      transformResponse: (response: { zines: Zine[] }) => response.zines ?? [],
+      providesTags: (result, _error, { projectId }) => {
+        const base = [{ type: 'Zine' as const, id: `LIST-${projectId}` }];
+        if (!result) return base;
+        return [
+          ...result.map((zine) => ({ type: 'Zine' as const, id: zine.id })),
+          ...base,
+        ];
+      },
+    }),
+    createZine: builder.mutation<
+      { zine: Zine; pages: ZinePage[] },
+      { projectId: string; name?: string; description?: string; laidOutPageIds?: string[] }
+    >({
+      query: ({ projectId, name, description, laidOutPageIds }) => ({
+        url: `/projects/${encodeURIComponent(projectId)}/zines`,
+        method: 'POST',
+        body: {
+          name,
+          description,
+          laid_out_page_ids: laidOutPageIds ?? [],
+        },
+      }),
+      transformResponse: (response: { zine: Zine; pages: ZinePage[] }) => ({
+        zine: response.zine,
+        pages: response.pages ?? [],
+      }),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: 'Zine', id: `LIST-${projectId}` },
+      ],
+    }),
+    getZine: builder.query<{ zine: Zine; pages: ZinePage[] }, { zineId: string }>({
+      query: ({ zineId }) => `/zines/${encodeURIComponent(zineId)}`,
+      transformResponse: (response: { zine: Zine; pages: ZinePage[] }) => ({
+        zine: response.zine,
+        pages: response.pages ?? [],
+      }),
+      providesTags: (result) =>
+        result
+          ? [
+              { type: 'Zine' as const, id: result.zine.id },
+              { type: 'ZinePages' as const, id: result.zine.id },
+            ]
+          : [],
+    }),
+    updateZine: builder.mutation<
+      Zine,
+      { zineId: string; name?: string; description?: string }
+    >({
+      query: ({ zineId, ...body }) => ({
+        url: `/zines/${encodeURIComponent(zineId)}`,
+        method: 'PATCH',
+        body,
+      }),
+      transformResponse: (response: { zine: Zine }) => response.zine,
+      invalidatesTags: (result) =>
+        result
+          ? [
+              { type: 'Zine', id: result.id },
+              { type: 'Zine', id: `LIST-${result.project_id}` },
+            ]
+          : [],
+    }),
+    deleteZine: builder.mutation<void, { zineId: string; projectId: string }>({
+      query: ({ zineId }) => ({
+        url: `/zines/${encodeURIComponent(zineId)}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_result, _error, { zineId, projectId }) => [
+        { type: 'Zine', id: zineId },
+        { type: 'Zine', id: `LIST-${projectId}` },
+        { type: 'ZinePages', id: zineId },
+      ],
+    }),
+    getZinePages: builder.query<ZinePage[], { zineId: string }>({
+      query: ({ zineId }) => `/zines/${encodeURIComponent(zineId)}/pages`,
+      transformResponse: (response: { pages: ZinePage[] }) => response.pages ?? [],
+      providesTags: (_result, _error, { zineId }) => [
+        { type: 'ZinePages', id: zineId },
+      ],
+    }),
+    setZinePages: builder.mutation<
+      ZinePage[],
+      { zineId: string; laidOutPageIds: string[] }
+    >({
+      query: ({ zineId, laidOutPageIds }) => ({
+        url: `/zines/${encodeURIComponent(zineId)}/pages`,
+        method: 'PUT',
+        body: { laid_out_page_ids: laidOutPageIds },
+      }),
+      transformResponse: (response: { pages: ZinePage[] }) => response.pages ?? [],
+      invalidatesTags: (_result, _error, { zineId }) => [
+        { type: 'ZinePages', id: zineId },
+        { type: 'Zine', id: zineId },
+      ],
+    }),
   }),
 });
 
@@ -704,12 +1023,24 @@ export const {
   useCreateImageLayoutTemplateMutation,
   useUpdateImageLayoutTemplateMutation,
   useDeleteImageLayoutTemplateMutation,
+  useGetGlobalPageTemplatesQuery,
+  useGetPageTemplatesQuery,
+  useGetPageTemplateQuery,
+  useCreateGlobalPageTemplateMutation,
+  useCreatePageTemplateMutation,
+  useUpdatePageTemplateMutation,
+  useDeletePageTemplateMutation,
   useGetLaidOutImagesQuery,
   useGetLaidOutImageQuery,
   useCreateLaidOutImageMutation,
   useUpdateLaidOutImageMutation,
   useDeleteLaidOutImageMutation,
   usePreviewLaidOutImageQuery,
+  useGetLaidOutPagesQuery,
+  useGetLaidOutPageQuery,
+  useCreateLaidOutPageMutation,
+  useUpdateLaidOutPageMutation,
+  useDeleteLaidOutPageMutation,
   useGetLayoutSequencesQuery,
   useCreateLayoutSequenceMutation,
   useUpdateLayoutSequenceMutation,
@@ -718,4 +1049,11 @@ export const {
   useAddLayoutSequenceItemMutation,
   useReorderLayoutSequenceItemsMutation,
   useDeleteLayoutSequenceItemMutation,
+  useGetZinesQuery,
+  useCreateZineMutation,
+  useGetZineQuery,
+  useUpdateZineMutation,
+  useDeleteZineMutation,
+  useGetZinePagesQuery,
+  useSetZinePagesMutation,
 } = api;
