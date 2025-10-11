@@ -150,11 +150,11 @@ func (c *RenderCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLaye
 		if err != nil {
 			return err
 		}
-		for _, fp := range written {
-			if fi, err := os.Stat(fp); err == nil {
-				fmt.Printf("Saved output image: %s (Size: %d bytes)\n", fp, fi.Size())
-			}
-		}
+        for _, fp := range written {
+            if fi, err := os.Stat(fp); err == nil {
+                fmt.Printf("Saved output image: %s (Size: %d bytes)\n", fp, fi.Size())
+            }
+        }
 	}
 
 	return nil
