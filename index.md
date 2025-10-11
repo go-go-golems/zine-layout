@@ -5,7 +5,7 @@ Date: 2025-10-11
 ## Phase 3 — Stage A (Page-Level Rendering)
 
 - [x] Add `pkg/pagelayout/settings.go` with `PageLayoutSettings` and helpers
-- [x] Add `pkg/pagelayout/renderer/renderer.go` with variants: thumbnail, full, combined, left, right
+- [x] Add `pkg/pagelayout/renderer/renderer.go` with variants: thumbnail, full, combined, left, right (left/right include gutter markers for spreads)
 - [x] HTTP preview endpoint: `GET /api/projects/{id}/page-preview?variant=thumbnail|full|left|right|combined`
 - [x] CLI command: `pages-render` (renders a single image to a page)
 - [x] Register `pages-render` in `cmd/zine-layout/main.go`
@@ -43,4 +43,4 @@ go run ./cmd/zine-layout pages-render \
 - `cmd/zine-layout/main.go` (command registration)
 
 Notes:
-- Current preview renders the first project image into a standard 8.5x11 page at 300 DPI with 0.5in margins. Spread splitting and absolute placement are supported by the renderer; UI wiring and persisted render metadata can be layered later.
+- Preview renders the first project image into a standard 8.5x11 page at 300 DPI with 0.5in margins. Borders are enabled by default in previews. For spreads, left/right variants include inner-edge gutter markers.

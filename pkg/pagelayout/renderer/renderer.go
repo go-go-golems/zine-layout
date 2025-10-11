@@ -85,11 +85,27 @@ func RenderPage(ctx RenderContext) (*PageRenderResult, error) {
 	// thumbnail
 	variants["thumbnail"] = makeThumbnail(canvas, ctx.ThumbnailMaxPx)
 	// spread halves
-	if ctx.Settings.IsSpread {
-		leftImg, rightImg := splitSpread(canvas, ctx.Settings)
-		variants["left"] = leftImg
-		variants["right"] = rightImg
-	}
+    if ctx.Settings.IsSpread {
+        leftImg, rightImg := splitSpread(canvas, ctx.Settings)
+        // Add gutter markers to left/right previews at inner edges
+        marker := color.RGBA{0, 0, 0, 128}
+        if li, ok := leftImg.(*image.RGBA); ok {
+            drawDashedVertical(li, li.Bounds().Dx()-1, marker)
+        } else {
+            li := ensureRGBA(leftImg)
+            drawDashedVertical(li, li.Bounds().Dx()-1, marker)
+            leftImg = li
+        }
+        if ri, ok := rightImg.(*image.RGBA); ok {
+            drawDashedVertical(ri, 0, marker)
+        } else {
+            ri := ensureRGBA(rightImg)
+            drawDashedVertical(ri, 0, marker)
+            rightImg = ri
+        }
+        variants["left"] = leftImg
+        variants["right"] = rightImg
+    }
 
 	return &PageRenderResult{Full: canvas, Variants: variants}, nil
 }
@@ -153,6 +169,26 @@ func splitSpread(canvas *image.RGBA, s pagelayout.PageLayoutSettings) (image.Ima
 }
 
 // Helpers to parse border options from settings
+func ensureRGBA(img image.Image) *image.RGBA {
+    if v, ok := img.(*image.RGBA); ok { return v }
+    b := img.Bounds()
+    out := image.NewRGBA(b)
+    draw.Draw(out, b, img, b.Min, draw.Src)
+    return out
+}
+
+func drawDashedVertical(img *image.RGBA, x int, c color.Color) {
+    b := img.Bounds()
+    if x < b.Min.X { x = b.Min.X }
+    if x >= b.Max.X { x = b.Max.X - 1 }
+    dash := 6
+    for y := b.Min.Y; y < b.Max.Y; y++ {
+        if (y-b.Min.Y)%dash < dash/2 {
+            img.Set(x, y, c)
+        }
+    }
+}
+
 func parseBorderColor(s string) color.Color {
     if s == "" {
         return color.RGBA{0,0,0,255}
