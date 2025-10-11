@@ -20,6 +20,9 @@ var _ = func() bool {
 
 // RunMigrations ensures the SQLite schema is created.
 func RunMigrations(db *sql.DB) error {
+	if err := prepareSchema(db); err != nil {
+		return err
+	}
 	if _, err := db.Exec(schemaSQL); err != nil {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
@@ -124,4 +127,72 @@ func generateID(prefix string) string {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return fmt.Sprintf("%s-%s-%s", prefix, ts, string(b))
+}
+
+func prepareSchema(db *sql.DB) error {
+	// Legacy Phase 2 table lacked laid_out_image_id; drop and recreate if necessary.
+	hasPagesTable, err := hasTable(db, "laid_out_pages")
+	if err != nil {
+		return err
+	}
+	if hasPagesTable {
+		hasColumn, err := tableHasColumn(db, "laid_out_pages", "laid_out_image_id")
+		if err != nil {
+			return err
+		}
+		if !hasColumn {
+			if _, err := db.Exec(`DROP TABLE IF EXISTS zine_pages;`); err != nil {
+				return fmt.Errorf("drop legacy zine_pages: %w", err)
+			}
+			if _, err := db.Exec(`DROP TABLE IF EXISTS laid_out_pages;`); err != nil {
+				return fmt.Errorf("drop legacy laid_out_pages: %w", err)
+			}
+		}
+	}
+	// Remove legacy inputs table if it still exists.
+	if _, err := db.Exec(`DROP TABLE IF EXISTS laid_out_page_inputs;`); err != nil {
+		return fmt.Errorf("drop legacy laid_out_page_inputs: %w", err)
+	}
+	return nil
+}
+
+func hasTable(db *sql.DB, table string) (bool, error) {
+	row := db.QueryRow(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`, table)
+	var dummy int
+	err := row.Scan(&dummy)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("query sqlite_master for %s: %w", table, err)
+	}
+	return true, nil
+}
+
+func tableHasColumn(db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.Query(fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	if err != nil {
+		return false, fmt.Errorf("pragma table_info(%s): %w", table, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			cid        int
+			name       string
+			ctype      string
+			notNull    int
+			dfltValue  any
+			primaryKey int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &dfltValue, &primaryKey); err != nil {
+			return false, fmt.Errorf("scan table_info(%s): %w", table, err)
+		}
+		if strings.EqualFold(name, column) {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("iterate table_info(%s): %w", table, err)
+	}
+	return false, nil
 }

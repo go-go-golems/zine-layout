@@ -318,10 +318,61 @@ export const SequencesTab: React.FC<SequencesTabProps> = ({ projectId }) => {
         </Card>
       )}
 
-      {/* Split View: Preview + Sequence Builder */}
+      {/* Three-Column Layout: Assets + Preview + Sequence Builder */}
       {selectedSequenceId && sequenceDetailQuery.data && (
-        <div className="grid lg:grid-cols-2 gap-6">
-          {/* Left: Preview Pane */}
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Left: Available Assets */}
+          <Card>
+            <CardHeader>
+              <h3 className="text-lg font-semibold text-gray-900">Available Assets</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Click to add to sequence
+              </p>
+            </CardHeader>
+            <CardBody>
+              <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                {assets.map((asset) => (
+                  <button
+                    key={asset.id}
+                    type="button"
+                    onClick={async () => {
+                      if (!selectedSequenceId) return;
+                      const addedItems = await addSequenceItem({
+                        sequenceId: selectedSequenceId,
+                        assetId: asset.id,
+                      }).unwrap();
+                      setIsPlaying(false);
+                    }}
+                    className="w-full flex items-center space-x-3 p-2 border border-gray-200 rounded-lg bg-white hover:border-primary-300 hover:bg-primary-50 transition-colors"
+                  >
+                    <div className="w-16 h-16 bg-gray-100 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
+                      <img
+                        src={asset.src}
+                        alt={asset.name}
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {asset.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {asset.width} × {asset.height}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+                {assets.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">No assets uploaded yet.</p>
+                    <p className="text-xs mt-1">Go to Assets tab to upload images.</p>
+                  </div>
+                )}
+              </div>
+            </CardBody>
+          </Card>
+
+          {/* Center: Preview Pane */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
