@@ -592,56 +592,119 @@ See Template Editor Modal design in the full layout below.
 ## Tab 4: Page Layouts Tab *(Phase 3 - Placeholder)*
 
 ### Purpose
-Compose multi-image pages using page templates. Select a page template (e.g., 2-up, 4-up grid) and assign laid-out images to slots.
+Place laid-out images onto physical print pages with proper margins, spreads, and gutter handling. This is the final step before assembling into a zine.
 
-### Placeholder Design
+**Key Concept:** One laid-out image per page (or spread). The page template defines page size, margins, and how the image is positioned.
+
+### Layout Design
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│  Page Layouts                                        [+ Create Page]    │
+│  Page Layouts                                                           │
 ├────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  ┌─ Page Templates ──────────────────────────────────────────────────┐ │
-│  │                                                                     │ │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐          │ │
-│  │  │ Single   │  │ 2-Up     │  │ 4-Up     │  │ Custom   │          │ │
-│  │  │ Image    │  │ Spread   │  │ Grid     │  │ Grid     │          │ │
-│  │  │ [  📄  ] │  │ [ 📄📄 ] │  │ [📄📄] │  │ [ ⊞ ]    │          │ │
-│  │  │          │  │          │  │ [📄📄] │  │          │          │ │
-│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘          │ │
-│  │                                                                     │ │
-│  └─────────────────────────────────────────────────────────────────────┘ │
+│  ═══ SECTION 1: Page Layout Templates ═══                              │
 │                                                                         │
-│  ┌─ Composed Pages ──────────────────────────────────────────────────┐  │
-│  │                                                                     │  │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐                         │  │
-│  │  │┌────────┐│  │┌────────┐│  │┌────────┐│                         │  │
-│  │  ││Page    ││  ││Page    ││  ││Page    ││                         │  │
-│  │  ││Preview ││  ││Preview ││  ││Preview ││                         │  │
-│  │  │└────────┘│  │└────────┘│  │└────────┘│                         │  │
-│  │  │ Page 1   │  │ Page 2   │  │ Page 3   │                         │  │
-│  │  │ 2-Up     │  │ Single   │  │ 4-Up     │                         │  │
-│  │  │ [Edit]   │  │ [Edit]   │  │ [Edit]   │                         │  │
-│  │  └──────────┘  └──────────┘  └──────────┘                         │  │
-│  │                                                                     │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
+│  ┌─ Template Library ──────────────────────────────────────────────┐  │
+│  │                                                                   │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │  │
+│  │  │ 8×10"        │  │ Spread       │  │ Full Bleed   │          │  │
+│  │  │ Portrait     │  │ 16×10"       │  │ Letter       │          │  │
+│  │  │              │  │              │  │              │          │  │
+│  │  │ [   📄   ]   │  │ [  📄📄  ]   │  │ [   📄   ]   │          │  │
+│  │  │              │  │              │  │              │          │  │
+│  │  │ Single page  │  │ Spread mode  │  │ Single page  │          │  │
+│  │  │ 0.5" margins │  │ 0.25" gutter │  │ 0" margins   │          │  │
+│  │  │ 300 DPI      │  │ 300 DPI      │  │ 300 DPI      │          │  │
+│  │  │              │  │              │  │              │          │  │
+│  │  │ [Edit]       │  │ [Edit]       │  │ [Edit]       │          │  │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘          │  │
+│  │                                                                   │  │
+│  │  [+ Create Template]                                             │  │
+│  │                                                                   │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
 │                                                                         │
-│  Coming in Phase 3                                                     │
-│  • Select page template (1-up, 2-up, 4-up, custom grids)             │
-│  • Drag laid-out images into page slots                               │
-│  • Preview complete page composition                                   │
-│  • Save as laid-out page                                               │
+│  ═══ SECTION 2: Print-Ready Pages ═══                                  │
+│                                                                         │
+│  Print Pages (12)                                  [+ Create Page]     │
+│                                                                         │
+│  ┌─ Quick Create ──────────────────────────────────────────────────┐  │
+│  │  Laid-Out Image: [img01-8x10-portrait ▾]                         │  │
+│  │  Page Template:  [8×10" Portrait with margins ▾]                 │  │
+│  │  [Create Print Page]                                             │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│  ┌─ Print Pages Grid ──────────────────────────────────────────────┐  │
+│  │                                                                   │  │
+│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐                 │  │
+│  │  │┌──────────┐│  │┌──────────┐│  │┌──────────┐│                 │  │
+│  │  ││   ┌──┐   ││  ││   ┌──┐   ││  ││  ┌───┐   ││                 │  │
+│  │  ││   │██│   ││  ││   │██│   ││  ││  │███│   ││                 │  │
+│  │  ││   └──┘   ││  ││   └──┘   ││  ││  └───┘   ││                 │  │
+│  │  ││ margins  ││  ││ margins  ││  ││ full     ││                 │  │
+│  │  │└──────────┘│  │└──────────┘│  │└──────────┘│                 │  │
+│  │  │ Page 1     │  │ Page 2     │  │ Page 3     │                 │  │
+│  │  │ img01.png  │  │ img02.png  │  │ img03.png  │                 │  │
+│  │  │ 8×10"      │  │ 8×10"      │  │ Letter     │                 │  │
+│  │  │ [View][✕]  │  │ [View][✕]  │  │ [View][✕]  │                 │  │
+│  │  └────────────┘  └────────────┘  └────────────┘                 │  │
+│  │                                                                   │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Features (Planned)
+### Template Editor (Spread Mode Example)
 
-- **Page template selector** with common presets
-- **Drag-and-drop** laid-out images into page slots
-- **Visual page composer** showing final page layout
-- **Grid customization** for custom slot arrangements
-- **Preview rendering** of complete pages
+```
+┌─ Create Page Layout Template ──────────────────────────────────────┐
+│                                                                     │
+│  ┌─ Settings ──────────┐  ┌─ Preview ──────────────────────────┐  │
+│  │                      │  │                                     │  │
+│  │ Name:                │  │  ┌─ Left Page ─┐ ║ ┌─ Right Page ┐ │  │
+│  │ [____________]       │  │  │             │ ║ │             │ │  │
+│  │                      │  │  │ ┌─────────┐ │ ║ │ ┌─────────┐ │ │  │
+│  │ ═══ Page Size ═══    │  │  │ │         │ │ ║ │ │         │ │ │  │
+│  │                      │  │  │ │ Wide    │→│ ║ │←│ Image   │ │ │  │
+│  │ Size: [8×10" ▾]     │  │  │ │ Image   │ │ ║ │ │ Split   │ │ │  │
+│  │ DPI:  [300____]      │  │  │ │         │ │ ║ │ │         │ │ │  │
+│  │                      │  │  │ └─────────┘ │ ║ │ └─────────┘ │ │  │
+│  │ [✓] Spread Mode      │  │  │    overlap→ │ ║ │ ←overlap   │ │  │
+│  │                      │  │  └─────────────┘ ║ └─────────────┘ │  │
+│  │ ═══ Spread ═══       │  │                  ↑                   │  │
+│  │                      │  │               gutter                 │  │
+│  │ Gutter: [0.25__] in  │  │                                     │  │
+│  │ Overlap:[0.125_] in  │  │  Wide image spans both pages       │  │
+│  │                      │  │  Split at center with gutter        │  │
+│  │ ═══ Margins ═══      │  │                                     │  │
+│  │                      │  │  [← Select Preview Image]           │  │
+│  │ [✓] Uniform: [0.5]in │  │                                     │  │
+│  │                      │  │                                     │  │
+│  │ ═══ Positioning ═══  │  │                                     │  │
+│  │                      │  │                                     │  │
+│  │ ◉ Fill content area  │  │                                     │  │
+│  │ ○ Absolute (x,y,w,h) │  │                                     │  │
+│  │ ○ Snap to margins    │  │                                     │  │
+│  │                      │  │                                     │  │
+│  └──────────────────────┘  └─────────────────────────────────────┘  │
+│                                                                     │
+│  [Cancel]  [Save Template]                                         │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Features
+
+- **Page size presets** (Letter, 8×10, A4, etc.)
+- **Spread mode** checkbox for wide images across facing pages
+- **Gutter settings** (width and overlap for binding)
+- **Margins** (uniform or individual)
+- **Positioning modes:**
+  - **Fill content area** - Image fills page minus margins (default)
+  - **Absolute position** - Specify exact x, y, width, height
+  - **Snap to margins** - 9-point grid within content area
+- **Live preview** showing how laid-out image sits on page
+- **For spreads:** Preview shows left page, right page, and how they combine
 
 ---
 
@@ -1054,16 +1117,19 @@ Cards stack vertically, actions move to bottom:
    - Sees live preview update
    - Saves changes
 
-5. **Compose Pages** (Page Layouts Tab - *Phase 3*)
-   - User selects page template (e.g., 2-up spread)
-   - Drags laid-out images into page slots
-   - Previews complete page
-   - Saves as laid-out page
-   - Repeats for all pages
+5. **Create Print Pages** (Page Layouts Tab - *Phase 3*)
+   - User creates page template:
+     - 8×10" single page with 0.5" margins
+     - Or: 16×10" spread with 0.25" gutter
+   - Selects laid-out image from dropdown
+   - Selects page template
+   - Creates print page (laid-out image on physical page)
+   - Reviews preview with margins/bleed
+   - Repeats for all images
 
 6. **Assemble Zine** (Zine Tab - *Phase 3/4*)
    - User creates new zine
-   - Adds laid-out pages in order
+   - Adds print pages in order
    - Applies imposition template (8-page fold)
    - Previews folding/binding
    - Exports print-ready PDF

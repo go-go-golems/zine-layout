@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui';
 import { AssetsTab } from './tabs/AssetsTab';
 import { SequencesTab } from './tabs/SequencesTab';
 import { ImageLayoutsTab } from './tabs/ImageLayoutsTab';
+import { PageLayoutsTab } from './tabs/PageLayoutsTab';
+import { ZineTab } from './tabs/ZineTab';
 
 const formatDateTime = (iso?: string) => {
   if (!iso) return '—';
@@ -89,27 +91,11 @@ export const ProjectDetail: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="page-layouts">
-          {id && (
-            <div className="p-12 text-center border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-              <div className="text-4xl mb-4">📄</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Page Layouts</h3>
-              <p className="text-gray-600 max-w-md mx-auto">
-                Multi-image page composition coming in Phase 3. This will allow you to create pages with multiple laid-out images using grid templates.
-              </p>
-                </div>
-              )}
+          {id && <PageLayoutsTab projectId={id} />}
         </TabsContent>
 
         <TabsContent value="zine">
-          {id && (
-            <div className="p-12 text-center border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-              <div className="text-4xl mb-4">📚</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Zine Assembly & Export</h3>
-              <p className="text-gray-600 max-w-md mx-auto">
-                Zine assembly, imposition templates, and print export coming in Phase 3/4. This will allow you to create complete books with proper page ordering for printing and folding.
-                        </p>
-                      </div>
-          )}
+          {id && <ZineTab projectId={id} />}
         </TabsContent>
       </Tabs>
     </div>
