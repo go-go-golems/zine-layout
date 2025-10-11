@@ -1129,7 +1129,115 @@ The UI refactor is **complete and production-ready** for Phases 1 & 2. Tabs 4 & 
 
 ---
 
+## 2025-10-11T05:00Z – Page Layouts Design Correction
+
+### Context
+Discovered a misunderstanding about what "Page Layouts" means. Initially designed it as multi-image composition (multiple images on one page), but the actual requirement is simpler and more focused: placing ONE laid-out image onto a physical print page.
+
+### Correction Made
+
+**Wrong Understanding (initial design):**
+- Page templates with multiple image slots (2-up, 4-up grids)
+- Drag multiple laid-out images into one page
+- Complex slot management
+
+**Correct Understanding (see 02-image-resizer-code.tsx):**
+- Page templates define: page size, margins, spread settings, image positioning
+- ONE laid-out image per page (or spread)
+- Spread mode: wide laid-out image split into left/right pages with gutter
+- Positioning: fill content area, absolute position, or snap to margins
+
+### What We Did
+
+1. **Created New Design Document** (`ttmp/2025-10-11/12-page-layout-tab-design.md`)
+   - Comprehensive ASCII UI design for correct page layout concept
+   - Shows page template editor with spread mode
+   - Explains positioning modes (fill, absolute, snap)
+   - Visual diagrams for spreads with gutter
+   - Data model and workflow examples
+
+2. **Updated Main UI Design** (`10-ui-design-for-the-zine-photo-layout-software.md`)
+   - Replaced Tab 4 design with correct concept
+   - Updated workflow examples
+   - Removed multi-image composition references
+   - Added spread mode explanation
+
+3. **Kept Existing PageLayoutsTab.tsx Implementation**
+   - Current dummy implementation still useful for visualization
+   - Will be replaced when Phase 3 backend work starts
+   - Shows the UI structure even if concept was different
+
+### What We Learned
+
+#### Requirements Clarification
+
+- **Always check reference code**: The `02-image-resizer-code.tsx` had the answer
+- **Spread mode is key**: Two-page layouts from one wide image is a core feature
+- **Gutter math matters**: Overlap into gutter for binding is important detail
+- **Simpler is often correct**: One image per page is cleaner than multi-image slots
+
+#### Design Process
+
+- **Dummy implementations can reveal misunderstandings**: Building the UI exposed the confusion
+- **User can correct course early**: Better to find out now than after full implementation
+- **Reference materials are crucial**: Looking at existing code would have prevented error
+- **ASCII diagrams help clarify**: Drawing the spread with gutter made the concept clear
+
+### Correct Workflow Now
+
+```
+Asset (raw image)
+  ↓
+[Image Layout Template] → Crop, scale, position
+  ↓
+Laid-Out Image (cropped/scaled, ready for use)
+  ↓
+[Page Layout Template] → Page size, margins, spread, gutter
+  ↓
+Print Page (laid-out image on physical page)
+  ↓
+[Zine] → Collect print pages
+  ↓
+[Imposition Template] → 8-page fold, etc.
+  ↓
+Print-Ready PDF/PNG
+```
+
+**Each step adds one layer:**
+1. Image Layout: Prepare the image
+2. Page Layout: Place on physical page
+3. Zine: Collect pages into book
+4. Imposition: Arrange for printing/folding
+
+### Design Document Status
+
+- ✅ `10-ui-design-for-the-zine-photo-layout-software.md` - **Updated with correct Tab 4 design**
+- ✅ `12-page-layout-tab-design.md` - **New comprehensive design for page layouts**
+- ⚠️ `PageLayoutsTab.tsx` - Current implementation uses old concept (will need rewrite)
+- ✅ Changelog updated with correction
+
+### Next Steps for Page Layouts Tab
+
+When implementing Phase 3:
+1. Use `12-page-layout-tab-design.md` as the spec
+2. Rewrite PageLayoutsTab.tsx to match correct concept
+3. Add spread mode checkbox and gutter controls
+4. Implement three positioning modes
+5. Preview should show: page boundary, margins, laid-out image placement
+6. For spreads: show left page, right page, combined view
+7. Export options: single page PNG, left page, right page, combined, PDF
+
+### Lessons for Future
+
+- **Read reference code first**: Would have saved confusion
+- **Validate understanding early**: ASCII design revealed the issue
+- **Keep related code together**: Page layout logic in one place helps
+- **Spreads are a first-class concept**: Not just "two pages", but special rendering mode
+
+---
+
 **END OF CHANGELOG**
+
 
 
 
