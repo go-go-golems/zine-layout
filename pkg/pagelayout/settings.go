@@ -49,6 +49,11 @@ type PageLayoutSettings struct {
 	ImageYIn       float64 `json:"imageYIn" yaml:"image_y_in"`
 	ImageWidthIn   float64 `json:"imageWidthIn" yaml:"image_width_in"`
 	ImageHeightIn  float64 `json:"imageHeightIn" yaml:"image_height_in"`
+
+	// Optional page border drawing
+	BorderEnabled bool   `json:"borderEnabled" yaml:"border_enabled"`
+	BorderColor   string `json:"borderColor" yaml:"border_color"`
+	BorderType    string `json:"borderType" yaml:"border_type"` // plain|dotted|dashed|corner
 }
 
 func (s *PageLayoutSettings) Canonicalize() error {

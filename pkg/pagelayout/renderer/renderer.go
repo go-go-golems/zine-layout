@@ -1,6 +1,7 @@
 package renderer
 
 import (
+    "fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -8,6 +9,7 @@ import (
 	xdraw "golang.org/x/image/draw"
 
 	"github.com/go-go-golems/zine-layout/pkg/pagelayout"
+    "github.com/go-go-golems/zine-layout/pkg/zinelayout"
 )
 
 // RenderContext groups inputs for page-level rendering.
@@ -68,6 +70,13 @@ func RenderPage(ctx RenderContext) (*PageRenderResult, error) {
 		// Scale-cover into target while preserving aspect ratio, then center-crop
 		drawIntoTargetCover(canvas, target, src)
 	}
+
+    // Optional border: draw around the full page content area
+    if ctx.Settings.BorderEnabled {
+        c := parseBorderColor(ctx.Settings.BorderColor)
+        bt := parseBorderType(ctx.Settings.BorderType)
+        zinelayout.DrawBorder(canvas, canvas.Bounds(), c, bt)
+    }
 
 	variants := map[string]image.Image{}
 	// full
@@ -141,4 +150,48 @@ func splitSpread(canvas *image.RGBA, s pagelayout.PageLayoutSettings) (image.Ima
 	draw.Draw(left, left.Bounds(), canvas, leftRect.Min, draw.Src)
 	draw.Draw(right, right.Bounds(), canvas, rightRect.Min, draw.Src)
 	return left, right
+}
+
+// Helpers to parse border options from settings
+func parseBorderColor(s string) color.Color {
+    if s == "" {
+        return color.RGBA{0,0,0,255}
+    }
+    // Accept formats: #RRGGBB, #RRGGBBAA, or r,g,b,a
+    if len(s) > 0 && s[0] == '#' {
+        // Very small parser: only #RRGGBB and #RRGGBBAA
+        hex := s[1:]
+        var r, g, b, a uint8
+        switch len(hex) {
+        case 6:
+            var rv, gv, bv int
+            _, err := fmt.Sscanf(hex, "%02x%02x%02x", &rv, &gv, &bv)
+            if err == nil { r, g, b, a = uint8(rv), uint8(gv), uint8(bv), 255 }
+        case 8:
+            var rv, gv, bv, av int
+            _, err := fmt.Sscanf(hex, "%02x%02x%02x%02x", &rv, &gv, &bv, &av)
+            if err == nil { r, g, b, a = uint8(rv), uint8(gv), uint8(bv), uint8(av) }
+        }
+        if a == 0 { a = 255 }
+        return color.RGBA{r,g,b,a}
+    }
+    var r, g, b, a int
+    if _, err := fmt.Sscanf(s, "%d,%d,%d,%d", &r,&g,&b,&a); err == nil {
+        if a == 0 { a = 255 }
+        return color.RGBA{uint8(r),uint8(g),uint8(b),uint8(a)}
+    }
+    return color.RGBA{0,0,0,255}
+}
+
+func parseBorderType(s string) zinelayout.BorderType {
+    switch s {
+    case string(zinelayout.BorderTypeDotted):
+        return zinelayout.BorderTypeDotted
+    case string(zinelayout.BorderTypeDashed):
+        return zinelayout.BorderTypeDashed
+    case string(zinelayout.BorderTypeCorner):
+        return zinelayout.BorderTypeCorner
+    default:
+        return zinelayout.BorderTypePlain
+    }
 }

@@ -396,6 +396,9 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
                 IsSpread: false, GutterWidthIn: 0, GutterOverlapIn: 0,
                 PositioningMode: "fill",
                 AnchorPreset:    "center",
+                BorderEnabled: true,
+                BorderColor:   "0,0,0,255",
+                BorderType:    "plain",
             }
             if err := settings.Canonicalize(); err != nil {
                 http.Error(w, err.Error(), http.StatusBadRequest)
