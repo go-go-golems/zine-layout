@@ -45,6 +45,7 @@ export const ProjectDetail: React.FC = () => {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [dragAssetId, setDragAssetId] = useState<string | null>(null);
   const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
+  const [isCreatingSequence, setIsCreatingSequence] = useState(false);
 
   const assets = useMemo<AssetSummary[]>(() => {
     if (!assetsQuery.data || !id) return [];
@@ -78,10 +79,10 @@ export const ProjectDetail: React.FC = () => {
   const [selectedSequenceId, setSelectedSequenceId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!selectedSequenceId && sequencesQuery.data?.length) {
+    if (!isCreatingSequence && !selectedSequenceId && sequencesQuery.data?.length) {
       setSelectedSequenceId(sequencesQuery.data[0]!.id);
     }
-  }, [sequencesQuery.data, selectedSequenceId]);
+  }, [sequencesQuery.data, selectedSequenceId, isCreatingSequence]);
 
   const sequenceDetailQuery = useGetImageSequenceDetailQuery(
     { sequenceId: selectedSequenceId ?? '' },
@@ -152,6 +153,7 @@ export const ProjectDetail: React.FC = () => {
     }).unwrap();
     setNewSequenceName('');
     setNewSequenceDescription('');
+    setIsCreatingSequence(false);
     setSelectedSequenceId(sequence.id);
   };
 
@@ -357,14 +359,21 @@ export const ProjectDetail: React.FC = () => {
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => setSelectedSequenceId(null)}
+                  onClick={() => {
+                    setIsCreatingSequence(true);
+                    setSelectedSequenceId(null);
+                    setNewSequenceName('');
+                    setNewSequenceDescription('');
+                    setIsPlaying(false);
+                    setSlideIndex(0);
+                  }}
                 >
                   + New Sequence
                 </Button>
               </div>
             </CardHeader>
             <CardBody className="space-y-6">
-              {!selectedSequenceId && (
+              {(!selectedSequenceId || isCreatingSequence) && (
                 <form onSubmit={handleCreateSequence} className="space-y-4">
                   <Input
                     label="Sequence name"
@@ -383,11 +392,12 @@ export const ProjectDetail: React.FC = () => {
                     <Button
                       variant="secondary"
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        setIsCreatingSequence(false);
                         setSelectedSequenceId(
                           sequencesQuery.data?.[0]?.id ?? null
-                        )
-                      }
+                        );
+                      }}
                     >
                       Cancel
                     </Button>
@@ -401,11 +411,26 @@ export const ProjectDetail: React.FC = () => {
               {Boolean(sequencesQuery.data?.length) && (
                 <div className="grid md:grid-cols-2 gap-4">
                   {sequencesQuery.data?.map((sequence) => (
-                    <button
+                    <div
                       key={sequence.id}
-                      type="button"
-                      onClick={() => setSelectedSequenceId(sequence.id)}
-                      className={`border rounded-lg p-4 text-left transition-colors ${
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        setIsCreatingSequence(false);
+                        setSelectedSequenceId(sequence.id);
+                        setSlideIndex(0);
+                        setIsPlaying(false);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setIsCreatingSequence(false);
+                          setSelectedSequenceId(sequence.id);
+                          setSlideIndex(0);
+                          setIsPlaying(false);
+                        }
+                      }}
+                      className={`border rounded-lg p-4 text-left transition-colors focus:outline-none ${
                         sequence.id === selectedSequenceId
                           ? 'border-primary-500 ring-2 ring-primary-200 bg-primary-50'
                           : 'border-gray-200 hover:border-primary-300'
@@ -434,7 +459,7 @@ export const ProjectDetail: React.FC = () => {
                       <p className="text-xs text-gray-500">
                         Updated {formatDateTime(sequence.updated_at)}
                       </p>
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}

@@ -21,6 +21,13 @@ export default defineConfig(({ mode }) => {
         '/projects': {
           target: proxyTarget,
           changeOrigin: true,
+          bypass: (req) => {
+            const accept = req.headers.accept ?? '';
+            if (accept.includes('text/html')) {
+              return '/index.html';
+            }
+            return undefined;
+          },
         },
         '/uploads': {
           target: proxyTarget,

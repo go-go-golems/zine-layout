@@ -8,6 +8,8 @@
 - Reorganised the CLI under an `image-sequences` verb group with individual subcommands (`list`, `get`, `create`, `update`, `delete`, `add-item`, `reorder`, `delete-item`).
 - Simplified the React UI to match the new workflow (projects → assets → image sequences), removing legacy YAML/spread tooling and adding sequence management panels.
 - Added drag-and-drop sequencing, inline previews, and slideshow controls to the project detail view for quick proofing of image ordering.
+- Taught the Go server and dev proxy to fall back to `index.html` (and serve a favicon) so deep links like `/projects/:id` work identically in dev and production.
+- Introduced basic request logging in the Go server to aid troubleshooting while the UI and API are still in flux.
 
 ## What Worked
 - Database migrations run cleanly against an empty DB and align with the new repository methods.
@@ -18,16 +20,18 @@
 
 ## What Didn’t Work (Yet)
 - No automated CLI smoke test script exists for the new workflow (`cmd/zine-layout/cmds/api/phase1_test.sh` is still a TODO).
-- The frontend and RTK Query layers remain untouched and still target the old endpoints.
-- There is no API-level test suite; current confidence comes from ad-hoc `curl` sessions.
+- There is no API-level or UI test suite; confidence still comes from manual CLI/`curl`/browser checks.
+- Sequence previews currently reload every time the project list refreshes; a memoised cache or optimistic update layer would keep the slideshow snappier.
 
 ## What I Learned
 - Removing the legacy manifest layer simplified the server substantially, but required careful alignment of helper utilities (e.g., keeping `projects.SavePNGImage` purely for disk I/O).
 - Grouping CLI verbs under a dedicated namespace reduces churn when adding new subcommands—factory registration becomes obvious and discoverability improves.
 - Dropping old tables from the migration upfront avoids confusion when iterating in a clean-slate schema, but requires discipline to recreate data during testing.
+- SPA fallbacks matter even in dev: letting Vite serve HTML for `/projects/*` keeps navigation working during UI refreshes.
+- Server-side logging is cheap insurance when the API contract and UI are changing in tandem.
 
 ## Attention Points For Next Steps
 - Add scripted CLI validation that spins up the server, exercises project/asset/sequence flows, and tears down temporary data.
-- Verify REST responses with curl/httpie (or Go tests) once CLI coverage is in place.
-- Ensure the frontend contracts are updated or clearly flagged as broken before moving to Phase 2.
-- Consider seeding helper fixtures (e.g., sample PNGs) to accelerate manual testing while the UI lags behind.
+- Backfill REST/API tests (or snapshots) so we can refactor safely in Phase 2 when templates arrive.
+- Ensure the new UI affordances (drag/drop, slideshow) are mirrored in documentation/screenshots before hand-off.
+- Consider seeding helper fixtures (e.g., sample PNGs) or a `make demo-data` target to accelerate manual testing while the UI lags behind automation.

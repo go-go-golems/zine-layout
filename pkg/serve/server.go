@@ -134,14 +134,38 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/image-sequences/", s.handleSequenceRoutes)
 
 	// Serve project files (images) under /projects/{id}/...
-	mux.Handle("/projects/", http.StripPrefix("/projects/", http.FileServer(http.Dir(s.projectsRoot))))
+	projectFiles := http.StripPrefix("/projects/", http.FileServer(http.Dir(s.projectsRoot)))
+	mux.Handle("/projects/", projectFiles)
 
 	if s.settings.Root != "" {
-		staticFS := http.FileServer(http.Dir(s.settings.Root))
-		mux.Handle("/", staticFS)
+		distDir := s.settings.Root
+		fileServer := http.FileServer(http.Dir(distDir))
+		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			path := r.URL.Path
+			if path == "" || path == "/" {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+
+			fullPath := filepath.Join(distDir, filepath.Clean(path))
+			if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+
+			indexPath := filepath.Join(distDir, "index.html")
+			if _, err := os.Stat(indexPath); err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			http.ServeFile(w, r, indexPath)
+		}))
 	}
 
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s %s", r.Method, r.URL.RequestURI())
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) close() {

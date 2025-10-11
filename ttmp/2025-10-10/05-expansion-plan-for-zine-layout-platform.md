@@ -1666,15 +1666,12 @@ echo "✓ All tests passed"
 - [x] 1.8 Register commands in `cmd/zine-layout/cmds/api/commands.go`
 
 **Frontend:**
-- [ ] 1.9 Extend `web/src/api.ts`
-  - Add `ImageSequence`, `ImageSequenceItem` types
-  - Add RTK Query endpoints: `getImageSequences`, `createImageSequence`, `getSequenceItems`, `reorderSequenceItems`, etc.
-- [ ] 1.10 Create `web/src/views/ImageSequenceEditor.tsx`
-  - List sequences in project
-  - Create/rename/delete sequences
-  - Drag-and-drop interface for reordering assets within sequence
-  - Support gap markers
-- [ ] 1.11 Add route in `web/src/routes/*.tsx` for sequence editor
+- [x] 1.9 Extend `web/src/api.ts`
+  - Added typed project/asset/sequence clients and RTK Query endpoints aligned with the new REST API.
+- [x] 1.10 Create `web/src/views/ImageSequenceEditor.tsx`
+  - Implemented within the refreshed `ProjectDetail` view: listing sequences, drag-and-drop asset placement, gap support, slideshow preview, and inline item management.
+- [x] 1.11 Add route in `web/src/routes/*.tsx` for sequence editor
+  - Reused the existing project route (`/projects/:id`) with the new sequence editor UI.
 
 **Testing:**
 - [ ] 1.14 Create CLI smoke test script `cmd/zine-layout/cmds/api/phase1_test.sh`
