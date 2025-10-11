@@ -214,3 +214,24 @@
 - Consider adding workflow verbs for seeding projects/assets to avoid manual sqlite3 scripting during tests.
 
 ---
+
+## 2025-10-11T05:10Z – REST API for Page Templates, Print Pages & Zines
+- Added dedicated route files in `pkg/serve` for page templates, laid-out pages, and zines, wired into `server.go` with new `PagesService` and `ZinesService` instances.
+- Responses now expose normalized JSON payloads (`page_templates`, `laid_out_pages`, `zines`) with helper structs in `pkg/serve/types.go`.
+- Extended `web/src/api.ts` with strongly-typed RTK Query endpoints covering all Phase 3 entities, including list/detail mutations and tag invalidation semantics.
+
+### What Worked
+- Reusing the Phase 2 routing pattern (one file per entity) made it easy to bolt on the new handlers without bloating `server.go`.
+- RTK Query’s tag system let us keep cache invalidation predictable across project-scoped and global template lists.
+
+### What Didn't Work
+- Preview/export endpoints remain stubs; `/api/laid-out-pages/{id}/preview` still surfaces `ErrPageRendererNotImplemented`.
+
+### What I Learned
+- Surfacing shared results (global + project templates) benefits from tagging both scopes so UI caches refresh automatically when globals change.
+
+### Attention Points
+- Implement the renderer/export pipeline so the preview/export endpoints can return binary payloads.
+- Once the frontend views land, ensure they use the new hooks instead of the deprecated store slices.
+
+---

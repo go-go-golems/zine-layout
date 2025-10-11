@@ -65,12 +65,12 @@ Project (workspace)
   └── Layout Sequences (ordered laid-out image lists)
 
 [Phase 3 will add:]
-  ├── Page Templates (multi-image composition grids)
-  ├── Laid Out Pages (template + laid-out images → printable page)
+  ├── Page Templates (physical page settings: size, margins, spread, gutter)
+  ├── Laid Out Pages (template + ONE laid-out image → print-ready page)
   └── Zines (ordered page collections)
 
 [Phase 4 will add:]
-  └── Zine Layout Templates (imposition schemes for print output)
+  └── Zine Layout Templates (imposition schemes: 8-page fold, 16-page booklet, etc.)
 ```
 
 ### Entity Details
@@ -746,6 +746,125 @@ type LayoutSequenceItem struct {
 
 ---
 
+### Page Templates
+
+#### `GET /api/page-templates`
+**Returns:** All global page templates (scope = NULL project)
+
+#### `GET /api/projects/{id}/page-templates`
+**Returns:** Combined list of global + project-scoped page templates
+```json
+{
+  "page_templates": [
+    {
+      "id": "ptpl-20251011T050000Z-abc123",
+      "scope": "global",
+      "name": "8x10 Portrait",
+      "template": { "page": { "width_in": 8, "height_in": 10, "dpi": 300 } },
+      "created_at": "2025-10-11T05:00:00Z",
+      "updated_at": "2025-10-11T05:00:00Z"
+    },
+    {
+      "id": "ptpl-20251011T051000Z-def456",
+      "scope": "project",
+      "project_id": "prj-...",
+      "name": "Cover Variant",
+      "template": { "margin_in": { "top": 0.25 } }
+    }
+  ]
+}
+```
+
+#### `POST /api/page-templates`
+**Body:** `{ "name": "...", "description": "...", "template": { ... } }`  
+**Effect:** Creates global template (no project_id)
+
+#### `POST /api/projects/{id}/page-templates`
+**Body:** `{ "name": "...", "description": "...", "template": { ... } }`  
+**Effect:** Creates template scoped to project
+
+#### `GET /api/page-templates/{id}`
+**Returns:** Single template
+
+#### `PATCH /api/page-templates/{id}`
+**Body:** Partial update; `template` map replaces stored JSON. `PUT` also accepted.  
+**Effect:** Updates metadata/template JSON; if `project_id` empty string → promotes to global.
+
+#### `DELETE /api/page-templates/{id}`
+**Effect:** Removes template; fails with 409 if referenced by laid-out pages (RESTRICT)
+
+---
+
+### Laid Out Pages
+
+#### `GET /api/projects/{id}/laid-out-pages`
+**Returns:** All laid-out pages for project
+```json
+{
+  "laid_out_pages": [
+    {
+      "id": "lop-20251011T052000Z-ghi789",
+      "project_id": "prj-...",
+      "page_template_id": "ptpl-...",
+      "laid_out_image_id": "loi-...",
+      "result": null,
+      "created_at": "2025-10-11T05:20:00Z",
+      "updated_at": "2025-10-11T05:20:00Z"
+    }
+  ]
+}
+```
+
+#### `POST /api/projects/{id}/laid-out-pages`
+**Body:** `{ "page_template_id": "...", "laid_out_image_id": "..." }`  
+**Effect:** Validates template/image belong to project; stores page record
+
+#### `GET /api/laid-out-pages/{id}`
+**Returns:** Single laid-out page
+
+#### `PATCH /api/laid-out-pages/{id}`
+**Body:** `{ "laid_out_image_id": "..." }`  
+**Effect:** Swaps underlying laid-out image and clears cached result JSON
+
+#### `DELETE /api/laid-out-pages/{id}`
+**Effect:** Removes page; cascades from zines via FK
+
+#### `GET /api/laid-out-pages/{id}/preview`
+**Status:** 501 Not Implemented — will stream rendered raster once renderer exists
+
+#### `GET /api/laid-out-pages/{id}/export`
+**Status:** 501 Not Implemented — placeholder for future PNG/PDF export
+
+---
+
+### Zines
+
+#### `GET /api/projects/{id}/zines`
+**Returns:** List of zines within project
+
+#### `POST /api/projects/{id}/zines`
+**Body:** `{ "name": "...", "description": "...", "laid_out_page_ids": ["lop-..."] }`  
+**Effect:** Creates zine and seeds ordering
+
+#### `GET /api/zines/{id}`
+**Returns:** `{ "zine": {...}, "pages": [{ "position": 0, "laid_out_page_id": "lop-..." }] }`
+
+#### `PATCH /api/zines/{id}`
+**Body:** `{ "name": "...", "description": "..." }`  
+**Effect:** Updates zine metadata
+
+#### `DELETE /api/zines/{id}`
+**Effect:** Removes zine + page ordering rows
+
+#### `GET /api/zines/{id}/pages`
+**Returns:** Ordered laid-out page references
+
+#### `PUT /api/zines/{id}/pages`
+**Body:** `{ "laid_out_page_ids": ["lop-...", "lop-..."] }`  
+**Effect:** Replaces ordering transactionally (validates project ownership)
+
+---
+
 ## Core Processes
 
 ### Process 1: Image Upload & Organization
@@ -1418,15 +1537,32 @@ filepath.Join(projectsRoot, projectID, "images", filepath.Base(filename))
 
 ### Phase 3: Page Templates + Laid Out Pages + Zines
 
-**Persistence status:** ✅
-- Schema now includes `page_templates`, `laid_out_pages`, `laid_out_page_inputs`, `zines`, and `zine_pages`.
-- SQLite repositories expose CRUD plus sequencing helpers (SetInputs / SetPages).
-- Service layer orchestrates laid-out page creation and zine ordering.
+**Persistence status:** ✅ (Corrected October 11, 2025)
+- Schema includes `page_templates`, `laid_out_pages`, `zines`, and `zine_pages`.
+- **Corrected model**: One laid-out image per page (not multiple)
+  - `laid_out_pages` has `laid_out_image_id` column
+  - Removed `laid_out_page_inputs` table (no longer needed)
+- SQLite repositories expose CRUD operations
+- Zine repositories include page ordering helpers (`SetPages` / `GetPages`)
+- Service layer simplified:
+  - `CreatePage(projectID, pageTemplateID, laidOutImageID)` - single image per page
+  - `UpdatePageImage(pageID, laidOutImageID)` - change which image is on page
+  - `GetPage(pageID)` - fetch page details
+
+**Page template settings include:**
+- Page size (width, height, DPI)
+- Margins (top, right, bottom, left)
+- **Spread mode**: Wide image split into left/right pages
+- **Gutter settings**: Width and overlap for binding
+- **Image positioning**: Fill content area, absolute position, or snap to margins
 
 **Still outstanding:**
-- Page rendering flow (`PagesService.RenderPage`) — currently returns `ErrPageRendererNotImplemented`.
-- REST API + UI for page templates, laid-out pages, and zines.
-- End-to-end workflows once renderer/output exporters land.
+- `PageLayoutSettings` struct definition
+- Page rendering flow (`PagesService.RenderPage`) — currently returns `ErrPageRendererNotImplemented`
+- Spread rendering (split image with gutter calculations)
+- UI implementation for page templates, laid-out pages, and zines (REST API delivered)
+- Export with bleed and crop marks
+- End-to-end workflows once renderer lands
 
 ### Phase 4: Zine Export & Imposition
 
@@ -1441,6 +1577,32 @@ filepath.Join(projectsRoot, projectID, "images", filepath.Base(filename))
 ---
 
 ## Key Design Decisions
+
+### Why Three Separate Layout Stages? (Image → Page → Zine)
+
+**Rationale:**
+- **Image Layout**: Prepare the image (crop, scale, position) - produces a laid-out image
+- **Page Layout**: Place laid-out image on physical print page (margins, spreads, gutter) - produces a print page
+- **Zine Layout**: Assemble print pages into book (ordering, imposition) - produces final export
+
+**Why not combine them?**
+- **Separation of concerns**: Each stage has distinct settings and outputs
+- **Reusability**: Same laid-out image can be used on different page sizes
+- **Flexibility**: Different page templates (single vs spread) for same image
+- **Print-specific needs**: Page margins, bleed, crop marks are print concerns, not image concerns
+
+**Example Workflow:**
+1. Asset (4032×3024 photo) + Image Layout Template (8×10", 2:3 crop, fill) → Laid-Out Image (2400×3000 cropped)
+2. Laid-Out Image + Page Template (8.5×11" page, 0.5" margins) → Print Page (image on letter-size page)
+3. Print Page + Page Template (16×10" spread, 0.25" gutter) → Spread Print Page (wide image split L/R)
+4. Print Pages → Zine → Imposition → Final PDF
+
+**Spread Mode Explained:**
+- User creates wide laid-out image (e.g., 16×10" panorama)
+- Page template with spread mode = true
+- Gutter settings define center split and overlap
+- Rendering produces: left page, right page, combined spread
+- Each page overlaps into gutter for binding
 
 ### Why Separate Image Sequences from Layout Sequences?
 
@@ -1710,6 +1872,39 @@ zine-layout serve \
 | POST | `/api/layout-sequences/{id}/items` | Add item |
 | DELETE | `/api/layout-sequences/{id}/items/{pos}` | Delete item |
 
+### Page Template Routes
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/page-templates` | List global page templates |
+| POST | `/api/page-templates` | Create global page template |
+| GET | `/api/projects/{id}/page-templates` | List global + project page templates |
+| POST | `/api/projects/{id}/page-templates` | Create project page template |
+| GET | `/api/page-templates/{id}` | Get page template |
+| PATCH | `/api/page-templates/{id}` | Update page template |
+| DELETE | `/api/page-templates/{id}` | Delete page template |
+
+### Laid Out Page Routes
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/projects/{id}/laid-out-pages` | List laid-out pages in project |
+| POST | `/api/projects/{id}/laid-out-pages` | Create laid-out page |
+| GET | `/api/laid-out-pages/{id}` | Get laid-out page |
+| PATCH | `/api/laid-out-pages/{id}` | Update laid-out image used by page |
+| DELETE | `/api/laid-out-pages/{id}` | Delete laid-out page |
+| GET | `/api/laid-out-pages/{id}/preview` | (Stub) Preview rendered page |
+| GET | `/api/laid-out-pages/{id}/export` | (Stub) Export rendered page |
+
+### Zine Routes
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/projects/{id}/zines` | List zines in project |
+| POST | `/api/projects/{id}/zines` | Create zine |
+| GET | `/api/zines/{id}` | Get zine + pages |
+| PATCH | `/api/zines/{id}` | Update zine metadata |
+| DELETE | `/api/zines/{id}` | Delete zine |
+| GET | `/api/zines/{id}/pages` | List ordered laid-out pages |
+| PUT | `/api/zines/{id}/pages` | Replace zine page ordering |
+
 **Total:** 42 endpoints implemented (Phase 1 & 2)
 
 ---
@@ -1770,68 +1965,96 @@ zine-layout api <entity> <verb> [--flags]
 
 **Workflow Helpers (direct DB access, Phase 3 scaffolding):**
 - `workflow page-templates list|create|get|delete`
-- `workflow laid-out-pages create|list|get|set-inputs|delete`
+- `workflow laid-out-pages create|list|get|update-image|delete`
+  - **create**: `--project-id --template-id --laid-out-image-id` (single image per page)
+  - **update-image**: `--page-id --laid-out-image-id` (change which image)
 - `workflow zines create|list|get|set-pages|delete`
 
 **Total:** 38 API-oriented commands + 14 workflow helpers operational
 
 ---
 
-## Frontend Component Inventory (Phase 1 & 2)
+## Frontend Component Inventory (Phase 1 & 2 + UI Refactor)
 
-### Views
+### Views (Updated October 11, 2025)
 
-| Component | Route | Purpose |
-|-----------|-------|---------|
-| `Projects.tsx` | `/projects` | Project gallery, create new |
-| `ProjectDetail.tsx` | `/projects/:id` | Asset management, sequence editing |
-| `LayoutTemplateManager.tsx` | `/projects/:id/templates` | Browse/create/edit templates |
-| `LaidOutImageViewer.tsx` | `/projects/:id/laid-out-images` | Grid of computed layouts |
-| `LayoutSequenceEditor.tsx` | `/projects/:id/layout-sequences` | Order laid-out images |
+| Component | Route | Purpose | Status |
+|-----------|-------|---------|--------|
+| `Projects.tsx` | `/projects` | Project gallery, create new | ✅ Production |
+| `ProjectDetail.tsx` | `/projects/:id` | Tabbed workflow router | ✅ Refactored (673→125 lines) |
+| **Tabs (new):** | | | |
+| `AssetsTab.tsx` | `/projects/:id?tab=assets` | Upload and manage images | ✅ Production |
+| `SequencesTab.tsx` | `/projects/:id?tab=sequences` | Sequence builder with preview | ✅ Production |
+| `ImageLayoutsTab.tsx` | `/projects/:id?tab=image-layouts` | Template editor + layouts | ✅ Production w/ visual controls |
+| `PageLayoutsTab.tsx` | `/projects/:id?tab=page-layouts` | Page composition | 🔨 Dummy (Phase 3) |
+| `ZineTab.tsx` | `/projects/:id?tab=zine` | Zine assembly + export | 🔨 Dummy (Phase 3/4) |
+| *(Deprecated)* | | | |
+| `LayoutTemplateManager.tsx` | N/A | Replaced by ImageLayoutsTab | ⚠️ Kept for reference |
+| `LaidOutImageViewer.tsx` | N/A | Replaced by ImageLayoutsTab | ⚠️ Kept for reference |
+| `LayoutSequenceEditor.tsx` | N/A | Will integrate into ZineTab | ⚠️ Kept for reference |
 
 ### Reusable Components
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
+| `Tabs.tsx` | `components/ui/` | Context-based tab navigation |
+| `SliderInput.tsx` | `components/` | Dual slider + numeric input |
+| `AnchorGrid.tsx` | `components/` | 9-point positioning grid |
 | `ProjectAssetsPanel.tsx` | `components/ProjectAssetsPanel.tsx` | Upload, gallery, drag-and-drop |
 | `Card, Button, Input` | `components/ui/` | Reusable UI primitives |
 
 ---
 
-## Example User Journey (Complete Phase 1 & 2 Workflow)
+## Example User Journey (Complete Phase 1 & 2 Workflow with New UI)
 
-### Day 1: Upload & Organize
+### Day 1: Upload & Organize (Tab 1 & 2)
 1. User creates project "Summer Zine 2025"
-2. Uploads 50 PNG files via web UI
-3. Creates sequence "Best 20" 
-4. Drags 20 favorite assets into sequence
+2. **Assets Tab**: Uploads 50 PNG files via drag-and-drop
+3. **Sequences Tab**: Creates sequence "Best 20" 
+4. Drags 20 favorite assets into sequence builder
 5. Inserts gap at position 10 for spread break
-6. Reorders via drag-and-drop
+6. Reorders via drag-and-drop, watches in live preview panel
 
-### Day 2: Template Creation
-1. Opens Layout Template Manager
-2. Selects first asset from sequence
-3. Configures: 8×10" paper, 0.25" margins, crop to 2:3, fill
-4. Previews in real-time
-5. Saves as template "Portrait 2:3"
-6. Repeats for square variant: saves as "Square 1:1"
+### Day 2: Template Creation (Tab 3 - Image Layouts)
+1. **Image Layouts Tab** → Template Library section
+2. Clicks "+ Create Template"
+3. Uses visual form controls (NO JSON!):
+   - Paper size: 8×10"
+   - DPI slider: 300
+   - Orientation: Portrait
+   - Margins slider: 0.5" (uniform)
+   - Crop mode: Fill
+   - Aspect ratio: 2:3 (Portrait)
+   - Anchor: Middle Center
+4. Selects asset for live preview
+5. Sees real-time preview as adjusts sliders
+6. Saves as template "Portrait 2:3"
+7. Repeats for square variant: saves as "Square 1:1"
 
-### Day 3: Layout Application
-1. Navigates to Laid Out Images view
-2. Clicks "Apply Template to Sequence"
+### Day 3: Layout Application (Tab 3 - Image Layouts)
+1. Scrolls to "Laid-Out Images" section
+2. Uses "Batch Apply Template"
 3. Selects "Best 20" sequence + "Portrait 2:3" template
 4. Server creates 19 laid-out images (skips 1 gap)
-5. User reviews grid of previews
-6. Tweaks one image: adjusts `user_scale: 1.15`
-7. Clicks recompute → updates that one record
+5. User reviews grid of previews with thumbnails
+6. Clicks "Edit" on one image
+7. Adjusts user scale slider to 1.15
+8. Saves changes → layout recomputed
 
-### Day 4: Final Sequence
-1. Creates layout sequence "Final Book Order"
-2. Adds all 19 laid-out images
-3. Reorders to taste
-4. Exports preview slideshow
-5. **[Phase 3]:** Composes pages, builds zine
-6. **[Phase 4]:** Applies 8-page fold template, exports for print
+### Day 4: Print Pages & Zine Assembly **[Phase 3/4]**
+1. **Page Layouts Tab**: Creates page template
+   - 8.5×11" with 0.5" margins
+   - Or: 16×10" spread with 0.25" gutter
+2. Applies page template to laid-out images → Print pages
+3. **Zine Tab**: Creates zine "Summer Book Final"
+4. Adds print pages in order
+5. Selects imposition: 8-page fold
+6. Previews fold diagram
+7. Exports as print-ready PDF
+
+**Current Status (October 11, 2025):**
+- Days 1-3: ✅ **Fully functional with new tabbed UI**
+- Day 4: 🔨 **Dummy UI ready, awaiting Phase 3/4 backend**
 
 ---
 
@@ -1962,12 +2185,80 @@ curl -X POST http://localhost:8088/api/projects/prj-.../laid-out-images \
 
 ---
 
+## Recent Updates (October 11, 2025)
+
+### UI Refactor: Tabbed Workflow Interface
+
+**Status:** ✅ Complete
+
+Transformed the frontend from a single-page vertical stack into a professional tabbed interface:
+
+**New Tab Structure:**
+- **Tab 1: Assets** (📁) - Upload and manage images with gallery view
+- **Tab 2: Sequences** (🔢) - Split-view sequence builder with live preview
+- **Tab 3: Image Layouts** (🖼️) - Visual template editor (NO MORE JSON!) + laid-out images
+- **Tab 4: Page Layouts** (📄) - Page composition (dummy UI for Phase 3)
+- **Tab 5: Zine** (📚) - Zine assembly and export (dummy UI for Phase 3/4)
+
+**Key Improvements:**
+- ✅ Visual form controls replace JSON editing (sliders, dropdowns, grids)
+- ✅ Live previews in template editors
+- ✅ URL-based tab state (`?tab=assets`) for bookmarkable workflows
+- ✅ 81% reduction in main component size (673 → 125 lines)
+- ✅ Zero TypeScript errors, production build succeeds
+- ✅ Bundle: 330.13 kB (97.46 kB gzipped)
+
+**Documentation:**
+- See `ttmp/2025-10-10/10-ui-design-for-the-zine-photo-layout-software.md` for complete UI spec
+- See `ttmp/2025-10-11/11-changelog-and-things-we-learned.md` for implementation details
+
+### Page Layouts Model Correction
+
+**Status:** ✅ Complete
+
+Corrected the page layouts concept based on reference code analysis:
+
+**Previous (incorrect):**
+- Multiple laid-out images per page
+- `laid_out_page_inputs` table for image slots
+- Complex multi-image composition
+
+**Current (correct):**
+- **ONE laid-out image per page** (or spread)
+- Direct `laid_out_image_id` column in `laid_out_pages`
+- **Spread mode**: Wide image split into left/right pages with gutter overlap
+- Three positioning modes: fill content area, absolute position, snap to margins
+
+**Updated Components:**
+- Schema: Added `laid_out_image_id`, removed `laid_out_page_inputs` table
+- Types: Simplified `LaidOutPage`, removed `LaidOutPageInput`
+- Repository: Removed `SetInputs`/`GetInputs` methods
+- Service: `CreatePage(projectID, templateID, imageID)` - single image
+- CLI: Commands now use `--laid-out-image-id`, renamed `set-inputs` to `update-image`
+
+**Documentation:**
+- See `ttmp/2025-10-11/12-page-layout-tab-design.md` for detailed page layouts design
+- All references updated in system spec, expansion plan, and UI design docs
+
+---
+
 ## Conclusion
 
-**Status:** Foundation complete. The system supports end-to-end workflows from image upload through template application and layout sequence management.
+**Status:** Foundation complete. The system supports end-to-end workflows from image upload through template application and layout sequence management. **UI dramatically improved** with tabbed interface and visual controls.
 
-**Ready for:** Phase 3 (page composition) and Phase 4 (print export).
+**Production Ready (October 11, 2025):**
+- ✅ Phase 1: Projects + Assets + Sequences (backend + frontend)
+- ✅ Phase 2: Image Layout Templates + Laid-Out Images (backend + frontend with visual controls)
+- ✅ Tabbed UI with 5 workflow-oriented tabs
+- ✅ Visual form controls throughout (no more JSON editing)
+- ✅ Live previews in all template editors
 
-**Stable interfaces:** API routes, database schema, and CLI commands are production-ready and versioned.
+**Ready for:** Phase 3 (page composition with corrected model) and Phase 4 (print export with imposition).
 
-**Next milestone:** Implement page templates and zine assembly to complete the authoring workflow.
+**Stable interfaces:** API routes, database schema (corrected for page layouts), CLI commands, and frontend tabs are production-ready.
+
+**Next milestone:** 
+1. Build page rendering service (with spread/gutter support)
+2. Rewrite PageLayoutsTab with visual controls powered by new API hooks
+3. Implement Zine tab UI + workflows on top of REST endpoints
+4. Complete export pipeline with imposition and PDF generation

@@ -34,6 +34,8 @@ type Server struct {
 	db           *sql.DB
 	repos        *repo.Repositories
 	layout       *services.LayoutService
+	pages        *services.PagesService
+	zines        *services.ZinesService
 }
 
 // New constructs a Server with the provided settings.
@@ -111,6 +113,8 @@ func (s *Server) initDatabase() error {
 	s.db = db
 	s.repos = repos
 	s.layout = services.NewLayoutService(repos)
+	s.pages = services.NewPagesService(repos)
+	s.zines = services.NewZinesService(repos)
 	return nil
 }
 
@@ -141,6 +145,19 @@ func (s *Server) Routes() http.Handler {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 	mux.HandleFunc("/api/layout-sequences/", s.handleLayoutSequenceRoutes)
+
+	mux.HandleFunc("/api/page-templates", s.handlePageTemplates)
+	mux.HandleFunc("/api/page-templates/", s.handlePageTemplateRoutes)
+
+	mux.HandleFunc("/api/laid-out-pages", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/laid-out-pages/", s.handleLaidOutPageRoutes)
+
+	mux.HandleFunc("/api/zines", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/zines/", s.handleZineRoutes)
 
 	// Serve project files (images) under /projects/{id}/...
 	projectFiles := http.StripPrefix("/projects/", http.FileServer(http.Dir(s.projectsRoot)))
@@ -184,6 +201,8 @@ func (s *Server) close() {
 	}
 	s.repos = nil
 	s.layout = nil
+	s.pages = nil
+	s.zines = nil
 }
 
 // HTTP handlers ----------------------------------------------------------------

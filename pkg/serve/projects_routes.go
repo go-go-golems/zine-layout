@@ -118,6 +118,24 @@ func (s *Server) handleProjectRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.handleProjectLayoutSequences(w, r, projectID)
+	case "page-templates":
+		if len(parts) != 2 {
+			http.NotFound(w, r)
+			return
+		}
+		s.handleProjectPageTemplates(w, r, projectID)
+	case "laid-out-pages":
+		if len(parts) != 2 {
+			http.NotFound(w, r)
+			return
+		}
+		s.handleProjectLaidOutPages(w, r, projectID)
+	case "zines":
+		if len(parts) != 2 {
+			http.NotFound(w, r)
+			return
+		}
+		s.handleProjectZines(w, r, projectID)
 	default:
 		http.NotFound(w, r)
 	}

@@ -95,6 +95,47 @@ type layoutSequenceItemResponse struct {
 	LaidOutImageID string `json:"laid_out_image_id"`
 }
 
+// Page template responses ----------------------------------------------------
+
+type pageTemplateResponse struct {
+	ID          string         `json:"id"`
+	ProjectID   *string        `json:"project_id,omitempty"`
+	Scope       string         `json:"scope"`
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Template    map[string]any `json:"template"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+// Laid-out page responses ----------------------------------------------------
+
+type laidOutPageResponse struct {
+	ID             string         `json:"id"`
+	ProjectID      string         `json:"project_id"`
+	PageTemplateID string         `json:"page_template_id"`
+	LaidOutImageID string         `json:"laid_out_image_id"`
+	Result         map[string]any `json:"result,omitempty"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+}
+
+// Zine responses -------------------------------------------------------------
+
+type zineResponse struct {
+	ID          string    `json:"id"`
+	ProjectID   string    `json:"project_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type zinePageResponse struct {
+	Position      int    `json:"position"`
+	LaidOutPageID string `json:"laid_out_page_id"`
+}
+
 // Response helpers ------------------------------------------------------------
 
 func projectToResponse(p *repo.Project) projectResponse {
@@ -217,6 +258,69 @@ func layoutSequenceItemsToResponse(items []*repo.LayoutSequenceItem) []layoutSeq
 		resp = append(resp, layoutSequenceItemResponse{
 			Position:       item.Position,
 			LaidOutImageID: item.LaidOutImageID,
+		})
+	}
+	return resp
+}
+
+func pageTemplateToResponse(tpl *repo.PageTemplate) pageTemplateResponse {
+	scope := "project"
+	if tpl.ProjectID == nil || *tpl.ProjectID == "" {
+		scope = "global"
+	}
+	template := map[string]any{}
+	if strings.TrimSpace(tpl.TemplateJSON) != "" {
+		_ = json.Unmarshal([]byte(tpl.TemplateJSON), &template)
+	}
+	return pageTemplateResponse{
+		ID:          tpl.ID,
+		ProjectID:   tpl.ProjectID,
+		Scope:       scope,
+		Name:        tpl.Name,
+		Description: tpl.Description,
+		Template:    template,
+		CreatedAt:   tpl.CreatedAt,
+		UpdatedAt:   tpl.UpdatedAt,
+	}
+}
+
+func laidOutPageToResponse(page *repo.LaidOutPage) (*laidOutPageResponse, error) {
+	var result map[string]any
+	if page.ResultJSON != nil {
+		if text := strings.TrimSpace(*page.ResultJSON); text != "" {
+			if err := json.Unmarshal([]byte(text), &result); err != nil {
+				return nil, fmt.Errorf("decode laid-out page result: %w", err)
+			}
+		}
+	}
+	return &laidOutPageResponse{
+		ID:             page.ID,
+		ProjectID:      page.ProjectID,
+		PageTemplateID: page.PageTemplateID,
+		LaidOutImageID: page.LaidOutImageID,
+		Result:         result,
+		CreatedAt:      page.CreatedAt,
+		UpdatedAt:      page.UpdatedAt,
+	}, nil
+}
+
+func zineToResponse(z *repo.Zine) zineResponse {
+	return zineResponse{
+		ID:          z.ID,
+		ProjectID:   z.ProjectID,
+		Name:        z.Name,
+		Description: z.Description,
+		CreatedAt:   z.CreatedAt,
+		UpdatedAt:   z.UpdatedAt,
+	}
+}
+
+func zinePagesToResponse(pages []*repo.ZinePage) []zinePageResponse {
+	resp := make([]zinePageResponse, 0, len(pages))
+	for _, page := range pages {
+		resp = append(resp, zinePageResponse{
+			Position:      page.Position,
+			LaidOutPageID: page.LaidOutPageID,
 		})
 	}
 	return resp

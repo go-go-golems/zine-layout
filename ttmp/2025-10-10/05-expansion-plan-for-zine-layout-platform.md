@@ -1802,7 +1802,7 @@ echo "✓ All tests passed"
   - `CreateZine(projectID, name, pageIDs)` – creates zine record and page ordering
   - `AddPageToZine(zineID, pageID, position)` – insert page at position
   - `ReorderZinePages(zineID, pageIDs)` – update page order
-- [ ] 3.6 Add REST endpoints in `pkg/serve/server.go`
+- [x] 3.6 Add REST endpoints in `pkg/serve/server.go`
   - `/api/projects/{id}/page-templates` (list, create)
   - `/api/page-templates` (list global templates)
   - `/api/page-templates/{id}` (get, update, delete)
@@ -1815,6 +1815,7 @@ echo "✓ All tests passed"
   - `/api/projects/{id}/zines` (list, create)
   - `/api/zines/{id}` (get, update, delete)
   - `/api/zines/{id}/pages` (get, set order)
+  - ✅ Implemented in `pkg/serve/page_templates_routes.go`, `pkg/serve/laid_out_pages_routes.go`, `pkg/serve/zines_routes.go`, and wired through `pkg/serve/server.go` (documented in changelog 2025-10-11T05:10Z).
 
 **CLI:**
 - [x] 3.7 Add Glazed commands
@@ -1825,9 +1826,10 @@ echo "✓ All tests passed"
   - Added `zine-layout workflow zines` (create, list, get, set-pages, delete)
 
 **Frontend:**
-- [ ] 3.8 Extend `web/src/api.ts`
+- [x] 3.8 Extend `web/src/api.ts`
   - Add types: `PageTemplate`, `LaidOutPage` (with laid_out_image_id), `Zine`
   - Add all CRUD endpoints
+  - ✅ Implemented via new RTK Query slices and type definitions in `web/src/api.ts`; see changelog 2025-10-11T05:10Z for context.
 - [ ] 3.9 Build `web/src/views/tabs/PageLayoutsTab.tsx` (rewrite current dummy)
   - Section 1: Page template library with visual editor
     - Page size, margins, spread mode, gutter settings
