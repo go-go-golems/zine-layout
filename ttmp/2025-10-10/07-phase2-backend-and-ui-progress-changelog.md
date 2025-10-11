@@ -191,3 +191,26 @@
 - Mirror the new CLI capabilities in forthcoming REST handlers and frontend views.
 
 ---
+
+## 2025-10-11T04:25Z – Workflow CLI Smoke Tests & Imagelayout Check
+- Exercised the new workflow verbs against a fresh `tmp-workflow-test` data root:
+  - Created a global page template (`ptpl-…`), laid-out page (`lpg-…`), and single-page zine (`zne-…`), confirming list/get/set/delete flows across page and zine services.
+  - Observed FK requirements (manual `projects` seed via sqlite3) and ensured schema migrations no longer drop tables on startup.
+- Ran `go run ./cmd/zine-layout imagelayout compute` with explicit flags—placement math returns expected crop/cover results and diagnostic trace.
+- Noticed that `--spec` alone still yields “canvas dimensions must be positive”; YAML deserialization isn’t populating the settings struct yet (likely missing field tags). Added this to the follow-up list.
+
+### What Worked
+- Workflow commands produce tidy tabular/JSON output and provide a practical harness while REST/UI remain unfinished.
+- Layout engine continues to match expectations for cover/contain scenarios when inputs are provided via flags.
+
+### What Didn't Work
+- Imagelayout spec parsing ignores YAML settings, forcing manual flag overrides.
+
+### What I Learned
+- Having repo-level CLI verbs is invaluable for quick regression checks; keeping a scratch data root avoids polluting main workspace assets.
+
+### Attention Points
+- Patch the imagelayout spec loader with proper YAML tags so CLI specs work out-of-the-box.
+- Consider adding workflow verbs for seeding projects/assets to avoid manual sqlite3 scripting during tests.
+
+---

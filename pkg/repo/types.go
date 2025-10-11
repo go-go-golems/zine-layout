@@ -83,6 +83,51 @@ type LayoutSequenceItem struct {
 	LaidOutImageID string
 }
 
+// PageTemplate defines how laid-out images should be composed on a page.
+type PageTemplate struct {
+	ID           string
+	ProjectID    *string
+	Name         string
+	Description  string
+	TemplateJSON string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// LaidOutPage represents a concrete page instantiated from a template and inputs.
+type LaidOutPage struct {
+	ID             string
+	ProjectID      string
+	PageTemplateID string
+	ResultJSON     *string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// LaidOutPageInput associates a laid-out image with a page input slot.
+type LaidOutPageInput struct {
+	PageID         string
+	InputIndex     int
+	LaidOutImageID string
+}
+
+// Zine represents an ordered collection of laid-out pages.
+type Zine struct {
+	ID          string
+	ProjectID   string
+	Name        string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// ZinePage connects a laid-out page to its position within a zine.
+type ZinePage struct {
+	ZineID        string
+	Position      int
+	LaidOutPageID string
+}
+
 // ProjectRepository manages project metadata persistence.
 type ProjectRepository interface {
 	Create(project *Project) error
@@ -149,6 +194,40 @@ type LayoutSequenceRepository interface {
 	DeleteItem(sequenceID string, position int) error
 }
 
+// PageTemplateRepository manages reusable page composition templates.
+type PageTemplateRepository interface {
+	Create(tpl *PageTemplate) error
+	Update(tpl *PageTemplate) error
+	Get(id string) (*PageTemplate, error)
+	ListGlobal() ([]*PageTemplate, error)
+	ListByProject(projectID string) ([]*PageTemplate, error)
+	Delete(id string) error
+}
+
+// LaidOutPageRepository persists composed pages and their input mapping.
+type LaidOutPageRepository interface {
+	Create(page *LaidOutPage) error
+	Update(page *LaidOutPage) error
+	Get(id string) (*LaidOutPage, error)
+	ListByProject(projectID string) ([]*LaidOutPage, error)
+	Delete(id string) error
+
+	SetInputs(pageID string, inputs []*LaidOutPageInput) error
+	GetInputs(pageID string) ([]*LaidOutPageInput, error)
+}
+
+// ZineRepository manages ordered collections of laid-out pages.
+type ZineRepository interface {
+	Create(zine *Zine) error
+	Update(zine *Zine) error
+	Get(id string) (*Zine, error)
+	ListByProject(projectID string) ([]*Zine, error)
+	Delete(id string) error
+
+	SetPages(zineID string, pages []*ZinePage) error
+	GetPages(zineID string) ([]*ZinePage, error)
+}
+
 // Repositories aggregates all persistence adapters.
 type Repositories struct {
 	Projects             ProjectRepository
@@ -157,4 +236,7 @@ type Repositories struct {
 	ImageLayoutTemplates ImageLayoutTemplateRepository
 	LaidOutImages        LaidOutImageRepository
 	LayoutSequences      LayoutSequenceRepository
+	PageTemplates        PageTemplateRepository
+	LaidOutPages         LaidOutPageRepository
+	Zines                ZineRepository
 }

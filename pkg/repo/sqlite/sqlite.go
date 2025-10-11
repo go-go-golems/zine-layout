@@ -41,6 +41,9 @@ func NewRepositories(db *sql.DB) (*repo.Repositories, error) {
 	layoutTemplates := &imageLayoutTemplateRepo{db: db}
 	laidOutImages := &laidOutImageRepo{db: db}
 	layoutSequences := &layoutSequenceRepo{db: db}
+	pageTemplates := &pageTemplateRepo{db: db}
+	laidOutPages := &laidOutPageRepo{db: db}
+	zines := &zineRepo{db: db}
 
 	return &repo.Repositories{
 		Projects:             projects,
@@ -49,6 +52,9 @@ func NewRepositories(db *sql.DB) (*repo.Repositories, error) {
 		ImageLayoutTemplates: layoutTemplates,
 		LaidOutImages:        laidOutImages,
 		LayoutSequences:      layoutSequences,
+		PageTemplates:        pageTemplates,
+		LaidOutPages:         laidOutPages,
+		Zines:                zines,
 	}, nil
 }
 

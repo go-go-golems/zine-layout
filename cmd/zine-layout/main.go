@@ -81,6 +81,10 @@ func main() {
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(imagelayoutCmd)
 
+	workflowCmd, err := cmds.NewWorkflowCommand()
+	cobra.CheckErr(err)
+	rootCmd.AddCommand(workflowCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal().Err(err).Msg("Error executing root command")
 	}

@@ -56,8 +56,9 @@ The project detail page now uses a **horizontal tab bar** to organize the workfl
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌─────┐ ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐           │
-│  │ 📁  │ │  🔢     │ │  📐      │ │  🖼️      │ │  📚     │           │
-│  │Assets│ │Sequences│ │Templates │ │  Layouts │ │ Output  │           │
+│  │ 📁  │ │  🔢     │ │  🖼️      │ │  📄      │ │  📚     │           │
+│  │Assets│ │Sequences│ │  Image   │ │   Page   │ │  Zine   │           │
+│  │     │ │         │ │ Layouts  │ │ Layouts  │ │         │           │
 │  └─────┘ └─────────┘ └──────────┘ └──────────┘ └─────────┘           │
 │    (1)       (2)         (3)          (4)          (5)                │
 │                                                                         │
@@ -69,9 +70,9 @@ The project detail page now uses a **horizontal tab bar** to organize the workfl
 
 1. **Assets** (📁): Upload and manage raw images
 2. **Sequences** (🔢): Organize images into ordered collections
-3. **Templates** (📐): Create and manage layout templates
-4. **Layouts** (🖼️): Apply templates to assets to create laid-out images
-5. **Output** (📚): Organize laid-out images into layout sequences and export
+3. **Image Layouts** (🖼️): Create layout templates and apply them to assets
+4. **Page Layouts** (📄): Multi-image page composition *(Phase 3 - Placeholder)*
+5. **Zine** (📚): Zine assembly and export *(Phase 3 - Placeholder)*
 
 ---
 
@@ -231,17 +232,22 @@ Organize assets into named, ordered collections. Drag-and-drop interface for seq
 
 ---
 
-## Tab 3: Templates Tab
+## Tab 3: Image Layouts Tab
 
 ### Purpose
-Create and manage reusable layout templates with visual form controls instead of raw JSON. Preview templates on sample images.
+Create reusable layout templates and apply them to assets to generate laid-out images. This combines template management with the production workflow in a single, cohesive interface.
 
 ### Layout
 
+This tab has two main sections: **Template Library** (top) and **Laid-Out Images** (bottom), providing a complete workflow from template creation to image production.
+
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│  Layout Templates                                    [+ Create Template]│
+│  Image Layouts                                                          │
 ├────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ═══ SECTION 1: Layout Templates ═══                                   │
+│                                                                         │
 │                                                                         │
 │  ┌─ Template Library ──────────────────────────────────────────────┐  │
 │  │                                                                   │  │
@@ -405,14 +411,28 @@ Create and manage reusable layout templates with visual form controls instead of
 │  │  │  │                      │  │                           │ │  │   │
 ```
 
----
+│                                                                         │
+│  ═══ SECTION 2: Laid-Out Images ═══                                    │
+│                                                                         │
+```
 
-## Tab 4: Layouts Tab
+### Section 1: Template Library
 
-### Purpose
-Apply templates to assets to create laid-out images. This is the core production step. Shows asset-template pairings with visual previews.
+**Purpose:** Manage reusable layout templates with visual form controls.
 
-### Layout
+**Features:**
+- Card-based template library with visual indicators
+- Filter by scope: All, Global, Project
+- Visual form controls instead of JSON
+- Live preview pane showing sample asset with template applied
+- Preset paper sizes and aspect ratios
+- Advanced settings collapsible section
+
+See Template Editor Modal design in the full layout below.
+
+### Section 2: Laid-Out Images
+
+**Purpose:** Apply templates to assets to create laid-out images. Shows asset-template pairings with visual previews.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -569,110 +589,141 @@ Apply templates to assets to create laid-out images. This is the core production
 
 ---
 
-## Tab 5: Output Tab
+## Tab 4: Page Layouts Tab *(Phase 3 - Placeholder)*
 
 ### Purpose
-Organize laid-out images into layout sequences for export. Final step before generating print files or page compositions.
+Compose multi-image pages using page templates. Select a page template (e.g., 2-up, 4-up grid) and assign laid-out images to slots.
+
+### Placeholder Design
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│  Page Layouts                                        [+ Create Page]    │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─ Page Templates ──────────────────────────────────────────────────┐ │
+│  │                                                                     │ │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐          │ │
+│  │  │ Single   │  │ 2-Up     │  │ 4-Up     │  │ Custom   │          │ │
+│  │  │ Image    │  │ Spread   │  │ Grid     │  │ Grid     │          │ │
+│  │  │ [  📄  ] │  │ [ 📄📄 ] │  │ [📄📄] │  │ [ ⊞ ]    │          │ │
+│  │  │          │  │          │  │ [📄📄] │  │          │          │ │
+│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘          │ │
+│  │                                                                     │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                         │
+│  ┌─ Composed Pages ──────────────────────────────────────────────────┐  │
+│  │                                                                     │  │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐                         │  │
+│  │  │┌────────┐│  │┌────────┐│  │┌────────┐│                         │  │
+│  │  ││Page    ││  ││Page    ││  ││Page    ││                         │  │
+│  │  ││Preview ││  ││Preview ││  ││Preview ││                         │  │
+│  │  │└────────┘│  │└────────┘│  │└────────┘│                         │  │
+│  │  │ Page 1   │  │ Page 2   │  │ Page 3   │                         │  │
+│  │  │ 2-Up     │  │ Single   │  │ 4-Up     │                         │  │
+│  │  │ [Edit]   │  │ [Edit]   │  │ [Edit]   │                         │  │
+│  │  └──────────┘  └──────────┘  └──────────┘                         │  │
+│  │                                                                     │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│  Coming in Phase 3                                                     │
+│  • Select page template (1-up, 2-up, 4-up, custom grids)             │
+│  • Drag laid-out images into page slots                               │
+│  • Preview complete page composition                                   │
+│  • Save as laid-out page                                               │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Features (Planned)
+
+- **Page template selector** with common presets
+- **Drag-and-drop** laid-out images into page slots
+- **Visual page composer** showing final page layout
+- **Grid customization** for custom slot arrangements
+- **Preview rendering** of complete pages
+
+---
+
+## Tab 5: Zine Tab *(Phase 3 - Placeholder)*
+
+### Purpose
+Assemble pages into complete zines, manage page order, and export for print. Final production step.
 
 ### Layout
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│  Layout Sequences & Export                          [+ New Sequence]   │
+│  Zines                                              [+ Create Zine]     │
 ├────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  ┌─ Layout Sequence Selector ──────────────────────────────────────┐  │
-│  │                                                                   │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  [+]      │  │
-│  │  │● Final Book  │  │  Proofs      │  │  Alternate   │           │  │
-│  │  │  Order       │  │  v1          │  │  Layout      │           │  │
-│  │  │  (18 images) │  │  (20 images) │  │  (15 images) │           │  │
-│  │  └──────────────┘  └──────────────┘  └──────────────┘           │  │
-│  │  Selected                                                         │  │
-│  │                                                                   │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
+│  ┌─ Zine Selector ────────────────────────────────────────────────────┐ │
+│  │                                                                     │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐            │ │
+│  │  │● Summer      │  │  Draft       │  │  Alternate   │            │ │
+│  │  │  Photobook   │  │  v2          │  │  Layout      │            │ │
+│  │  │  (24 pages)  │  │  (18 pages)  │  │  (20 pages)  │            │ │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘            │ │
+│  │  Selected                                                          │ │
+│  │                                                                     │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │  Final Book Order                        [✎ Edit] [🗑️ Delete]   │  │
-│  │  Ready for print export                                          │  │
-│  │  Updated Oct 11, 2025 5:45 PM                                    │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
+│  ┌─ Zine Pages ───────────────────────────────────────────────────────┐ │
+│  │                                                                     │ │
+│  │  ┌────┐  ┌────┐  ┌────┐  ┌────┐  ┌────┐  ┌────┐                 │ │
+│  │  │ P1 │  │ P2 │  │ P3 │  │ P4 │  │ P5 │  │ P6 │  ...            │ │
+│  │  │ ▭  │  │ ▭  │  │ ▭▭ │  │ ▭▭ │  │ ▭  │  │ ▭  │                 │ │
+│  │  └────┘  └────┘  └────┘  └────┘  └────┘  └────┘                 │ │
+│  │  Cover   Title   Spread  Spread  Photo  Photo                     │ │
+│  │                                                                     │ │
+│  │  Drag to reorder • Click to preview                               │ │
+│  │                                                                     │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
-│  ┌─── Three-Column Layout ─────────────────────────────────────────┐  │
-│  │                          │                          │            │  │
-│  │  ┌─ Items ────────────┐ │ ┌─ Preview ───────────┐ │ ┌─ Export ┐ │  │
-│  │  │                     │ │ │                     │ │ │         │ │  │
-│  │  │  [1] ┌───┐         │ │ │   ┌──────────────┐  │ │ │ Export  │ │  │
-│  │  │      │img│ loi-01  │ │ │   │              │  │ │ │ Options │ │  │
-│  │  │      └───┘         │ │ │   │              │  │ │ │         │ │  │
-│  │  │      [↑][↓][✕]     │ │ │   │   Current    │  │ │ │ Format: │ │  │
-│  │  │                     │ │ │   │   Laid-Out   │  │ │ │ [PNG ▾] │ │  │
-│  │  │  [2] ┌───┐         │ │ │   │   Image      │  │ │ │         │ │  │
-│  │  │      │img│ loi-07  │ │ │   │   Preview    │  │ │ │ DPI:    │ │  │
-│  │  │      └───┘         │ │ │   │              │  │ │ │ [300]   │ │  │
-│  │  │      [↑][↓][✕]     │ │ │   │              │  │ │ │         │ │  │
-│  │  │                     │ │ │   │              │  │ │ │ Quality:│ │  │
-│  │  │  [3] ┌───┐         │ │ │   └──────────────┘  │ │ │ [90%]   │ │  │
-│  │  │      │img│ loi-12  │ │ │                     │ │ │         │ │  │
-│  │  │      └───┘         │ │ │  Item 2 of 18      │ │ │ Include:│ │  │
-│  │  │      [↑][↓][✕]     │ │ │                     │ │ │ [✓]Crop │ │  │
-│  │  │                     │ │ │  loi-07             │ │ │    marks│ │  │
-│  │  │  ⋮                  │ │ │  8×10 Portrait      │ │ │ [✓]Bleed│ │  │
-│  │  │                     │ │ │  from img07.png     │ │ │         │ │  │
-│  │  │  [18] ┌───┐        │ │ │                     │ │ │ Output: │ │  │
-│  │  │       │img│ loi-45 │ │ │  [◀ Prev] [Next ▶] │ │ │ ◉ ZIP   │ │  │
-│  │  │       └───┘        │ │ │                     │ │ │ ○ Folder│ │  │
-│  │  │       [↑][↓][✕]    │ │ │  [Export This]      │ │ │         │ │  │
-│  │  │                     │ │ │                     │ │ │ [Export │ │  │
-│  │  │ Drop laid-out      │ │ │                     │ │ │ All 18] │ │  │
-│  │  │ images here        │ │ │                     │ │ │         │ │  │
-│  │  │                     │ │ │                     │ │ │ Preview │ │  │
-│  │  │ [Add Laid-Out Img] │ │ │                     │ │ │ Export: │ │  │
-│  │  │                     │ │ │                     │ │ │         │ │  │
-│  │  └─────────────────────┘ │ └─────────────────────┘ │ │ final-  │ │  │
-│  │                          │                          │ │ book-01 │ │  │
-│  │                          │                          │ │ .png    │ │  │
-│  │                          │                          │ │ final-  │ │  │
-│  │                          │                          │ │ book-02 │ │  │
-│  │                          │                          │ │ .png    │ │  │
-│  │                          │                          │ │ ...     │ │  │
-│  │                          │                          │ │         │ │  │
-│  │                          │                          │ └─────────┘ │  │
-│  └──────────────────────────┴──────────────────────────┴────────────┘  │
+│  ┌─ Imposition & Export ─────────────────────────────────────────────┐  │
+│  │                                                                     │  │
+│  │  Imposition Template: [8-Page Fold ▾]                             │  │
+│  │                                                                     │  │
+│  │  ┌─────────────────────────────────────────────────────────────┐  │  │
+│  │  │  [ Preview of folded layout ]                                │  │  │
+│  │  │                                                               │  │  │
+│  │  │    8    1                  Shows how pages will be           │  │  │
+│  │  │            →  fold  →      arranged when printed             │  │  │
+│  │  │    2    7                  and folded                         │  │  │
+│  │  │                                                               │  │  │
+│  │  └─────────────────────────────────────────────────────────────┘  │  │
+│  │                                                                     │  │
+│  │  Export Format: ◉ PDF  ○ PNG Sequence  ○ Print-Ready ZIP         │  │
+│  │                                                                     │  │
+│  │  [✓] Include crop marks    [✓] Include bleed                      │  │
+│  │  [✓] Embed color profile   [ ] Flatten layers                     │  │
+│  │                                                                     │  │
+│  │  [Preview Export]  [Download Zine]                                │  │
+│  │                                                                     │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│  Coming in Phase 4                                                     │
+│  • Create zine from laid-out pages                                    │
+│  • Reorder pages for final book sequence                              │
+│  • Apply imposition templates (8-page fold, 16-page booklet)         │
+│  • Export print-ready PDF or image sequence                           │
+│  • Preview folded/bound result                                        │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Features
+### Key Features (Planned)
 
-- **Three-column layout**:
-  - Left: Sequence items list with reorder controls
-  - Center: Large preview of current item
-  - Right: Export options and controls
-- **Drag-and-drop** laid-out images from Layouts tab
-- **Reorder controls**: Up/down buttons or drag
-- **Preview navigation**: Prev/Next buttons to browse sequence
+- **Zine selector** for managing multiple books
+- **Page sequence editor** with drag-and-drop reordering
+- **Imposition template selector** (8-page fold, 16-page booklet, etc.)
+- **Visual imposition preview** showing how pages map to print sheets
 - **Export options**:
-  - Format: PNG, JPEG, TIFF
-  - DPI setting
-  - Quality slider
-  - Crop marks toggle
-  - Bleed toggle
-  - Output as ZIP or folder
-- **Batch export**: Export entire sequence at once
-- **Individual export**: Export single item
-- **Filename preview**: Shows what exported files will be named
-- **Progress indicator** when exporting
-
-### Behavior
-
-- Select sequence → loads items and first preview
-- Click item in list → shows in preview pane
-- Drag laid-out image from Layouts tab → adds to end of sequence
-- Reorder items → updates sequence order
-- Click "Export All" → generates all images, packages as ZIP
-- Click "Export This" → downloads single image
-- Progress bar shows during export operations
+  - PDF with crop marks and bleed
+  - PNG sequence for online viewing
+  - Print-ready ZIP with multiple sheets
+- **Page thumbnail preview** in sequence order
+- **Print preview mode** showing spreads as they'll appear when bound
 
 ---
 
@@ -978,8 +1029,9 @@ Cards stack vertically, actions move to bottom:
    - Reorders items via drag-and-drop
    - Inserts gaps for spreads
 
-3. **Create Template** (Templates Tab)
-   - User clicks "+ Create Template"
+3. **Create Template & Apply** (Image Layouts Tab)
+   - User scrolls to Template Library section
+   - Clicks "+ Create Template"
    - Names it "8×10 Portrait Crop"
    - Adjusts settings with visual controls:
      - Paper: 8×10"
@@ -988,46 +1040,42 @@ Cards stack vertically, actions move to bottom:
      - Crop: Fill, 2:3 ratio
    - Previews on sample image
    - Saves template
-
-4. **Generate Layouts** (Layouts Tab)
-   - User selects "Summer Book Final" sequence
+   - Scrolls to Laid-Out Images section
+   - Selects "Summer Book Final" sequence
    - Selects "8×10 Portrait Crop" template
    - Clicks "Apply to All 20 Images"
    - System processes batch (shows progress)
    - Grid populates with laid-out images
 
-5. **Fine-Tune Layouts** (Layouts Tab)
-   - User clicks "Edit" on specific image
+4. **Fine-Tune Layouts** (Image Layouts Tab)
+   - User clicks "Edit" on specific laid-out image
    - Adjusts scale slider to 1.2×
    - Nudges position slightly
    - Sees live preview update
    - Saves changes
 
-6. **Create Output Sequence** (Output Tab)
-   - User clicks "+ New Sequence"
-   - Names it "Final Print Order"
-   - Drags laid-out images from Layouts tab
-   - Reorders to final book order
-   - Previews each page
+5. **Compose Pages** (Page Layouts Tab - *Phase 3*)
+   - User selects page template (e.g., 2-up spread)
+   - Drags laid-out images into page slots
+   - Previews complete page
+   - Saves as laid-out page
+   - Repeats for all pages
 
-7. **Export** (Output Tab)
-   - User selects export options:
-     - Format: PNG
-     - DPI: 300
-     - Include crop marks
-   - Clicks "Export All 20"
-   - System generates files
-   - Downloads as ZIP
+6. **Assemble Zine** (Zine Tab - *Phase 3/4*)
+   - User creates new zine
+   - Adds laid-out pages in order
+   - Applies imposition template (8-page fold)
+   - Previews folding/binding
+   - Exports print-ready PDF
 
 **Total time:** ~15 minutes for 20 images (after initial setup)
 
 ### Workflow 2: Quick Template Test
 
 1. **Upload Test Image** (Assets Tab)
-2. **Create Template** (Templates Tab) - adjust settings, preview
-3. **Apply to Image** (Layouts Tab) - quick create
-4. **Review** - check preview
-5. **Export** - download single image
+2. **Create & Apply Template** (Image Layouts Tab) - adjust settings, preview, apply to single asset
+3. **Review Preview** - check computed layout
+4. **Download** - export single image *(when export is implemented)*
 
 **Total time:** ~2 minutes
 
@@ -1035,8 +1083,8 @@ Cards stack vertically, actions move to bottom:
 
 1. **Upload Images** (Assets Tab)
 2. **Create Sequence** (Sequences Tab) - optional, can apply directly
-3. **Batch Apply** (Layouts Tab) - select existing template, apply to all
-4. **Export** (Output Tab) - organize and export
+3. **Batch Apply** (Image Layouts Tab) - select existing template, apply to all
+4. **Review & Export** - preview results, export as needed
 
 **Total time:** ~5 minutes for 10 images (template already exists)
 
@@ -1044,35 +1092,44 @@ Cards stack vertically, actions move to bottom:
 
 ## Implementation Priorities
 
-### Phase 1: Core Tabbed Structure (Week 1)
-- Implement tab navigation component
-- Create Assets tab with upload and gallery
-- Create Sequences tab with basic drag-and-drop
-- Migrate existing API hooks to new tab components
+### Phase 1: Core Tabbed Structure ✅ **COMPLETED**
+- ✅ Implement tab navigation component
+- ✅ Create Assets tab with upload and gallery
+- ✅ Create Sequences tab with split-view (preview + builder)
+- ✅ Migrate existing API hooks to new tab components
+- ✅ URL-based tab state with search params
 
-### Phase 2: Template Editor (Week 2)
-- Build Templates tab with card library
-- Create template editor modal with form controls
-- Implement live preview integration
-- Connect to existing template API
+### Phase 2: Image Layouts Tab (Week 2)
+- Build unified Image Layouts tab with two sections:
+  - **Section 1:** Template Library with visual form editor
+  - **Section 2:** Laid-Out Images with batch apply
+- Replace JSON textareas with proper form controls:
+  - Dropdowns for presets (paper sizes, aspect ratios)
+  - Sliders for numeric values (DPI, scale, position)
+  - 9-point anchor grid selector
+  - Toggle for uniform margins
+- Implement live preview integration in template editor
+- Build edit drawer for laid-out image overrides
+- Add batch apply progress indicators
 
-### Phase 3: Layouts Production (Week 3)
-- Build Layouts tab with batch apply
-- Create edit drawer with override controls
-- Implement preview rendering
-- Add filter and sort options
+### Phase 3: Page Layouts & Zine Tabs (Week 3-4)
+- Build Page Layouts tab (Phase 3 backend work)
+  - Page template selector
+  - Visual page composer with drag-and-drop slots
+  - Preview rendering of composed pages
+- Build Zine tab (Phase 3/4 backend work)
+  - Zine page sequence editor
+  - Imposition template selector
+  - Export options form
+  - Print preview mode
 
-### Phase 4: Output & Export (Week 4)
-- Build Output tab with sequence editor
-- Implement export options panel
-- Add progress indicators for batch operations
-- Integration testing of full workflow
-
-### Phase 5: Polish & Mobile (Week 5)
+### Phase 4: Polish & Mobile (Week 5)
 - Responsive design implementation
-- Mobile-specific interactions
+- Mobile tab dropdown selector
+- Cross-tab drag-and-drop
+- Keyboard shortcuts
 - Accessibility audit and fixes
-- Performance optimization
+- Performance optimization (virtual scrolling)
 
 ---
 
@@ -1091,15 +1148,36 @@ Cards stack vertically, actions move to bottom:
 ```
 <ProjectDetail>
   <ProjectHeader />
-  <TabNavigation activeTab={tab} onTabChange={setTab} />
   
-  <TabContent>
-    {tab === 'assets' && <AssetsTab projectId={id} />}
-    {tab === 'sequences' && <SequencesTab projectId={id} />}
-    {tab === 'templates' && <TemplatesTab projectId={id} />}
-    {tab === 'layouts' && <LayoutsTab projectId={id} />}
-    {tab === 'output' && <OutputTab projectId={id} />}
-  </TabContent>
+  <Tabs value={activeTab} onValueChange={setActiveTab}>
+    <TabsList>
+      <TabsTrigger value="assets">📁 Assets</TabsTrigger>
+      <TabsTrigger value="sequences">🔢 Sequences</TabsTrigger>
+      <TabsTrigger value="image-layouts">🖼️ Image Layouts</TabsTrigger>
+      <TabsTrigger value="page-layouts">📄 Page Layouts</TabsTrigger>
+      <TabsTrigger value="zine">📚 Zine</TabsTrigger>
+    </TabsList>
+    
+    <TabsContent value="assets">
+      <AssetsTab projectId={id} />
+    </TabsContent>
+    
+    <TabsContent value="sequences">
+      <SequencesTab projectId={id} />
+    </TabsContent>
+    
+    <TabsContent value="image-layouts">
+      <ImageLayoutsTab projectId={id} />
+    </TabsContent>
+    
+    <TabsContent value="page-layouts">
+      <PageLayoutsTab projectId={id} /> {/* Phase 3 */}
+    </TabsContent>
+    
+    <TabsContent value="zine">
+      <ZineTab projectId={id} /> {/* Phase 3/4 */}
+    </TabsContent>
+  </Tabs>
 </ProjectDetail>
 ```
 
@@ -1174,7 +1252,7 @@ This design specification transforms the current "everything stacked vertically"
 4. **Live previews** - See results immediately as settings change
 5. **Contextual actions** - Actions available where they make sense
 
-The tab structure mirrors the actual workflow: **Upload → Organize → Template → Layout → Export**, making it intuitive for new users while remaining efficient for power users.
+The tab structure mirrors the actual workflow: **Upload (Assets) → Organize (Sequences) → Create Layouts (Image Layouts) → Compose Pages (Page Layouts) → Assemble & Export (Zine)**, making it intuitive for new users while remaining efficient for power users.
 
 **Key Improvement Areas:**
 
