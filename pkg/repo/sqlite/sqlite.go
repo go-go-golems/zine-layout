@@ -38,11 +38,17 @@ func NewRepositories(db *sql.DB) (*repo.Repositories, error) {
 	projects := &projectRepo{db: db}
 	assets := &assetRepo{db: db}
 	imageSequences := &imageSequenceRepo{db: db}
+	layoutTemplates := &imageLayoutTemplateRepo{db: db}
+	laidOutImages := &laidOutImageRepo{db: db}
+	layoutSequences := &layoutSequenceRepo{db: db}
 
 	return &repo.Repositories{
-		Projects:       projects,
-		Assets:         assets,
-		ImageSequences: imageSequences,
+		Projects:             projects,
+		Assets:               assets,
+		ImageSequences:       imageSequences,
+		ImageLayoutTemplates: layoutTemplates,
+		LaidOutImages:        laidOutImages,
+		LayoutSequences:      layoutSequences,
 	}, nil
 }
 

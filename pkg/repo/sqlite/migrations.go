@@ -4,6 +4,10 @@ const schemaSQL = `
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
+DROP TABLE IF EXISTS layout_sequence_items;
+DROP TABLE IF EXISTS layout_sequences;
+DROP TABLE IF EXISTS laid_out_images;
+DROP TABLE IF EXISTS image_layout_templates;
 DROP TABLE IF EXISTS image_sequence_items;
 DROP TABLE IF EXISTS image_sequences;
 DROP TABLE IF EXISTS assets;
@@ -37,6 +41,36 @@ CREATE TABLE IF NOT EXISTS assets (
 
 CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id, uploaded_at DESC);
 
+CREATE TABLE IF NOT EXISTS image_layout_templates (
+    id TEXT PRIMARY KEY,
+    project_id TEXT,
+    name TEXT NOT NULL,
+    description TEXT,
+    settings_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_layout_templates_project ON image_layout_templates(project_id, name);
+
+CREATE TABLE IF NOT EXISTS laid_out_images (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    template_id TEXT NOT NULL,
+    overrides_json TEXT,
+    result_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+    FOREIGN KEY (template_id) REFERENCES image_layout_templates(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_laid_out_images_project ON laid_out_images(project_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_laid_out_images_asset ON laid_out_images(asset_id, updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS image_sequences (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
@@ -59,5 +93,26 @@ CREATE TABLE IF NOT EXISTS image_sequence_items (
     FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL,
     CHECK (is_gap IN (0, 1)),
     CHECK (is_gap = 1 OR asset_id IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS layout_sequences (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_layout_sequences_project ON layout_sequences(project_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS layout_sequence_items (
+    sequence_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    laid_out_image_id TEXT NOT NULL,
+    PRIMARY KEY (sequence_id, position),
+    FOREIGN KEY (sequence_id) REFERENCES layout_sequences(id) ON DELETE CASCADE,
+    FOREIGN KEY (laid_out_image_id) REFERENCES laid_out_images(id) ON DELETE CASCADE
 );
 `

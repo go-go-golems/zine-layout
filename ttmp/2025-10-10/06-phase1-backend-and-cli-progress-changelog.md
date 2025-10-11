@@ -35,3 +35,7 @@
 - Backfill REST/API tests (or snapshots) so we can refactor safely in Phase 2 when templates arrive.
 - Ensure the new UI affordances (drag/drop, slideshow) are mirrored in documentation/screenshots before hand-off.
 - Consider seeding helper fixtures (e.g., sample PNGs) or a `make demo-data` target to accelerate manual testing while the UI lags behind automation.
+
+---
+
+➡️ **Phase 2 Progress:** Tracked separately in `ttmp/2025-10-10/07-phase2-backend-and-ui-progress-changelog.md`.

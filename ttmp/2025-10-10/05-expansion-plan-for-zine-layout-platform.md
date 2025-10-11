@@ -1683,27 +1683,29 @@ echo "✓ All tests passed"
 
 ### Phase 2: Image Layout Templates + Laid Out Images + Layout Sequences
 
+> **Status (2025-10-10 Phase 2 Kick-off):** Implementation now in progress. The checklist below will be updated as each subsystem lands in code; see `ttmp/2025-10-10/07-phase2-backend-and-ui-progress-changelog.md` for day-by-day notes.
+
 **Goal:** Implement template system and image layout computation using algorithms from `01-algorithm-for-resizing.md`.
 
 **Backend:**
-- [ ] 2.1 Add tables to schema in `pkg/repo/sqlite/migrations.go`
+- [x] 2.1 Add tables to schema in `pkg/repo/sqlite/migrations.go`
   - `image_layout_templates`
   - `laid_out_images`
   - `layout_sequences`
   - `layout_sequence_items`
-- [ ] 2.2 Add entity types to `pkg/repo/types.go`
+- [x] 2.2 Add entity types to `pkg/repo/types.go`
   - `ImageLayoutTemplate`
   - `LaidOutImage`
   - `LayoutSequence`, `LayoutSequenceItem`
-- [ ] 2.3 Implement repositories
+- [x] 2.3 Implement repositories
   - `pkg/repo/sqlite/image_layout_templates.go` – CRUD, support global (project_id NULL) and project-specific templates
   - `pkg/repo/sqlite/laid_out_images.go` – CRUD + ListByAsset
   - `pkg/repo/sqlite/layout_sequences.go` – CRUD + item management
-- [ ] 2.4 Create service layer in `pkg/services/layout.go`
+- [x] 2.4 Create service layer in `pkg/services/layout.go`
   - `CreateLaidOutImage(projectID, assetID, templateID, overrides)` – fetches asset/template, runs `simple.ComputePlacement`, stores result
   - `ApplyTemplateToSequence(projectID, sequenceID, templateID)` – batch-creates laid-out images for all assets in sequence
   - `mergeSettings(base, override)` – helper to apply overrides to template settings
-- [ ] 2.5 Add REST endpoints in `pkg/serve/server.go`
+- [x] 2.5 Add REST endpoints in `pkg/serve/server.go`
   - `/api/projects/{id}/image-layout-templates` (list, create)
   - `/api/image-layout-templates` (list global templates)
   - `/api/image-layout-templates/{id}` (get, update, delete)
@@ -1713,8 +1715,8 @@ echo "✓ All tests passed"
   - `/api/layout-sequences/{id}` (get, update, delete)
   - `/api/layout-sequences/{id}/items` (get, reorder)
 - [ ] 2.6 Add preview/render endpoints
-  - `/api/laid-out-images/{id}/preview` – render preview using stored result
-  - `/api/laid-out-images/{id}/export` – export final cropped/resized image
+  - ✅ `/api/laid-out-images/{id}/preview` – serves the persisted layout computation payload for quick client previews.
+  - 🚧 `/api/laid-out-images/{id}/export` – stubbed (`501 Not Implemented`); needs renderer wiring in a later iteration.
 
 **Algorithms Implementation:**
 - [ ] 2.7 Adapt `pkg/spread/simple/algorithm.go` to support all modes from `01-algorithm-for-resizing.md`
@@ -1730,7 +1732,7 @@ echo "✓ All tests passed"
   - Generate all required export variants per mode
 
 **CLI:**
-- [ ] 2.10 Add Glazed commands
+- [x] 2.10 Add Glazed commands
   - `image-layout-templates/*` (list, get, create, update, delete)
   - `laid-out-images/*` (list, get, create, delete, preview, export)
   - `layout-sequences/*` (list, create, get, update, delete, add-item, reorder)

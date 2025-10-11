@@ -17,6 +17,9 @@ import {
   type AssetSummary,
 } from '../components/bookSpread/ProjectAssetsPanel';
 import { Button, Card, CardBody, CardHeader, Input } from '../components/ui';
+import { LayoutTemplateManager } from './LayoutTemplateManager';
+import { LaidOutImageViewer } from './LaidOutImageViewer';
+import { LayoutSequenceEditor } from './LayoutSequenceEditor';
 
 const formatDateTime = (iso?: string) => {
   if (!iso) return '—';
@@ -656,6 +659,14 @@ export const ProjectDetail: React.FC = () => {
             </CardBody>
           </Card>
         </div>
+
+        {id && (
+          <>
+            <LayoutTemplateManager projectId={id} />
+            <LaidOutImageViewer projectId={id} />
+            <LayoutSequenceEditor projectId={id} />
+          </>
+        )}
       </div>
     </div>
   );

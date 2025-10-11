@@ -1,7 +1,10 @@
 package api
 
 import (
+	imagelayouttemplates "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/api/image_layout_templates"
 	imagesequences "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/api/image_sequences"
+	laidoutimages "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/api/laid_out_images"
+	layoutsequences "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/api/layout_sequences"
 	"github.com/spf13/cobra"
 )
 
@@ -36,6 +39,24 @@ func AddAllAPICommands(rootCmd *cobra.Command) error {
 		return err
 	}
 	rootCmd.AddCommand(seqCmd)
+
+	tplCmd, err := imagelayouttemplates.NewCommand()
+	if err != nil {
+		return err
+	}
+	rootCmd.AddCommand(tplCmd)
+
+	imgCmd, err := laidoutimages.NewCommand()
+	if err != nil {
+		return err
+	}
+	rootCmd.AddCommand(imgCmd)
+
+	seqLayoutCmd, err := layoutsequences.NewCommand()
+	if err != nil {
+		return err
+	}
+	rootCmd.AddCommand(seqLayoutCmd)
 
 	return nil
 }
