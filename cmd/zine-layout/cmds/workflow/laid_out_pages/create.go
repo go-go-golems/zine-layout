@@ -22,10 +22,10 @@ type laidOutPagesCreateCommand struct {
 }
 
 type laidOutPagesCreateSettings struct {
-	DataRoot   string   `glazed.parameter:"data-root"`
-	ProjectID  string   `glazed.parameter:"project-id"`
-	TemplateID string   `glazed.parameter:"template-id"`
-	Inputs     []string `glazed.parameter:"inputs"`
+	DataRoot       string `glazed.parameter:"data-root"`
+	ProjectID      string `glazed.parameter:"project-id"`
+	TemplateID     string `glazed.parameter:"template-id"`
+	LaidOutImageID string `glazed.parameter:"laid-out-image-id"`
 }
 
 func (c *laidOutPagesCreateCommand) RunIntoGlazeProcessor(
@@ -43,6 +43,9 @@ func (c *laidOutPagesCreateCommand) RunIntoGlazeProcessor(
 	if strings.TrimSpace(settings.TemplateID) == "" {
 		return fmt.Errorf("--template-id is required")
 	}
+	if strings.TrimSpace(settings.LaidOutImageID) == "" {
+		return fmt.Errorf("--laid-out-image-id is required")
+	}
 
 	repos, db, err := workflowshared.OpenRepositories(settings.DataRoot)
 	if err != nil {
@@ -51,7 +54,7 @@ func (c *laidOutPagesCreateCommand) RunIntoGlazeProcessor(
 	defer db.Close()
 
 	service := services.NewPagesService(repos)
-	page, inputs, err := service.CreatePage(settings.ProjectID, settings.TemplateID, settings.Inputs)
+	page, err := service.CreatePage(settings.ProjectID, settings.TemplateID, settings.LaidOutImageID)
 	if err != nil {
 		return err
 	}
@@ -61,25 +64,11 @@ func (c *laidOutPagesCreateCommand) RunIntoGlazeProcessor(
 		types.MRP("page_id", page.ID),
 		types.MRP("project_id", page.ProjectID),
 		types.MRP("page_template_id", page.PageTemplateID),
+		types.MRP("laid_out_image_id", page.LaidOutImageID),
 		types.MRP("created_at", page.CreatedAt.Format(time.RFC3339)),
 		types.MRP("updated_at", page.UpdatedAt.Format(time.RFC3339)),
 	)
-	if err := gp.AddRow(ctx, pageRow); err != nil {
-		return err
-	}
-
-	for _, input := range inputs {
-		row := types.NewRow(
-			types.MRP("entity", "laid_out_page_input"),
-			types.MRP("page_id", input.PageID),
-			types.MRP("position", input.InputIndex),
-			types.MRP("laid_out_image_id", input.LaidOutImageID),
-		)
-		if err := gp.AddRow(ctx, row); err != nil {
-			return err
-		}
-	}
-	return nil
+	return gp.AddRow(ctx, pageRow)
 }
 
 func newLaidOutPagesCreateCommand() (*cobra.Command, error) {
@@ -90,12 +79,12 @@ func newLaidOutPagesCreateCommand() (*cobra.Command, error) {
 	cmd := &laidOutPagesCreateCommand{
 		CommandDescription: cmds.NewCommandDescription(
 			"create",
-			cmds.WithShort("Create a laid-out page"),
+			cmds.WithShort("Create a print-ready page from a laid-out image"),
 			cmds.WithFlags(
 				parameters.NewParameterDefinition("data-root", parameters.ParameterTypeString, parameters.WithDefault("./data"), parameters.WithHelp("Path to data directory")),
 				parameters.NewParameterDefinition("project-id", parameters.ParameterTypeString, parameters.WithRequired(true), parameters.WithHelp("Project id")),
-				parameters.NewParameterDefinition("template-id", parameters.ParameterTypeString, parameters.WithRequired(true), parameters.WithHelp("Page template id")),
-				parameters.NewParameterDefinition("inputs", parameters.ParameterTypeStringList, parameters.WithDefault([]string{}), parameters.WithHelp("Ordered laid-out image ids")),
+				parameters.NewParameterDefinition("template-id", parameters.ParameterTypeString, parameters.WithRequired(true), parameters.WithHelp("Page layout template id")),
+				parameters.NewParameterDefinition("laid-out-image-id", parameters.ParameterTypeString, parameters.WithRequired(true), parameters.WithHelp("Laid-out image id to place on page")),
 			),
 			cmds.WithLayersList(glazedLayer),
 		),

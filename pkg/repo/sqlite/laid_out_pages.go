@@ -27,11 +27,12 @@ func (r *laidOutPageRepo) Create(page *repo.LaidOutPage) error {
 		page.UpdatedAt = page.CreatedAt
 	}
 
-	_, err := r.db.Exec(`INSERT INTO laid_out_pages (id, project_id, page_template_id, result_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)`,
+	_, err := r.db.Exec(`INSERT INTO laid_out_pages (id, project_id, page_template_id, laid_out_image_id, result_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		page.ID,
 		page.ProjectID,
 		page.PageTemplateID,
+		page.LaidOutImageID,
 		nullStringPtr(page.ResultJSON),
 		toUnix(page.CreatedAt),
 		toUnix(page.UpdatedAt),
@@ -51,9 +52,10 @@ func (r *laidOutPageRepo) Update(page *repo.LaidOutPage) error {
 	}
 
 	res, err := r.db.Exec(`UPDATE laid_out_pages
-        SET page_template_id = ?, result_json = ?, updated_at = ?
+        SET page_template_id = ?, laid_out_image_id = ?, result_json = ?, updated_at = ?
         WHERE id = ?`,
 		page.PageTemplateID,
+		page.LaidOutImageID,
 		nullStringPtr(page.ResultJSON),
 		toUnix(page.UpdatedAt),
 		page.ID,
@@ -68,7 +70,7 @@ func (r *laidOutPageRepo) Update(page *repo.LaidOutPage) error {
 }
 
 func (r *laidOutPageRepo) Get(id string) (*repo.LaidOutPage, error) {
-	row := r.db.QueryRow(`SELECT id, project_id, page_template_id, result_json, created_at, updated_at
+	row := r.db.QueryRow(`SELECT id, project_id, page_template_id, laid_out_image_id, result_json, created_at, updated_at
         FROM laid_out_pages WHERE id = ?`, id)
 	var (
 		page    repo.LaidOutPage
@@ -76,7 +78,7 @@ func (r *laidOutPageRepo) Get(id string) (*repo.LaidOutPage, error) {
 		created int64
 		updated int64
 	)
-	if err := row.Scan(&page.ID, &page.ProjectID, &page.PageTemplateID, &result, &created, &updated); err != nil {
+	if err := row.Scan(&page.ID, &page.ProjectID, &page.PageTemplateID, &page.LaidOutImageID, &result, &created, &updated); err != nil {
 		return nil, errNotFound(err)
 	}
 	if result.Valid {
@@ -88,7 +90,7 @@ func (r *laidOutPageRepo) Get(id string) (*repo.LaidOutPage, error) {
 }
 
 func (r *laidOutPageRepo) ListByProject(projectID string) ([]*repo.LaidOutPage, error) {
-	rows, err := r.db.Query(`SELECT id, project_id, page_template_id, result_json, created_at, updated_at
+	rows, err := r.db.Query(`SELECT id, project_id, page_template_id, laid_out_image_id, result_json, created_at, updated_at
         FROM laid_out_pages WHERE project_id = ?
         ORDER BY updated_at DESC`, projectID)
 	if err != nil {
@@ -104,7 +106,7 @@ func (r *laidOutPageRepo) ListByProject(projectID string) ([]*repo.LaidOutPage, 
 			created int64
 			updated int64
 		)
-		if err := rows.Scan(&page.ID, &page.ProjectID, &page.PageTemplateID, &result, &created, &updated); err != nil {
+		if err := rows.Scan(&page.ID, &page.ProjectID, &page.PageTemplateID, &page.LaidOutImageID, &result, &created, &updated); err != nil {
 			return nil, fmt.Errorf("scan laid-out page: %w", err)
 		}
 		if result.Valid {
@@ -129,60 +131,4 @@ func (r *laidOutPageRepo) Delete(id string) error {
 		return sql.ErrNoRows
 	}
 	return err
-}
-
-func (r *laidOutPageRepo) SetInputs(pageID string, inputs []*repo.LaidOutPageInput) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return fmt.Errorf("begin set laid-out page inputs tx: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			err = tx.Commit()
-		}
-	}()
-
-	if _, err = tx.Exec(`DELETE FROM laid_out_page_inputs WHERE page_id = ?`, pageID); err != nil {
-		return fmt.Errorf("delete laid-out page inputs: %w", err)
-	}
-
-	for _, input := range inputs {
-		if input == nil {
-			continue
-		}
-		if _, err = tx.Exec(`INSERT INTO laid_out_page_inputs (page_id, input_index, laid_out_image_id)
-            VALUES (?, ?, ?)`,
-			pageID,
-			input.InputIndex,
-			input.LaidOutImageID,
-		); err != nil {
-			return fmt.Errorf("insert laid-out page input: %w", err)
-		}
-	}
-	return nil
-}
-
-func (r *laidOutPageRepo) GetInputs(pageID string) ([]*repo.LaidOutPageInput, error) {
-	rows, err := r.db.Query(`SELECT page_id, input_index, laid_out_image_id
-        FROM laid_out_page_inputs WHERE page_id = ?
-        ORDER BY input_index ASC`, pageID)
-	if err != nil {
-		return nil, fmt.Errorf("list laid-out page inputs: %w", err)
-	}
-	defer rows.Close()
-
-	var inputs []*repo.LaidOutPageInput
-	for rows.Next() {
-		var input repo.LaidOutPageInput
-		if err := rows.Scan(&input.PageID, &input.InputIndex, &input.LaidOutImageID); err != nil {
-			return nil, fmt.Errorf("scan laid-out page input: %w", err)
-		}
-		inputs = append(inputs, &input)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate laid-out page inputs: %w", err)
-	}
-	return inputs, nil
 }

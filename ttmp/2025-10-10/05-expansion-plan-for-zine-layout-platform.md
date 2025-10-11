@@ -150,14 +150,14 @@ CREATE TABLE IF NOT EXISTS layout_sequence_items (
     FOREIGN KEY (laid_out_image_id) REFERENCES laid_out_images(id) ON DELETE CASCADE
 );
 
--- Page Templates: How to position laid-out images on a printable page
--- Stores margins, gutter info, multi-image positioning from zinelayout DSL
+-- Page Templates: How to position ONE laid-out image on a physical print page
+-- Stores page size, margins, spread mode, gutter settings, and image positioning
 CREATE TABLE IF NOT EXISTS page_templates (
     id TEXT PRIMARY KEY,
     project_id TEXT,  -- NULL = global
     name TEXT NOT NULL,
     description TEXT,
-    template_json TEXT NOT NULL,  -- Serialized ZineLayout struct
+    template_json TEXT NOT NULL,  -- PageLayoutSettings: size, margins, spread, gutter, positioning
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
@@ -165,29 +165,23 @@ CREATE TABLE IF NOT EXISTS page_templates (
 
 CREATE INDEX IF NOT EXISTS idx_page_templates_project ON page_templates(project_id);
 
--- Laid Out Pages: Page Template + Laid Out Images = Final printable page
+-- Laid Out Pages: Page Template + ONE Laid Out Image = Print-ready page
+-- For spreads, one wide laid-out image is split into left/right pages with gutter
 CREATE TABLE IF NOT EXISTS laid_out_pages (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
     page_template_id TEXT NOT NULL,
-    result_json TEXT,  -- Render metadata, dimensions, file paths
+    laid_out_image_id TEXT NOT NULL,  -- Single laid-out image per page
+    result_json TEXT,  -- Render metadata: dimensions, file paths, split info for spreads
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    FOREIGN KEY (page_template_id) REFERENCES page_templates(id) ON DELETE RESTRICT
-);
-
-CREATE INDEX IF NOT EXISTS idx_laid_pages_project ON laid_out_pages(project_id);
-
--- Laid Out Page Inputs: Which laid-out images go into which page
-CREATE TABLE IF NOT EXISTS laid_out_page_inputs (
-    page_id TEXT NOT NULL,
-    laid_out_image_id TEXT NOT NULL,
-    input_index INTEGER NOT NULL,  -- Maps to ZineLayout input slots
-    PRIMARY KEY (page_id, input_index),
-    FOREIGN KEY (page_id) REFERENCES laid_out_pages(id) ON DELETE CASCADE,
+    FOREIGN KEY (page_template_id) REFERENCES page_templates(id) ON DELETE RESTRICT,
     FOREIGN KEY (laid_out_image_id) REFERENCES laid_out_images(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_laid_out_pages_project ON laid_out_pages(project_id);
+CREATE INDEX IF NOT EXISTS idx_laid_out_pages_image ON laid_out_pages(laid_out_image_id);
 
 -- Zines: Complete book consisting of an ordered sequence of pages
 CREATE TABLE IF NOT EXISTS zines (
@@ -302,32 +296,28 @@ type LayoutSequenceItem struct {
     IsGap           bool
 }
 
-// PageTemplate represents how to compose laid-out images on a page
+// PageTemplate defines how ONE laid-out image is positioned on a physical print page.
+// Settings include page size, margins, spread mode, gutter, and image positioning.
 type PageTemplate struct {
     ID           string
     ProjectID    *string  // NULL for global
     Name         string
     Description  string
-    TemplateJSON string   // Serialized ZineLayout
+    TemplateJSON string   // PageLayoutSettings: size, margins, spread, gutter, positioning
     CreatedAt    time.Time
     UpdatedAt    time.Time
 }
 
-// LaidOutPage represents a rendered page
+// LaidOutPage represents a print-ready page: one laid-out image placed on a physical page.
+// For spreads, stores rendering instructions for left/right page splits with gutter.
 type LaidOutPage struct {
     ID             string
     ProjectID      string
     PageTemplateID string
-    ResultJSON     *string  // Render metadata
+    LaidOutImageID string  // Single laid-out image per page
+    ResultJSON     *string  // Render metadata: dimensions, file paths, split info
     CreatedAt      time.Time
     UpdatedAt      time.Time
-}
-
-// LaidOutPageInput maps laid-out images to page input slots
-type LaidOutPageInput struct {
-    PageID         string
-    LaidOutImageID string
-    InputIndex     int
 }
 
 // Zine represents a complete book
@@ -420,16 +410,13 @@ type PageTemplateRepository interface {
     Delete(id string) error
 }
 
-// LaidOutPageRepository manages laid-out pages
+// LaidOutPageRepository manages print-ready pages
 type LaidOutPageRepository interface {
     Create(page *LaidOutPage) error
     Get(id string) (*LaidOutPage, error)
-    List(projectID string) ([]*LaidOutPage, error)
+    ListByProject(projectID string) ([]*LaidOutPage, error)
     Update(page *LaidOutPage) error
     Delete(id string) error
-    
-    SetInputs(pageID string, inputs []*LaidOutPageInput) error
-    GetInputs(pageID string) ([]*LaidOutPageInput, error)
 }
 
 // ZineRepository manages zines
@@ -1789,37 +1776,42 @@ echo "✓ All tests passed"
 
 ### Phase 3: Page Templates + Laid Out Pages + Zines
 
-**Goal:** Implement multi-image page composition and zine assembly.
+**Goal:** Implement print page creation (placing laid-out images on physical pages with margins/spreads) and zine assembly.
 
 **Backend:**
 - [x] 3.1 Add tables to schema
-  - `page_templates`
-  - `laid_out_pages`
-  - `laid_out_page_inputs`
-  - `zines`
-  - `zine_pages`
+  - `page_templates` – print page layout settings
+  - `laid_out_pages` – print-ready pages (template + image)
+  - `zines` – zine collections
+  - `zine_pages` – page ordering within zines
 - [x] 3.2 Add entity types to `pkg/repo/types.go`
-  - `PageTemplate`
-  - `LaidOutPage`, `LaidOutPageInput`
-  - `Zine`, `ZinePage`
+  - `PageTemplate` – print page layout settings
+  - `LaidOutPage` – print-ready page (template + single image)
+  - `Zine`, `ZinePage` – zine assembly
 - [x] 3.3 Implement repositories
-  - `pkg/repo/sqlite/page_templates.go`
-  - `pkg/repo/sqlite/laid_out_pages.go` – include SetInputs/GetInputs for page-to-image mappings
+  - `pkg/repo/sqlite/page_templates.go` – CRUD for page layout templates
+  - `pkg/repo/sqlite/laid_out_pages.go` – CRUD for print pages (one image per page)
   - `pkg/repo/sqlite/zines.go` – include SetPages/GetPages for zine-to-page ordering
 - [x] 3.4 Create service layer in `pkg/services/pages.go`
-  - `CreateLaidOutPage(projectID, pageTemplateID, laidOutImageIDs)` – validates inputs, stubs renderer until exporter lands
-  - `RenderPage(pageID)` – placeholder returning `ErrPageRendererNotImplemented` (renderer wiring tracked separately)
+  - `CreatePage(projectID, pageTemplateID, laidOutImageID)` – creates print page with single image
+  - `UpdatePageImage(pageID, laidOutImageID)` – changes which image is on the page
+  - `GetPage(pageID)` – fetches page details
+  - `DeletePage(pageID)` – removes print page
+  - `RenderPage(pageID)` – placeholder returning `ErrPageRendererNotImplemented`
 - [x] 3.5 Create service layer in `pkg/services/zines.go`
   - `CreateZine(projectID, name, pageIDs)` – creates zine record and page ordering
   - `AddPageToZine(zineID, pageID, position)` – insert page at position
   - `ReorderZinePages(zineID, pageIDs)` – update page order
 - [ ] 3.6 Add REST endpoints in `pkg/serve/server.go`
   - `/api/projects/{id}/page-templates` (list, create)
+  - `/api/page-templates` (list global templates)
   - `/api/page-templates/{id}` (get, update, delete)
   - `/api/projects/{id}/laid-out-pages` (list, create)
+    - POST body: `{"page_template_id": "...", "laid_out_image_id": "..."}`
   - `/api/laid-out-pages/{id}` (get, update, delete)
-  - `/api/laid-out-pages/{id}/inputs` (get, set)
-  - `/api/laid-out-pages/{id}/preview` – render and return image
+    - PUT body: `{"laid_out_image_id": "..."}` (change image on page)
+  - `/api/laid-out-pages/{id}/preview` – render and return image (single page or spread)
+  - `/api/laid-out-pages/{id}/export` – download PNG or PDF
   - `/api/projects/{id}/zines` (list, create)
   - `/api/zines/{id}` (get, update, delete)
   - `/api/zines/{id}/pages` (get, set order)
@@ -1827,32 +1819,45 @@ echo "✓ All tests passed"
 **CLI:**
 - [x] 3.7 Add Glazed commands
   - Added `zine-layout workflow page-templates` (list, create, get, delete) for direct repo access
-  - Added `zine-layout workflow laid-out-pages` (create, list, get, set-inputs, delete)
+  - Added `zine-layout workflow laid-out-pages` (create, list, get, update-image, delete)
+    - create: `--project-id --template-id --laid-out-image-id` (single image per page)
+    - update-image: `--page-id --laid-out-image-id` (change which image is on page)
   - Added `zine-layout workflow zines` (create, list, get, set-pages, delete)
 
 **Frontend:**
 - [ ] 3.8 Extend `web/src/api.ts`
-  - Add types: `PageTemplate`, `LaidOutPage`, `Zine`
+  - Add types: `PageTemplate`, `LaidOutPage` (with laid_out_image_id), `Zine`
   - Add all CRUD endpoints
-- [ ] 3.9 Create `web/src/views/PageComposer.tsx`
-  - Select page template (grid layout)
-  - Drag laid-out images into template slots
-  - Preview final page composition
-  - Save as laid-out page
-- [ ] 3.10 Create `web/src/views/ZineBuilder.tsx`
-  - Create new zine
-  - Add laid-out pages to zine
-  - Drag-and-drop page ordering
-  - Preview zine as page sequence
-  - Export individual pages or entire zine
+- [ ] 3.9 Build `web/src/views/tabs/PageLayoutsTab.tsx` (rewrite current dummy)
+  - Section 1: Page template library with visual editor
+    - Page size, margins, spread mode, gutter settings
+    - Positioning modes: fill, absolute, snap
+    - Live preview showing image on page
+  - Section 2: Print pages grid
+    - Quick create: select image + template
+    - Grid of print-ready pages
+    - Preview with margins, bleed, crop marks
+- [ ] 3.10 Build `web/src/views/tabs/ZineTab.tsx` (rewrite current dummy)
+  - Zine selector
+  - Page sequence editor with reordering
+  - Preview panel
+  - Export options (format, imposition, crop marks)
+  - Connect to real API
 
 **Testing:**
-- [ ] 3.11 Write service tests for page composition
-- [ ] 3.12 Write integration test: create page template → add images → render page → assemble zine
+- [ ] 3.11 Write service tests for page creation
+  - Test single page creation (one image + template)
+  - Test spread page creation
+  - Test validation (image belongs to project, template exists)
+- [ ] 3.12 Write integration test: create page template → apply to laid-out image → render → add to zine
 - [ ] 3.13 CLI test for complete workflow
+  - Create page template with spread mode
+  - Create print page from laid-out image
+  - Update page image
+  - Assemble zine from pages
 
 **Validation:**
-- [ ] 3.14 Test workflow: create multi-image page → add to zine → preview zine
+- [ ] 3.14 Test workflow: create page template → apply to laid-out image → add to zine → export
 
 ---
 

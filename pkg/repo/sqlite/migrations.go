@@ -122,23 +122,17 @@ CREATE TABLE IF NOT EXISTS laid_out_pages (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
     page_template_id TEXT NOT NULL,
+    laid_out_image_id TEXT NOT NULL,
     result_json TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    FOREIGN KEY (page_template_id) REFERENCES page_templates(id) ON DELETE RESTRICT
+    FOREIGN KEY (page_template_id) REFERENCES page_templates(id) ON DELETE RESTRICT,
+    FOREIGN KEY (laid_out_image_id) REFERENCES laid_out_images(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_laid_out_pages_project ON laid_out_pages(project_id, updated_at DESC);
-
-CREATE TABLE IF NOT EXISTS laid_out_page_inputs (
-    page_id TEXT NOT NULL,
-    input_index INTEGER NOT NULL,
-    laid_out_image_id TEXT NOT NULL,
-    PRIMARY KEY (page_id, input_index),
-    FOREIGN KEY (page_id) REFERENCES laid_out_pages(id) ON DELETE CASCADE,
-    FOREIGN KEY (laid_out_image_id) REFERENCES laid_out_images(id) ON DELETE CASCADE
-);
+CREATE INDEX IF NOT EXISTS idx_laid_out_pages_image ON laid_out_pages(laid_out_image_id);
 
 CREATE TABLE IF NOT EXISTS zines (
     id TEXT PRIMARY KEY,

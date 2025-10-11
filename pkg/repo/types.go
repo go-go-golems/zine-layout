@@ -83,32 +83,28 @@ type LayoutSequenceItem struct {
 	LaidOutImageID string
 }
 
-// PageTemplate defines how laid-out images should be composed on a page.
+// PageTemplate defines how a laid-out image should be placed on a physical print page.
+// Settings include page size, margins, spread mode with gutter, and image positioning.
 type PageTemplate struct {
 	ID           string
 	ProjectID    *string
 	Name         string
 	Description  string
-	TemplateJSON string
+	TemplateJSON string // PageLayoutSettings: page size, margins, spread, gutter, positioning
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
 
-// LaidOutPage represents a concrete page instantiated from a template and inputs.
+// LaidOutPage represents a print-ready page: one laid-out image placed on a physical page.
+// For spreads, the page stores rendering instructions for left/right page splits.
 type LaidOutPage struct {
 	ID             string
 	ProjectID      string
 	PageTemplateID string
-	ResultJSON     *string
+	LaidOutImageID string  // Single laid-out image per page
+	ResultJSON     *string // Render metadata: dimensions, file paths, split info for spreads
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-}
-
-// LaidOutPageInput associates a laid-out image with a page input slot.
-type LaidOutPageInput struct {
-	PageID         string
-	InputIndex     int
-	LaidOutImageID string
 }
 
 // Zine represents an ordered collection of laid-out pages.
@@ -211,9 +207,6 @@ type LaidOutPageRepository interface {
 	Get(id string) (*LaidOutPage, error)
 	ListByProject(projectID string) ([]*LaidOutPage, error)
 	Delete(id string) error
-
-	SetInputs(pageID string, inputs []*LaidOutPageInput) error
-	GetInputs(pageID string) ([]*LaidOutPageInput, error)
 }
 
 // ZineRepository manages ordered collections of laid-out pages.

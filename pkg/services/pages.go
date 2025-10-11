@@ -21,128 +21,103 @@ func NewPagesService(repos *repo.Repositories) *PagesService {
 	return &PagesService{repos: repos}
 }
 
-// CreatePage instantiates a laid-out page from a template and optional laid-out images.
-func (s *PagesService) CreatePage(projectID, pageTemplateID string, laidOutImageIDs []string) (*repo.LaidOutPage, []*repo.LaidOutPageInput, error) {
+// CreatePage creates a print-ready page by placing one laid-out image on a physical page.
+// The page template defines page size, margins, spread mode, gutter, and image positioning.
+func (s *PagesService) CreatePage(projectID, pageTemplateID, laidOutImageID string) (*repo.LaidOutPage, error) {
 	if s == nil || s.repos == nil {
-		return nil, nil, fmt.Errorf("pages service not initialized")
+		return nil, fmt.Errorf("pages service not initialized")
 	}
 	if projectID == "" {
-		return nil, nil, fmt.Errorf("project id is required")
+		return nil, fmt.Errorf("project id is required")
 	}
 	if pageTemplateID == "" {
-		return nil, nil, fmt.Errorf("page template id is required")
+		return nil, fmt.Errorf("page template id is required")
+	}
+	if laidOutImageID == "" {
+		return nil, fmt.Errorf("laid-out image id is required")
 	}
 
+	// Validate page template exists and is accessible
 	tpl, err := s.repos.PageTemplates.Get(pageTemplateID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("fetch page template: %w", err)
+		return nil, fmt.Errorf("fetch page template: %w", err)
 	}
 	if tpl.ProjectID != nil && *tpl.ProjectID != projectID {
-		return nil, nil, fmt.Errorf("template %s not available for project %s", pageTemplateID, projectID)
+		return nil, fmt.Errorf("template %s not available for project %s", pageTemplateID, projectID)
 	}
 
-	inputs := make([]*repo.LaidOutPageInput, 0, len(laidOutImageIDs))
-	for idx, imageID := range laidOutImageIDs {
-		if imageID == "" {
-			continue
-		}
-		image, err := s.repos.LaidOutImages.Get(imageID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("fetch laid-out image %s: %w", imageID, err)
-		}
-		if image.ProjectID != projectID {
-			return nil, nil, fmt.Errorf("laid-out image %s does not belong to project %s", imageID, projectID)
-		}
-		inputs = append(inputs, &repo.LaidOutPageInput{
-			PageID:         "",
-			InputIndex:     idx,
-			LaidOutImageID: imageID,
-		})
+	// Validate laid-out image exists and belongs to project
+	image, err := s.repos.LaidOutImages.Get(laidOutImageID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch laid-out image: %w", err)
+	}
+	if image.ProjectID != projectID {
+		return nil, fmt.Errorf("laid-out image %s does not belong to project %s", laidOutImageID, projectID)
 	}
 
+	// Create the print page
 	page := &repo.LaidOutPage{
 		ProjectID:      projectID,
 		PageTemplateID: pageTemplateID,
+		LaidOutImageID: laidOutImageID,
 		CreatedAt:      time.Now().UTC(),
 		UpdatedAt:      time.Now().UTC(),
 	}
 	if err := s.repos.LaidOutPages.Create(page); err != nil {
-		return nil, nil, fmt.Errorf("create laid-out page: %w", err)
+		return nil, fmt.Errorf("create laid-out page: %w", err)
 	}
 
-	if len(inputs) > 0 {
-		for _, input := range inputs {
-			input.PageID = page.ID
-		}
-		if err := s.repos.LaidOutPages.SetInputs(page.ID, inputs); err != nil {
-			return nil, nil, fmt.Errorf("persist page inputs: %w", err)
-		}
-	}
-
-	persistedInputs, err := s.repos.LaidOutPages.GetInputs(page.ID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("reload page inputs: %w", err)
-	}
-	return page, persistedInputs, nil
+	return page, nil
 }
 
-// UpdatePageInputs replaces the laid-out image inputs for an existing page.
-func (s *PagesService) UpdatePageInputs(pageID string, laidOutImageIDs []string) error {
+// UpdatePageImage changes which laid-out image is used for an existing print page.
+func (s *PagesService) UpdatePageImage(pageID, laidOutImageID string) error {
 	if s == nil || s.repos == nil {
 		return fmt.Errorf("pages service not initialized")
 	}
+	if laidOutImageID == "" {
+		return fmt.Errorf("laid-out image id is required")
+	}
+
 	page, err := s.repos.LaidOutPages.Get(pageID)
 	if err != nil {
 		return fmt.Errorf("fetch laid-out page: %w", err)
 	}
 
-	inputs := make([]*repo.LaidOutPageInput, 0, len(laidOutImageIDs))
-	for idx, imageID := range laidOutImageIDs {
-		if imageID == "" {
-			continue
-		}
-		image, err := s.repos.LaidOutImages.Get(imageID)
-		if err != nil {
-			return fmt.Errorf("fetch laid-out image %s: %w", imageID, err)
-		}
-		if image.ProjectID != page.ProjectID {
-			return fmt.Errorf("laid-out image %s does not belong to project %s", imageID, page.ProjectID)
-		}
-		inputs = append(inputs, &repo.LaidOutPageInput{
-			PageID:         pageID,
-			InputIndex:     idx,
-			LaidOutImageID: imageID,
-		})
+	// Validate new laid-out image
+	image, err := s.repos.LaidOutImages.Get(laidOutImageID)
+	if err != nil {
+		return fmt.Errorf("fetch laid-out image: %w", err)
+	}
+	if image.ProjectID != page.ProjectID {
+		return fmt.Errorf("laid-out image %s does not belong to project %s", laidOutImageID, page.ProjectID)
 	}
 
-	if err := s.repos.LaidOutPages.SetInputs(pageID, inputs); err != nil {
-		return fmt.Errorf("set laid-out page inputs: %w", err)
-	}
-
+	// Update the page
+	page.LaidOutImageID = laidOutImageID
 	page.UpdatedAt = time.Now().UTC()
+	// Clear result JSON since image changed (will need re-render)
+	page.ResultJSON = nil
+
 	if err := s.repos.LaidOutPages.Update(page); err != nil {
-		return fmt.Errorf("touch laid-out page: %w", err)
+		return fmt.Errorf("update laid-out page: %w", err)
 	}
 	return nil
 }
 
-// GetPageWithInputs returns a laid-out page and its ordered inputs.
-func (s *PagesService) GetPageWithInputs(pageID string) (*repo.LaidOutPage, []*repo.LaidOutPageInput, error) {
+// GetPage returns a laid-out page by ID.
+func (s *PagesService) GetPage(pageID string) (*repo.LaidOutPage, error) {
 	if s == nil || s.repos == nil {
-		return nil, nil, fmt.Errorf("pages service not initialized")
+		return nil, fmt.Errorf("pages service not initialized")
 	}
 	page, err := s.repos.LaidOutPages.Get(pageID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("fetch laid-out page: %w", err)
+		return nil, fmt.Errorf("fetch laid-out page: %w", err)
 	}
-	inputs, err := s.repos.LaidOutPages.GetInputs(pageID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("fetch page inputs: %w", err)
-	}
-	return page, inputs, nil
+	return page, nil
 }
 
-// DeletePage removes a laid-out page and its associated inputs.
+// DeletePage removes a laid-out page.
 func (s *PagesService) DeletePage(pageID string) error {
 	if s == nil || s.repos == nil {
 		return fmt.Errorf("pages service not initialized")

@@ -45,7 +45,7 @@ func (c *laidOutPagesGetCommand) RunIntoGlazeProcessor(
 	defer db.Close()
 
 	service := services.NewPagesService(repos)
-	page, inputs, err := service.GetPageWithInputs(settings.PageID)
+	page, err := service.GetPage(settings.PageID)
 	if err != nil {
 		return err
 	}
@@ -55,25 +55,11 @@ func (c *laidOutPagesGetCommand) RunIntoGlazeProcessor(
 		types.MRP("page_id", page.ID),
 		types.MRP("project_id", page.ProjectID),
 		types.MRP("page_template_id", page.PageTemplateID),
+		types.MRP("laid_out_image_id", page.LaidOutImageID),
+		types.MRP("created_at", page.CreatedAt.Format(time.RFC3339)),
 		types.MRP("updated_at", page.UpdatedAt.Format(time.RFC3339)),
 	)
-	if err := gp.AddRow(ctx, row); err != nil {
-		return err
-	}
-
-	for _, input := range inputs {
-		inputRow := types.NewRow(
-			types.MRP("entity", "laid_out_page_input"),
-			types.MRP("page_id", input.PageID),
-			types.MRP("position", input.InputIndex),
-			types.MRP("laid_out_image_id", input.LaidOutImageID),
-		)
-		if err := gp.AddRow(ctx, inputRow); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return gp.AddRow(ctx, row)
 }
 
 func newLaidOutPagesGetCommand() (*cobra.Command, error) {

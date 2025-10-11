@@ -15,27 +15,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type laidOutPagesSetInputsCommand struct {
+type laidOutPagesUpdateImageCommand struct {
 	*cmds.CommandDescription
 }
 
-type laidOutPagesSetInputsSettings struct {
-	DataRoot string   `glazed.parameter:"data-root"`
-	PageID   string   `glazed.parameter:"page-id"`
-	Inputs   []string `glazed.parameter:"inputs"`
+type laidOutPagesUpdateImageSettings struct {
+	DataRoot       string `glazed.parameter:"data-root"`
+	PageID         string `glazed.parameter:"page-id"`
+	LaidOutImageID string `glazed.parameter:"laid-out-image-id"`
 }
 
-func (c *laidOutPagesSetInputsCommand) RunIntoGlazeProcessor(
+func (c *laidOutPagesUpdateImageCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
 	parsedLayers *layers.ParsedLayers,
 	gp middlewares.Processor,
 ) error {
-	settings := &laidOutPagesSetInputsSettings{}
+	settings := &laidOutPagesUpdateImageSettings{}
 	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, settings); err != nil {
 		return err
 	}
 	if settings.PageID == "" {
 		return fmt.Errorf("--page-id is required")
+	}
+	if settings.LaidOutImageID == "" {
+		return fmt.Errorf("--laid-out-image-id is required")
 	}
 
 	repos, db, err := workflowshared.OpenRepositories(settings.DataRoot)
@@ -45,31 +48,32 @@ func (c *laidOutPagesSetInputsCommand) RunIntoGlazeProcessor(
 	defer db.Close()
 
 	service := services.NewPagesService(repos)
-	if err := service.UpdatePageInputs(settings.PageID, settings.Inputs); err != nil {
+	if err := service.UpdatePageImage(settings.PageID, settings.LaidOutImageID); err != nil {
 		return err
 	}
 
 	row := types.NewRow(
 		types.MRP("entity", "laid_out_page"),
 		types.MRP("page_id", settings.PageID),
-		types.MRP("status", "inputs-updated"),
+		types.MRP("laid_out_image_id", settings.LaidOutImageID),
+		types.MRP("status", "image-updated"),
 	)
 	return gp.AddRow(ctx, row)
 }
 
-func newLaidOutPagesSetInputsCommand() (*cobra.Command, error) {
+func newLaidOutPagesUpdateImageCommand() (*cobra.Command, error) {
 	glazedLayer, err := settings.NewGlazedParameterLayers()
 	if err != nil {
 		return nil, err
 	}
-	cmd := &laidOutPagesSetInputsCommand{
+	cmd := &laidOutPagesUpdateImageCommand{
 		CommandDescription: cmds.NewCommandDescription(
-			"set-inputs",
-			cmds.WithShort("Replace inputs for a laid-out page"),
+			"update-image",
+			cmds.WithShort("Change the laid-out image for a print page"),
 			cmds.WithFlags(
 				parameters.NewParameterDefinition("data-root", parameters.ParameterTypeString, parameters.WithDefault("./data"), parameters.WithHelp("Path to data directory")),
-				parameters.NewParameterDefinition("page-id", parameters.ParameterTypeString, parameters.WithRequired(true), parameters.WithHelp("Laid-out page id")),
-				parameters.NewParameterDefinition("inputs", parameters.ParameterTypeStringList, parameters.WithDefault([]string{}), parameters.WithHelp("Ordered laid-out image ids")),
+				parameters.NewParameterDefinition("page-id", parameters.ParameterTypeString, parameters.WithRequired(true), parameters.WithHelp("Print page id")),
+				parameters.NewParameterDefinition("laid-out-image-id", parameters.ParameterTypeString, parameters.WithRequired(true), parameters.WithHelp("New laid-out image id")),
 			),
 			cmds.WithLayersList(glazedLayer),
 		),
@@ -77,4 +81,4 @@ func newLaidOutPagesSetInputsCommand() (*cobra.Command, error) {
 	return workflowshared.BuildCommand(cmd)
 }
 
-var _ cmds.GlazeCommand = &laidOutPagesSetInputsCommand{}
+var _ cmds.GlazeCommand = &laidOutPagesUpdateImageCommand{}

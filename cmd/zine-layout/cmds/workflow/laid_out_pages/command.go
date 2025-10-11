@@ -12,7 +12,7 @@ func NewCommand() (*cobra.Command, error) {
 		newLaidOutPagesCreateCommand,
 		newLaidOutPagesListCommand,
 		newLaidOutPagesGetCommand,
-		newLaidOutPagesSetInputsCommand,
+		newLaidOutPagesUpdateImageCommand,
 		newLaidOutPagesDeleteCommand,
 	}
 

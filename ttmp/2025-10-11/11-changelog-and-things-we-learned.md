@@ -1213,19 +1213,63 @@ Print-Ready PDF/PNG
 
 - ✅ `10-ui-design-for-the-zine-photo-layout-software.md` - **Updated with correct Tab 4 design**
 - ✅ `12-page-layout-tab-design.md` - **New comprehensive design for page layouts**
-- ⚠️ `PageLayoutsTab.tsx` - Current implementation uses old concept (will need rewrite)
+- ⚠️ `PageLayoutsTab.tsx` - Current implementation uses old concept (will need rewrite for Phase 3)
 - ✅ Changelog updated with correction
 
-### Next Steps for Page Layouts Tab
+### Backend Code Updates
 
-When implementing Phase 3:
-1. Use `12-page-layout-tab-design.md` as the spec
-2. Rewrite PageLayoutsTab.tsx to match correct concept
-3. Add spread mode checkbox and gutter controls
-4. Implement three positioning modes
-5. Preview should show: page boundary, margins, laid-out image placement
-6. For spreads: show left page, right page, combined view
-7. Export options: single page PNG, left page, right page, combined, PDF
+Updated Go backend to match corrected understanding:
+
+1. **Schema Changes** (`pkg/repo/sqlite/migrations.go`)
+   - Added `laid_out_image_id` column to `laid_out_pages` table
+   - Removed `laid_out_page_inputs` table (no longer needed)
+   - Added index on `laid_out_image_id` for lookups
+
+2. **Type Definitions** (`pkg/repo/types.go`)
+   - Updated `LaidOutPage` to include `LaidOutImageID string` field
+   - Removed `LaidOutPageInput` type entirely
+   - Updated `LaidOutPageRepository` interface to remove `SetInputs` and `GetInputs`
+   - Added comments explaining single-image-per-page model
+
+3. **Repository Implementation** (`pkg/repo/sqlite/laid_out_pages.go`)
+   - Updated `Create()` to insert `laid_out_image_id`
+   - Updated `Update()` to handle `laid_out_image_id` changes
+   - Updated `Get()` and `ListByProject()` to select new column
+   - Removed `SetInputs()` and `GetInputs()` methods entirely
+
+4. **Service Layer** (`pkg/services/pages.go`)
+   - `CreatePage()` now takes single `laidOutImageID string` instead of `[]string`
+   - Renamed `UpdatePageInputs()` to `UpdatePageImage(pageID, laidOutImageID)`
+   - Renamed `GetPageWithInputs()` to `GetPage(pageID)`
+   - Simplified validation - just check one image belongs to project
+   - Updated comments to reflect print page concept
+
+5. **CLI Commands** (`cmd/zine-layout/cmds/workflow/laid_out_pages/`)
+   - Updated `create.go`: changed `--inputs` flag to `--laid-out-image-id`
+   - Renamed `set_inputs.go` to `update_image.go`
+   - Changed command name from `set-inputs` to `update-image`
+   - Updated all command descriptions and help text
+   - Fixed command registration in `command.go`
+   - Updated `get.go` to use new `GetPage()` service method
+
+6. **Build Verification**
+   - ✅ `go build ./...` succeeds with no errors
+   - ✅ `go test ./pkg/...` all pass
+   - Schema changes are backwards-incompatible (expected for fresh start)
+
+### Next Steps for Phase 3 Implementation
+
+When implementing Phase 3 backend:
+1. Define `PageLayoutSettings` struct (page size, margins, spread, gutter, positioning)
+2. Implement page rendering service:
+   - Load laid-out image result
+   - Apply page template settings
+   - For spreads: split into left/right with gutter overlap
+   - Generate PNG or PDF output
+3. Add REST API endpoints per expansion plan
+4. Rewrite `PageLayoutsTab.tsx` following `12-page-layout-tab-design.md`
+5. Test spread mode with gutter calculations
+6. Implement export with bleed and crop marks
 
 ### Lessons for Future
 
@@ -1236,7 +1280,150 @@ When implementing Phase 3:
 
 ---
 
+## Summary of Complete UI & Backend Refactor
+
+### What Was Accomplished
+
+**Frontend (Tabs 1-5):**
+- ✅ Complete tabbed interface with 5 workflow-oriented tabs
+- ✅ Visual form controls throughout (replaced all JSON editing)
+- ✅ Live previews in template editors
+- ✅ Reusable components (Tabs, SliderInput, AnchorGrid)
+- ✅ 1,824 lines of well-organized, maintainable code
+- ✅ Zero TypeScript errors, production build succeeds
+- ✅ Bundle size: 330.13 kB (97.46 kB gzipped) - very efficient
+
+**Backend (Page Layouts Model Fix):**
+- ✅ Corrected database schema (one image per page, not multiple)
+- ✅ Updated all types and interfaces
+- ✅ Fixed repository implementations
+- ✅ Refactored service layer
+- ✅ Updated CLI commands (create, update-image, get, list, delete)
+- ✅ All Go code compiles and tests pass
+
+**Documentation:**
+- ✅ `10-ui-design-for-the-zine-photo-layout-software.md` - Complete UI spec
+- ✅ `12-page-layout-tab-design.md` - Detailed page layouts design
+- ✅ `11-changelog-and-things-we-learned.md` - Comprehensive changelog
+- ✅ `05-expansion-plan-for-zine-layout-platform.md` - Updated with corrections
+
+### Files Changed
+
+**Frontend:**
+1. `web/src/components/ui/Tabs.tsx` (NEW) - 57 lines
+2. `web/src/components/ui/index.ts` (UPDATED)
+3. `web/src/components/SliderInput.tsx` (NEW) - 56 lines
+4. `web/src/components/AnchorGrid.tsx` (NEW) - 53 lines
+5. `web/src/views/tabs/AssetsTab.tsx` (NEW) - 137 lines
+6. `web/src/views/tabs/SequencesTab.tsx` (NEW) - 296 lines
+7. `web/src/views/tabs/ImageLayoutsTab.tsx` (NEW) - 580 lines
+8. `web/src/views/tabs/PageLayoutsTab.tsx` (NEW) - 310 lines (dummy)
+9. `web/src/views/tabs/ZineTab.tsx` (NEW) - 335 lines (dummy)
+10. `web/src/views/ProjectDetail.tsx` (REFACTORED) - 673 → 125 lines
+11. `web/src/views/LaidOutImageViewer.tsx` (FIXED) - TypeScript errors
+12. `web/src/views/LayoutTemplateManager.tsx` (FIXED) - TypeScript errors
+13. `web/src/views/LayoutSequenceEditor.tsx` (FIXED) - TypeScript errors
+
+**Backend:**
+1. `pkg/repo/types.go` (UPDATED) - Corrected LaidOutPage, removed LaidOutPageInput
+2. `pkg/repo/sqlite/migrations.go` (UPDATED) - Fixed laid_out_pages schema
+3. `pkg/repo/sqlite/laid_out_pages.go` (UPDATED) - Removed inputs methods
+4. `pkg/services/pages.go` (UPDATED) - Simplified API
+5. `cmd/zine-layout/cmds/workflow/laid_out_pages/create.go` (UPDATED)
+6. `cmd/zine-layout/cmds/workflow/laid_out_pages/update_image.go` (RENAMED from set_inputs.go)
+7. `cmd/zine-layout/cmds/workflow/laid_out_pages/get.go` (UPDATED)
+8. `cmd/zine-layout/cmds/workflow/laid_out_pages/command.go` (UPDATED)
+
+**Documentation:**
+1. `ttmp/2025-10-10/10-ui-design-for-the-zine-photo-layout-software.md` (UPDATED)
+2. `ttmp/2025-10-11/12-page-layout-tab-design.md` (NEW)
+3. `ttmp/2025-10-11/11-changelog-and-things-we-learned.md` (THIS FILE)
+4. `ttmp/2025-10-10/05-expansion-plan-for-zine-layout-platform.md` (UPDATED)
+
+**Total files changed: 25 files**
+
+### CLI Commands Updated
+
+**New workflow:**
+```bash
+# Create print page (one image per page)
+zine-layout workflow laid-out-pages create \
+  --project-id prj-... \
+  --template-id ptpl-... \
+  --laid-out-image-id loi-...
+
+# Change which image is on a page
+zine-layout workflow laid-out-pages update-image \
+  --page-id lpg-... \
+  --laid-out-image-id loi-...
+
+# Get page details
+zine-layout workflow laid-out-pages get --page-id lpg-...
+
+# List all pages in project
+zine-layout workflow laid-out-pages list --project-id prj-...
+
+# Delete a page
+zine-layout workflow laid-out-pages delete --page-id lpg-...
+```
+
+### Final Workflow Diagram
+
+```
+┌─────────────┐
+│   Asset     │  Raw uploaded image
+│  (PNG file) │
+└──────┬──────┘
+       │
+       ↓ [Apply Image Layout Template]
+       │ (crop, scale, position)
+       │
+┌──────┴──────────┐
+│  Laid-Out Image │  Cropped/scaled image ready for use
+└──────┬──────────┘
+       │
+       ↓ [Apply Page Layout Template]
+       │ (page size, margins, spread, gutter)
+       │
+┌──────┴──────────┐
+│  Laid-Out Page  │  Print-ready page (image on physical page)
+│  (Print Page)   │  - Single pages: image with margins
+└──────┬──────────┘  - Spreads: wide image split L/R with gutter
+       │
+       ↓ [Add to Zine]
+       │ (collect pages, order)
+       │
+┌──────┴──────────┐
+│      Zine       │  Complete book
+└──────┬──────────┘
+       │
+       ↓ [Apply Imposition Template]
+       │ (8-page fold, 16-page booklet, etc.)
+       │
+┌──────┴──────────┐
+│  Print-Ready    │  PDF or PNG sequence
+│     Export      │  Ready for printing/folding
+└─────────────────┘
+```
+
+### Next Steps for Phase 3 Implementation
+
+When implementing Phase 3 backend:
+1. Define `PageLayoutSettings` struct (page size, margins, spread, gutter, positioning)
+2. Implement page rendering service:
+   - Load laid-out image result
+   - Apply page template settings
+   - For spreads: split into left/right with gutter overlap
+   - Generate PNG or PDF output
+3. Add REST API endpoints per expansion plan
+4. Rewrite `PageLayoutsTab.tsx` following `12-page-layout-tab-design.md`
+5. Test spread mode with gutter calculations
+6. Implement export with bleed and crop marks
+
+---
+
 **END OF CHANGELOG**
+
 
 
 
