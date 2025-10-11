@@ -128,3 +128,24 @@
 - Backfill service-level tests (`pkg/services/layout_test.go`) now that the engine is stable, and add integration coverage for template→laid-out image workflows.
 - Implement renderer helpers (`pkg/imagelayout/renderer`) so export endpoints can graduate from stubs.
 - Extend the DSL compiler to surface validation errors for the new fit/crop/focus fields, keeping UI feedback tight.
+
+---
+
+## 2025-10-10T07:45Z – Frontend API Typings & Global Template Hooks
+- Reworked `web/src/api.ts` to mirror the Go-side `imagelayout` structs: added typed viewport settings/result/trace models, aliased `SpreadSettings`, and tightened laid-out overrides to `Partial<ImageLayoutViewportSettings>`.
+- Added RTK Query endpoints for global image layout templates (`GET/POST /api/image-layout-templates`) plus single-template fetches, alongside new hooks for upcoming UI work.
+- Renamed cache tag identifiers to the explicit “image layout” terminology so future page/zine layout DSLs can coexist without collisions.
+
+### What Worked
+- Porting the backend shape wholesale removed guesswork—existing Redux slices consume the richer data without intermediate casting.
+- Tag renames kept cache invalidation predictable even with the added global listings.
+
+### What Didn't Work
+- Legacy React views still import the older hook names; compatibility aliases remain for now, so the UI workstream must fold in the new hooks to benefit fully.
+
+### What I Learned
+- Maintaining a `SpreadSettings` alias eased the transition while signalling the new terminology to downstream consumers.
+
+### Attention Points
+- Coordinate with the frontend implementer to adopt the new hooks and retire the temporary aliases.
+- Backfill automated checks (typecheck/lint) once the UI migrates, ensuring the stricter typings catch regressions early.

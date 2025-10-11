@@ -38,33 +38,105 @@ export interface ImageSequenceItem {
   is_gap: boolean;
 }
 
+export interface ImageLayoutRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface ImageLayoutFocusPoint {
+  source_x: number;
+  source_y: number;
+  target_x: number;
+  target_y: number;
+}
+
+export interface ImageLayoutExportOptions {
+  format: string;
+  quality: number;
+  background: string;
+  filename_template: string;
+  out_dir: string;
+}
+
+export interface ImageLayoutViewportSettings {
+  mode?: 'page' | 'crop' | 'fit';
+  paper_width_in: number;
+  paper_height_in: number;
+  dpi: number;
+  orientation: 'portrait' | 'landscape';
+  is_spread?: boolean;
+  margin_top_in: number;
+  margin_right_in: number;
+  margin_bottom_in: number;
+  margin_left_in: number;
+  gutter_in?: number | null;
+  crop_ratio?: number | null;
+  crop_to_fill: boolean;
+  crop_width_px?: number | null;
+  crop_height_px?: number | null;
+  fit_mode?: 'width' | 'height' | 'auto';
+  fit_width_px?: number | null;
+  fit_height_px?: number | null;
+  user_scale: number;
+  position_x: number;
+  position_y: number;
+  units: 'normalized' | 'px';
+  anchor_preset?: string;
+  focus?: ImageLayoutFocusPoint | null;
+  export: ImageLayoutExportOptions;
+}
+
+export type ImageLayoutTemplateSettingsPayload =
+  | ImageLayoutViewportSettings
+  | (Partial<ImageLayoutViewportSettings> & Record<string, unknown>);
+
 export interface ImageLayoutTemplate {
   id: string;
   project_id?: string | null;
   scope: 'global' | 'project';
   name: string;
   description?: string;
-  settings: Record<string, unknown>;
+  settings: ImageLayoutViewportSettings;
   created_at: string;
   updated_at: string;
 }
 
-export interface LayoutComputation {
-  settings: Record<string, unknown>;
-  result: Record<string, unknown>;
-  trace?: {
-    inputs?: Record<string, unknown>;
-    steps?: Array<{ label: string; data: Record<string, unknown> }>;
-  };
+export interface ImageLayoutViewportResult {
+  source_rect: ImageLayoutRect;
+  target_rect: ImageLayoutRect;
+  canvas_rect: ImageLayoutRect;
+  scale: number;
+  mode: 'cover' | 'contain' | string;
 }
+
+export interface ImageLayoutTraceStep {
+  label: string;
+  data: Record<string, unknown>;
+}
+
+export interface ImageLayoutTrace {
+  inputs?: Record<string, unknown>;
+  steps?: ImageLayoutTraceStep[];
+}
+
+export interface ImageLayoutComputation {
+  settings: ImageLayoutViewportSettings;
+  result: ImageLayoutViewportResult;
+  trace?: ImageLayoutTrace;
+}
+
+export type LayoutComputation = ImageLayoutComputation;
+export type SpreadSettings = ImageLayoutViewportSettings;
 
 export interface LaidOutImage {
   id: string;
   project_id: string;
   asset_id: string;
   template_id: string;
-  overrides?: Record<string, unknown>;
-  result?: LayoutComputation;
+  overrides?: Partial<ImageLayoutViewportSettings> | null;
+  result?: ImageLayoutComputation;
   created_at: string;
   updated_at: string;
 }
@@ -78,11 +150,15 @@ export interface LayoutSequence {
   updated_at: string;
 }
 
+export type ImageLayoutSequence = LayoutSequence;
+
 export interface LayoutSequenceItem {
   sequence_id: string;
   position: number;
   laid_out_image_id: string;
 }
+
+export type ImageLayoutSequenceItem = LayoutSequenceItem;
 
 const baseQuery = fetchBaseQuery({ baseUrl: '/api' });
 
@@ -94,12 +170,12 @@ export const api = createApi({
   tagTypes: [
     'Project',
     'Asset',
-    'Sequence',
-    'SequenceItems',
-    'LayoutTemplate',
+    'ImageSequence',
+    'ImageSequenceItems',
+    'ImageLayoutTemplate',
     'LaidOutImage',
-    'LayoutSequence',
-    'LayoutSequenceItems',
+    'ImageLayoutSequence',
+    'ImageLayoutSequenceItems',
   ],
   endpoints: (builder) => ({
     getProjects: builder.query<Project[], void>({
@@ -170,10 +246,10 @@ export const api = createApi({
       query: ({ projectId }) => `/projects/${encodeURIComponent(projectId)}/image-sequences`,
       transformResponse: (response: { sequences: ImageSequence[] }) => response.sequences ?? [],
       providesTags: (result, _error, { projectId }) => {
-        const base = [{ type: 'Sequence' as const, id: `LIST-${projectId}` }];
+        const base = [{ type: 'ImageSequence' as const, id: `LIST-${projectId}` }];
         if (!result) return base;
         return [
-          ...result.map((seq) => ({ type: 'Sequence' as const, id: seq.id })),
+          ...result.map((seq) => ({ type: 'ImageSequence' as const, id: seq.id })),
           ...base,
         ];
       },
@@ -189,7 +265,7 @@ export const api = createApi({
       }),
       transformResponse: (response: { sequence: ImageSequence }) => response.sequence,
       invalidatesTags: (_result, _error, { projectId }) => [
-        { type: 'Sequence', id: `LIST-${projectId}` },
+        { type: 'ImageSequence', id: `LIST-${projectId}` },
       ],
     }),
     updateImageSequence: builder.mutation<
@@ -203,8 +279,8 @@ export const api = createApi({
       }),
       transformResponse: (response: { sequence: ImageSequence }) => response.sequence,
       invalidatesTags: (_result, _error, { sequenceId }) => [
-        { type: 'Sequence', id: sequenceId },
-        { type: 'SequenceItems', id: sequenceId },
+        { type: 'ImageSequence', id: sequenceId },
+        { type: 'ImageSequenceItems', id: sequenceId },
       ],
     }),
     deleteImageSequence: builder.mutation<void, { sequenceId: string; projectId: string }>({
@@ -213,9 +289,9 @@ export const api = createApi({
         method: 'DELETE',
       }),
       invalidatesTags: (_result, _error, { sequenceId, projectId }) => [
-        { type: 'Sequence', id: sequenceId },
-        { type: 'Sequence', id: `LIST-${projectId}` },
-        { type: 'SequenceItems', id: sequenceId },
+        { type: 'ImageSequence', id: sequenceId },
+        { type: 'ImageSequence', id: `LIST-${projectId}` },
+        { type: 'ImageSequenceItems', id: sequenceId },
       ],
     }),
 
@@ -232,8 +308,8 @@ export const api = createApi({
         items: response.items ?? [],
       }),
       providesTags: (_result, _error, { sequenceId }) => [
-        { type: 'Sequence', id: sequenceId },
-        { type: 'SequenceItems', id: sequenceId },
+        { type: 'ImageSequence', id: sequenceId },
+        { type: 'ImageSequenceItems', id: sequenceId },
       ],
     }),
     addImageSequenceItem: builder.mutation<
@@ -247,7 +323,7 @@ export const api = createApi({
       }),
       transformResponse: (response: { items: ImageSequenceItem[] }) => response.items ?? [],
       invalidatesTags: (_result, _error, { sequenceId }) => [
-        { type: 'SequenceItems', id: sequenceId },
+        { type: 'ImageSequenceItems', id: sequenceId },
       ],
     }),
     reorderImageSequenceItems: builder.mutation<
@@ -266,7 +342,7 @@ export const api = createApi({
       }),
       transformResponse: (response: { items: ImageSequenceItem[] }) => response.items ?? [],
       invalidatesTags: (_result, _error, { sequenceId }) => [
-        { type: 'SequenceItems', id: sequenceId },
+        { type: 'ImageSequenceItems', id: sequenceId },
       ],
     }),
     deleteImageSequenceItem: builder.mutation<
@@ -278,10 +354,23 @@ export const api = createApi({
         method: 'DELETE',
       }),
       invalidatesTags: (_result, _error, { sequenceId }) => [
-        { type: 'SequenceItems', id: sequenceId },
+        { type: 'ImageSequenceItems', id: sequenceId },
       ],
     }),
 
+    getGlobalImageLayoutTemplates: builder.query<ImageLayoutTemplate[], void>({
+      query: () => `/image-layout-templates`,
+      transformResponse: (response: { templates: ImageLayoutTemplate[] }) =>
+        response.templates ?? [],
+      providesTags: (result) => {
+        const base = [{ type: 'ImageLayoutTemplate' as const, id: 'LIST-global' }];
+        if (!result) return base;
+        return [
+          ...result.map((tpl) => ({ type: 'ImageLayoutTemplate' as const, id: tpl.id })),
+          ...base,
+        ];
+      },
+    }),
     getImageLayoutTemplates: builder.query<
       ImageLayoutTemplate[],
       { projectId: string }
@@ -291,17 +380,50 @@ export const api = createApi({
       transformResponse: (response: { templates: ImageLayoutTemplate[] }) =>
         response.templates ?? [],
       providesTags: (result, _error, { projectId }) => {
-        const base = [{ type: 'LayoutTemplate' as const, id: `LIST-${projectId}` }];
+        const base = [
+          { type: 'ImageLayoutTemplate' as const, id: `LIST-${projectId}` },
+          { type: 'ImageLayoutTemplate' as const, id: 'LIST-global' },
+        ];
         if (!result) return base;
         return [
-          ...result.map((tpl) => ({ type: 'LayoutTemplate' as const, id: tpl.id })),
+          ...result.map((tpl) => ({ type: 'ImageLayoutTemplate' as const, id: tpl.id })),
           ...base,
         ];
       },
     }),
+    getImageLayoutTemplate: builder.query<
+      ImageLayoutTemplate,
+      { templateId: string }
+    >({
+      query: ({ templateId }) => `/image-layout-templates/${encodeURIComponent(templateId)}`,
+      transformResponse: (response: { template: ImageLayoutTemplate }) => response.template,
+      providesTags: (result) =>
+        result ? [{ type: 'ImageLayoutTemplate', id: result.id }] : [],
+    }),
+    createGlobalImageLayoutTemplate: builder.mutation<
+      ImageLayoutTemplate,
+      {
+        name: string;
+        description?: string;
+        settings: ImageLayoutTemplateSettingsPayload;
+      }
+    >({
+      query: (body) => ({
+        url: `/image-layout-templates`,
+        method: 'POST',
+        body,
+      }),
+      transformResponse: (response: { template: ImageLayoutTemplate }) => response.template,
+      invalidatesTags: [{ type: 'ImageLayoutTemplate', id: 'LIST-global' }],
+    }),
     createImageLayoutTemplate: builder.mutation<
       ImageLayoutTemplate,
-      { projectId: string; name: string; description?: string; settings: Record<string, unknown> }
+      {
+        projectId: string;
+        name: string;
+        description?: string;
+        settings: ImageLayoutTemplateSettingsPayload;
+      }
     >({
       query: ({ projectId, ...body }) => ({
         url: `/projects/${encodeURIComponent(projectId)}/image-layout-templates`,
@@ -310,7 +432,7 @@ export const api = createApi({
       }),
       transformResponse: (response: { template: ImageLayoutTemplate }) => response.template,
       invalidatesTags: (_result, _error, { projectId }) => [
-        { type: 'LayoutTemplate', id: `LIST-${projectId}` },
+        { type: 'ImageLayoutTemplate', id: `LIST-${projectId}` },
       ],
     }),
     updateImageLayoutTemplate: builder.mutation<
@@ -319,7 +441,7 @@ export const api = createApi({
         templateId: string;
         name?: string;
         description?: string;
-        settings?: Record<string, unknown>;
+        settings?: ImageLayoutTemplateSettingsPayload;
       }
     >({
       query: ({ templateId, ...body }) => ({
@@ -330,11 +452,11 @@ export const api = createApi({
       transformResponse: (response: { template: ImageLayoutTemplate }) => response.template,
       invalidatesTags: (result) => {
         if (!result) return [];
-        const tags: { type: 'LayoutTemplate'; id: string }[] = [
-          { type: 'LayoutTemplate', id: result.id },
+        const tags: { type: 'ImageLayoutTemplate'; id: string }[] = [
+          { type: 'ImageLayoutTemplate', id: result.id },
         ];
         const listKey = result.project_id ?? 'global';
-        tags.push({ type: 'LayoutTemplate', id: `LIST-${listKey}` });
+        tags.push({ type: 'ImageLayoutTemplate', id: `LIST-${listKey}` });
         return tags;
       },
     }),
@@ -347,8 +469,8 @@ export const api = createApi({
         method: 'DELETE',
       }),
       invalidatesTags: (_result, _error, { templateId, scopeKey }) => [
-        { type: 'LayoutTemplate', id: templateId },
-        { type: 'LayoutTemplate', id: `LIST-${scopeKey}` },
+        { type: 'ImageLayoutTemplate', id: templateId },
+        { type: 'ImageLayoutTemplate', id: `LIST-${scopeKey}` },
       ],
     }),
 
@@ -378,7 +500,7 @@ export const api = createApi({
         projectId: string;
         assetId: string;
         templateId: string;
-        overrides?: Record<string, unknown>;
+        overrides?: Partial<ImageLayoutViewportSettings>;
       }
     >({
       query: ({ projectId, assetId, templateId, overrides }) => ({
@@ -400,7 +522,7 @@ export const api = createApi({
       {
         id: string;
         templateId?: string;
-        overrides?: Record<string, unknown>;
+        overrides?: Partial<ImageLayoutViewportSettings>;
       }
     >({
       query: ({ id, templateId, overrides }) => ({
@@ -433,9 +555,9 @@ export const api = createApi({
         { type: 'LaidOutImage', id: `LIST-${projectId}` },
       ],
     }),
-    previewLaidOutImage: builder.query<LayoutComputation, { id: string }>({
+    previewLaidOutImage: builder.query<ImageLayoutComputation, { id: string }>({
       query: ({ id }) => `/laid-out-images/${encodeURIComponent(id)}/preview`,
-      transformResponse: (response: { result: LayoutComputation }) => response.result,
+      transformResponse: (response: { result: ImageLayoutComputation }) => response.result,
     }),
 
     getLayoutSequences: builder.query<LayoutSequence[], { projectId: string }>({
@@ -443,10 +565,10 @@ export const api = createApi({
       transformResponse: (response: { layout_sequences: LayoutSequence[] }) =>
         response.layout_sequences ?? [],
       providesTags: (result, _error, { projectId }) => {
-        const base = [{ type: 'LayoutSequence' as const, id: `LIST-${projectId}` }];
+        const base = [{ type: 'ImageLayoutSequence' as const, id: `LIST-${projectId}` }];
         if (!result) return base;
         return [
-          ...result.map((seq) => ({ type: 'LayoutSequence' as const, id: seq.id })),
+          ...result.map((seq) => ({ type: 'ImageLayoutSequence' as const, id: seq.id })),
           ...base,
         ];
       },
@@ -463,7 +585,7 @@ export const api = createApi({
       transformResponse: (response: { layout_sequence: LayoutSequence }) =>
         response.layout_sequence,
       invalidatesTags: (_result, _error, { projectId }) => [
-        { type: 'LayoutSequence', id: `LIST-${projectId}` },
+        { type: 'ImageLayoutSequence', id: `LIST-${projectId}` },
       ],
     }),
     updateLayoutSequence: builder.mutation<
@@ -480,8 +602,8 @@ export const api = createApi({
       invalidatesTags: (result) =>
         result
           ? [
-              { type: 'LayoutSequence', id: result.id },
-              { type: 'LayoutSequence', id: `LIST-${result.project_id}` },
+              { type: 'ImageLayoutSequence', id: result.id },
+              { type: 'ImageLayoutSequence', id: `LIST-${result.project_id}` },
             ]
           : [],
     }),
@@ -494,9 +616,9 @@ export const api = createApi({
         method: 'DELETE',
       }),
       invalidatesTags: (_result, _error, { sequenceId, projectId }) => [
-        { type: 'LayoutSequence', id: sequenceId },
-        { type: 'LayoutSequence', id: `LIST-${projectId}` },
-        { type: 'LayoutSequenceItems', id: sequenceId },
+        { type: 'ImageLayoutSequence', id: sequenceId },
+        { type: 'ImageLayoutSequence', id: `LIST-${projectId}` },
+        { type: 'ImageLayoutSequenceItems', id: sequenceId },
       ],
     }),
     getLayoutSequenceDetail: builder.query<
@@ -512,8 +634,8 @@ export const api = createApi({
         items: response.items ?? [],
       }),
       providesTags: (_result, _error, { sequenceId }) => [
-        { type: 'LayoutSequence', id: sequenceId },
-        { type: 'LayoutSequenceItems', id: sequenceId },
+        { type: 'ImageLayoutSequence', id: sequenceId },
+        { type: 'ImageLayoutSequenceItems', id: sequenceId },
       ],
     }),
     addLayoutSequenceItem: builder.mutation<
@@ -527,7 +649,7 @@ export const api = createApi({
       }),
       transformResponse: (response: { items: LayoutSequenceItem[] }) => response.items ?? [],
       invalidatesTags: (_result, _error, { sequenceId }) => [
-        { type: 'LayoutSequenceItems', id: sequenceId },
+        { type: 'ImageLayoutSequenceItems', id: sequenceId },
       ],
     }),
     reorderLayoutSequenceItems: builder.mutation<
@@ -543,7 +665,7 @@ export const api = createApi({
       }),
       transformResponse: (response: { items: LayoutSequenceItem[] }) => response.items ?? [],
       invalidatesTags: (_result, _error, { sequenceId }) => [
-        { type: 'LayoutSequenceItems', id: sequenceId },
+        { type: 'ImageLayoutSequenceItems', id: sequenceId },
       ],
     }),
     deleteLayoutSequenceItem: builder.mutation<
@@ -555,7 +677,7 @@ export const api = createApi({
         method: 'DELETE',
       }),
       invalidatesTags: (_result, _error, { sequenceId }) => [
-        { type: 'LayoutSequenceItems', id: sequenceId },
+        { type: 'ImageLayoutSequenceItems', id: sequenceId },
       ],
     }),
   }),
@@ -576,7 +698,10 @@ export const {
   useAddImageSequenceItemMutation,
   useReorderImageSequenceItemsMutation,
   useDeleteImageSequenceItemMutation,
+  useGetGlobalImageLayoutTemplatesQuery,
   useGetImageLayoutTemplatesQuery,
+  useGetImageLayoutTemplateQuery,
+  useCreateGlobalImageLayoutTemplateMutation,
   useCreateImageLayoutTemplateMutation,
   useUpdateImageLayoutTemplateMutation,
   useDeleteImageLayoutTemplateMutation,

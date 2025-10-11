@@ -12,7 +12,7 @@ interface LayoutTemplateManagerProps {
   projectId: string;
 }
 
-const prettyJSON = (value: Record<string, unknown> | undefined) => {
+const prettyJSON = (value: unknown) => {
   if (!value) return '';
   try {
     return JSON.stringify(value, null, 2);

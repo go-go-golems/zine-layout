@@ -1746,9 +1746,15 @@ echo "✓ All tests passed"
   - `zine-layout imagelayout compute --spec layout.yaml` → print placement JSON/trace
 
 **Frontend:**
-- [ ] 2.14 Extend `web/src/api.ts`
-  - Add types: `ImageLayoutTemplate`, `LaidOutImage`, `LayoutSequence`
-  - Add all CRUD endpoints and preview/export endpoints
+- [x] 2.14 Extend `web/src/api.ts`
+  - Model the image layout entities explicitly: `ImageLayoutTemplate`, `LaidOutImage`, `ImageLayoutSequence`, and their item/result payloads.
+  - Port the Go-side `imagelayout.ViewportSettings`, `ViewportResult`, and `Trace` structure into TypeScript so consumers have strongly typed access to crop/fit/focus data.
+  - Expose both project-scoped and global endpoints:
+    - `GET/POST /api/image-layout-templates` for global templates,
+    - `GET/POST /api/projects/:id/image-layout-templates` for combined listings,
+    - full CRUD for `/api/image-layout-templates/:id`.
+  - Provide React Query hooks for laid-out images and image layout sequences, including preview/export stubs and recompute/update verbs.
+  - Align cache tag names with the “image layout” terminology to avoid confusion with future page/zine layout DSLs.
 - [ ] 2.15 Create `web/src/views/LayoutTemplateManager.tsx`
   - List templates (global + project-specific)
   - Create/edit templates using settings from `bookSpreadSlice`
