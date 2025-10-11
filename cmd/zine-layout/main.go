@@ -6,7 +6,11 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
-	"github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds"
+	apicmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/api"
+	imagelayoutcmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/imagelayout"
+	rendercmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/render"
+	servecmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/serve"
+	workflowcmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/workflow"
 	zldoc "github.com/go-go-golems/zine-layout/pkg/doc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -48,7 +52,7 @@ func main() {
 	cobra.CheckErr(err)
 	_ = hs
 
-	renderCmd, err := cmds.NewRenderCommand()
+	renderCmd, err := rendercmd.NewCommand()
 	cobra.CheckErr(err)
 	cobraRenderCmd, err := cli.BuildCobraCommandFromCommand(
 		renderCmd,
@@ -60,7 +64,7 @@ func main() {
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(cobraRenderCmd)
 
-	serveCmd, err := cmds.NewServeCommand()
+	serveCmd, err := servecmd.NewCommand()
 	cobra.CheckErr(err)
 	cobraServeCmd, err := cli.BuildCobraCommandFromCommand(
 		serveCmd,
@@ -73,15 +77,15 @@ func main() {
 	rootCmd.AddCommand(cobraServeCmd)
 
 	// api group commands
-	apiCmd, err := cmds.NewAPICobraCommand()
+	apiCmd, err := apicmd.NewCommand()
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(apiCmd)
 
-	imagelayoutCmd, err := cmds.NewImageLayoutCommand()
+	imagelayoutCmd, err := imagelayoutcmd.NewCommand()
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(imagelayoutCmd)
 
-	workflowCmd, err := cmds.NewWorkflowCommand()
+	workflowCmd, err := workflowcmd.NewCommand()
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(workflowCmd)
 

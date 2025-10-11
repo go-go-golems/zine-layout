@@ -38,7 +38,7 @@ func (c *ImagesListCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("project ID is required")
 	}
 
-url := fmt.Sprintf("%s/api/projects/%s/assets", settings.Server, settings.ProjectID)
+	url := fmt.Sprintf("%s/api/projects/%s/assets", settings.Server, settings.ProjectID)
 	resp, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to get images: %w", err)
@@ -52,42 +52,42 @@ url := fmt.Sprintf("%s/api/projects/%s/assets", settings.Server, settings.Projec
 		return fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
 
-var result struct {
-	Assets []struct {
-		ID          string            `json:"id"`
-		ProjectID   string            `json:"project_id"`
-		Filename    string            `json:"filename"`
-		Width       int               `json:"width"`
-		Height      int               `json:"height"`
-		ContentType string            `json:"content_type"`
-		Bytes       int64             `json:"bytes"`
-		UploadedAt  time.Time         `json:"uploaded_at"`
-		Metadata    map[string]any    `json:"metadata"`
-		URL         string            `json:"url"`
-	} `json:"assets"`
-}
+	var result struct {
+		Assets []struct {
+			ID          string         `json:"id"`
+			ProjectID   string         `json:"project_id"`
+			Filename    string         `json:"filename"`
+			Width       int            `json:"width"`
+			Height      int            `json:"height"`
+			ContentType string         `json:"content_type"`
+			Bytes       int64          `json:"bytes"`
+			UploadedAt  time.Time      `json:"uploaded_at"`
+			Metadata    map[string]any `json:"metadata"`
+			URL         string         `json:"url"`
+		} `json:"assets"`
+	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
-for _, asset := range result.Assets {
-	row := types.NewRow(
-		types.MRP("project_id", asset.ProjectID),
-		types.MRP("asset_id", asset.ID),
-		types.MRP("filename", asset.Filename),
-		types.MRP("width", asset.Width),
-		types.MRP("height", asset.Height),
-		types.MRP("bytes", asset.Bytes),
-		types.MRP("content_type", asset.ContentType),
-		types.MRP("uploaded_at", asset.UploadedAt.Format(time.RFC3339)),
-		types.MRP("metadata", asset.Metadata),
-		types.MRP("url", asset.URL),
-	)
-	if err := gp.AddRow(ctx, row); err != nil {
-		return err
+	for _, asset := range result.Assets {
+		row := types.NewRow(
+			types.MRP("project_id", asset.ProjectID),
+			types.MRP("asset_id", asset.ID),
+			types.MRP("filename", asset.Filename),
+			types.MRP("width", asset.Width),
+			types.MRP("height", asset.Height),
+			types.MRP("bytes", asset.Bytes),
+			types.MRP("content_type", asset.ContentType),
+			types.MRP("uploaded_at", asset.UploadedAt.Format(time.RFC3339)),
+			types.MRP("metadata", asset.Metadata),
+			types.MRP("url", asset.URL),
+		)
+		if err := gp.AddRow(ctx, row); err != nil {
+			return err
+		}
 	}
-}
 
 	return nil
 }

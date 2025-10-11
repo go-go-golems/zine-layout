@@ -49,14 +49,14 @@ func (c *ImagesUploadCommand) RunIntoGlazeProcessor(
 		if _, err := os.Stat(file); os.IsNotExist(err) {
 			return fmt.Errorf("file does not exist: %s", file)
 		}
-		
+
 		// Check file extension (basic validation)
 		ext := strings.ToLower(filepath.Ext(file))
 		if ext != ".png" {
 			fmt.Printf("Warning: %s is not a PNG file, skipping\n", file)
 			continue
 		}
-		
+
 		validFiles = append(validFiles, file)
 	}
 
@@ -72,15 +72,15 @@ func (c *ImagesUploadCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("failed to upload files: %w", err)
 	}
 
-var result struct {
-	Assets []struct {
-		ID        string `json:"id"`
-		Filename  string `json:"filename"`
-		Width     int    `json:"width"`
-		Height    int    `json:"height"`
-		URL       string `json:"url"`
-	} `json:"assets"`
-}
+	var result struct {
+		Assets []struct {
+			ID       string `json:"id"`
+			Filename string `json:"filename"`
+			Width    int    `json:"width"`
+			Height   int    `json:"height"`
+			URL      string `json:"url"`
+		} `json:"assets"`
+	}
 
 	if err := json.Unmarshal(respBytes, &result); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)

@@ -1,4 +1,4 @@
-package cmds
+package rendercmd
 
 import (
 	"context"
@@ -15,19 +15,19 @@ import (
 	"github.com/pkg/errors"
 )
 
-type RenderCommand struct {
+type Command struct {
 	*cmds.CommandDescription
 }
 
-var _ cmds.BareCommand = (*RenderCommand)(nil)
+var _ cmds.BareCommand = (*Command)(nil)
 
-func NewRenderCommand() (*RenderCommand, error) {
+func NewCommand() (*Command, error) {
 	glazedLayer, err := settings.NewGlazedParameterLayers()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create Glazed parameter layer")
 	}
 
-	return &RenderCommand{
+	return &Command{
 		CommandDescription: cmds.NewCommandDescription(
 			"render",
 			cmds.WithShort("Render output pages from a layout spec and input images"),
@@ -47,7 +47,7 @@ func NewRenderCommand() (*RenderCommand, error) {
 				parameters.NewParameterDefinition("layout-border", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Enable layout border")),
 				parameters.NewParameterDefinition("inner-border", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Enable inner layout border")),
 				parameters.NewParameterDefinition("border-color", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("Border color R,G,B,A (0-255) or color name or #hex")),
-                parameters.NewParameterDefinition("border-type", parameters.ParameterTypeChoice, parameters.WithChoices("plain", "dotted", "dashed", "corner"), parameters.WithHelp("Border type")),
+				parameters.NewParameterDefinition("border-type", parameters.ParameterTypeChoice, parameters.WithChoices("plain", "dotted", "dashed", "corner"), parameters.WithHelp("Border type")),
 				parameters.NewParameterDefinition("test", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Generate test images instead of reading inputs")),
 				parameters.NewParameterDefinition("test-bw", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Use black and white test images")),
 				parameters.NewParameterDefinition("test-dimensions", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("Test image size: 'WIDTH,HEIGHT' (e.g. 600px,800px)")),
@@ -75,7 +75,7 @@ type RenderSettings struct {
 	PPI            int      `glazed.parameter:"ppi"`
 }
 
-func (c *RenderCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayers) error {
+func (c *Command) Run(ctx context.Context, parsedLayers *layers.ParsedLayers) error {
 	s := &RenderSettings{}
 	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, s); err != nil {
 		return err

@@ -52,15 +52,15 @@ func (c *ProjectsGetCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
 
-var result struct {
-	Project struct {
-		ID          string    `json:"id"`
-		Name        string    `json:"name"`
-		Description string    `json:"description"`
-		CreatedAt   time.Time `json:"created_at"`
-		UpdatedAt   time.Time `json:"updated_at"`
-	} `json:"project"`
-}
+	var result struct {
+		Project struct {
+			ID          string    `json:"id"`
+			Name        string    `json:"name"`
+			Description string    `json:"description"`
+			CreatedAt   time.Time `json:"created_at"`
+			UpdatedAt   time.Time `json:"updated_at"`
+		} `json:"project"`
+	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
@@ -68,13 +68,13 @@ var result struct {
 
 	project := result.Project
 
-row := types.NewRow(
-	types.MRP("id", project.ID),
-	types.MRP("name", project.Name),
-	types.MRP("description", project.Description),
-	types.MRP("created_at", project.CreatedAt.Format(time.RFC3339)),
-	types.MRP("updated_at", project.UpdatedAt.Format(time.RFC3339)),
-)
+	row := types.NewRow(
+		types.MRP("id", project.ID),
+		types.MRP("name", project.Name),
+		types.MRP("description", project.Description),
+		types.MRP("created_at", project.CreatedAt.Format(time.RFC3339)),
+		types.MRP("updated_at", project.UpdatedAt.Format(time.RFC3339)),
+	)
 
 	return gp.AddRow(ctx, row)
 }

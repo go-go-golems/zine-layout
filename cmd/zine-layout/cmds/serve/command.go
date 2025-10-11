@@ -1,4 +1,4 @@
-package cmds
+package servecmd
 
 import (
 	"context"
@@ -16,19 +16,19 @@ import (
 	servepkg "github.com/go-go-golems/zine-layout/pkg/serve"
 )
 
-type ServeCommand struct {
+type Command struct {
 	*cmds.CommandDescription
 }
 
-var _ cmds.BareCommand = (*ServeCommand)(nil)
+var _ cmds.BareCommand = (*Command)(nil)
 
-func NewServeCommand() (*ServeCommand, error) {
+func NewCommand() (*Command, error) {
 	glazedLayer, err := settings.NewGlazedParameterLayers()
 	if err != nil {
 		return nil, err
 	}
 
-	return &ServeCommand{
+	return &Command{
 		CommandDescription: cmds.NewCommandDescription(
 			"serve",
 			cmds.WithShort("Serve the Zine Layout web UI and API"),
@@ -48,7 +48,7 @@ type ServeSettings struct {
 	Addr     string `glazed.parameter:"addr"`
 }
 
-func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayers) error {
+func (c *Command) Run(ctx context.Context, parsedLayers *layers.ParsedLayers) error {
 	settings := &ServeSettings{}
 	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, settings); err != nil {
 		return err

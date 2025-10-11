@@ -44,15 +44,15 @@ func (c *ProjectsListCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
 
-var result struct {
-	Projects []struct {
-		ID          string    `json:"id"`
-		Name        string    `json:"name"`
-		Description string    `json:"description"`
-		CreatedAt   time.Time `json:"created_at"`
-		UpdatedAt   time.Time `json:"updated_at"`
-	} `json:"projects"`
-}
+	var result struct {
+		Projects []struct {
+			ID          string    `json:"id"`
+			Name        string    `json:"name"`
+			Description string    `json:"description"`
+			CreatedAt   time.Time `json:"created_at"`
+			UpdatedAt   time.Time `json:"updated_at"`
+		} `json:"projects"`
+	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)

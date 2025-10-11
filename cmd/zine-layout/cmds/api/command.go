@@ -8,6 +8,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewCommand constructs the api verb group root command.
+func NewCommand() (*cobra.Command, error) {
+	root := &cobra.Command{
+		Use:   "api",
+		Short: "HTTP client commands for the zine-layout server",
+	}
+
+	if err := AddAllAPICommands(root); err != nil {
+		return nil, err
+	}
+
+	return root, nil
+}
+
 // AddAllAPICommands adds all API commands to the provided root command
 func AddAllAPICommands(rootCmd *cobra.Command) error {
 	// Projects commands

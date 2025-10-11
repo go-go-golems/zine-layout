@@ -1,4 +1,4 @@
-package workflowcmd
+package workflowshared
 
 import (
 	"database/sql"
@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func buildCommand(cmd cmds.GlazeCommand) (*cobra.Command, error) {
+func BuildCommand(cmd cmds.GlazeCommand) (*cobra.Command, error) {
 	return cli.BuildCobraCommand(cmd,
 		cli.WithParserConfig(cli.CobraParserConfig{
 			ShortHelpLayers: []string{layers.DefaultSlug},
@@ -24,7 +24,7 @@ func buildCommand(cmd cmds.GlazeCommand) (*cobra.Command, error) {
 	)
 }
 
-func openRepositories(dataRoot string) (*repo.Repositories, *sql.DB, error) {
+func OpenRepositories(dataRoot string) (*repo.Repositories, *sql.DB, error) {
 	if dataRoot == "" {
 		dataRoot = "./data"
 	}
@@ -45,7 +45,7 @@ func openRepositories(dataRoot string) (*repo.Repositories, *sql.DB, error) {
 	return repos, db, nil
 }
 
-func stringify(v any) (string, error) {
+func Stringify(v any) (string, error) {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return "", err

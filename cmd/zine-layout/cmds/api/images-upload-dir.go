@@ -55,7 +55,7 @@ func (c *ImagesUploadDirCommand) RunIntoGlazeProcessor(
 		if err != nil {
 			return err
 		}
-		
+
 		// Skip directories
 		if info.IsDir() {
 			// If not recursive, skip subdirectories
@@ -81,7 +81,7 @@ func (c *ImagesUploadDirCommand) RunIntoGlazeProcessor(
 	}
 
 	fmt.Printf("Found %d PNG file(s) in %s\n", len(pngFiles), settings.Directory)
-	
+
 	// Upload in batches to avoid overwhelming the server
 	const batchSize = 10
 	for i := 0; i < len(pngFiles); i += batchSize {
@@ -89,10 +89,10 @@ func (c *ImagesUploadDirCommand) RunIntoGlazeProcessor(
 		if end > len(pngFiles) {
 			end = len(pngFiles)
 		}
-		
+
 		batch := pngFiles[i:end]
 		fmt.Printf("Uploading batch %d/%d (%d files)...\n", (i/batchSize)+1, (len(pngFiles)+batchSize-1)/batchSize, len(batch))
-		
+
 		url := fmt.Sprintf("%s/api/projects/%s/images", settings.Server, settings.ProjectID)
 		respBytes, err := httpUploadFiles(url, batch)
 		if err != nil {
