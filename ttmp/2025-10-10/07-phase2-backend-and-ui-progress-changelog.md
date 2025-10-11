@@ -18,6 +18,14 @@
 
 ---
 
+## 2025-10-11T13:55Z – Phase 3 Schema Guard
+- Added defensive migration logic to drop legacy Phase 2 tables (`laid_out_pages`, `laid_out_page_inputs`, `zine_pages`) when the new `laid_out_image_id` column is missing so the refreshed schema can be applied automatically.
+- Verified the helper only runs once—fresh databases continue to use the new schema without data loss, and stale instances now migrate cleanly instead of crashing on startup.
+
+### Attention Points
+- Recreate print pages/zines after the drop since legacy data is removed; our workflow CLI can reseed fixtures quickly if needed.
+
+---
 ## 2025-10-10T00:45Z – Schema & Repository Scaffolding
 - Extended SQLite migration (`pkg/repo/sqlite/migrations.go`) with `image_layout_templates`, `laid_out_images`, `layout_sequences`, and item tables to support Phase 2 entities.
 - Added repository interfaces and structs for layouts/laid-out assets/sequence ordering (`pkg/repo/types.go`), plus concrete SQLite adapters for each new entity.

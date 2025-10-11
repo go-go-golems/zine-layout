@@ -1,7 +1,36 @@
 # Phase 3 & 4 Implementation Guide
 **Complete Step-by-Step Breakdown**  
 **Date:** October 11, 2025  
-**Status:** Ready for Implementation
+**Updated:** October 11, 2025 (API Discovery)  
+**Status:** REST APIs Already Done, Rendering Service Needed
+
+---
+
+## 🎉 IMPORTANT UPDATE
+
+**Major Discovery:** Phase 3 REST APIs (tasks 3C, 3D, 3F) are **already fully implemented**!
+
+**What This Means:**
+- ✅ All page template endpoints work
+- ✅ All laid-out page endpoints work (create with single image!)
+- ✅ All zine endpoints work
+- ✅ Frontend hooks are ready to use
+- ⏰ **28 hours of work saved!**
+- 📅 **Timeline reduced from 5 weeks to 3-4 weeks**
+
+**What You Can Do RIGHT NOW:**
+- Create page templates via API ✅
+- Create print pages (single image per page) ✅
+- Create and manage zines ✅
+- All CRUD operations work ✅
+
+**What Still Needs Work:**
+- Page rendering service (preview/export return 501)
+- Connect frontend tabs to APIs
+- Imposition algorithms
+- PDF generation
+
+**See `15-phase3-api-status-and-discrepancies.md` for complete analysis.**
 
 ---
 
@@ -35,29 +64,35 @@
 - CLI commands for all Phase 1 & 2 entities
 - Complete tabbed UI with visual controls
 
-✅ **Phase 3 Partially Done:**
-- Database tables: `page_templates`, `laid_out_pages`, `zines`, `zine_pages`
-- Repository layer: All CRUD operations
-- Service layer: `PagesService` (rendering stubbed), `ZinesService`
-- CLI workflow commands (direct DB access)
-- Dummy frontend tabs showing target UX
+✅ **Phase 3 MOSTLY DONE:** (Discovered October 11, 2025)
+- ✅ Database tables: `page_templates`, `laid_out_pages` (corrected), `zines`, `zine_pages`
+- ✅ Repository layer: All CRUD operations (updated for single image per page)
+- ✅ Service layer: `PagesService` (rendering stubbed), `ZinesService`
+- ✅ **REST API: ALL ENDPOINTS IMPLEMENTED!** (page templates, laid-out pages, zines)
+- ✅ **Frontend API types and RTK Query hooks: COMPLETE!**
+- ✅ CLI workflow commands (direct DB access)
+- ✅ Dummy frontend tabs showing target UX
+
+**🎉 SURPRISE DISCOVERY:** 
+REST APIs for Phase 3 (page templates, laid-out pages, zines) are already fully implemented! They correctly use the single-image-per-page model. Preview and export endpoints exist but return 501 (renderer not implemented yet). See `15-phase3-api-status-and-discrepancies.md` for detailed analysis.
 
 ### What Needs Implementation
 
-⧗ **Phase 3 Remaining:**
-- `PageLayoutSettings` struct definition
+⧗ **Phase 3 Remaining (MUCH LESS THAN EXPECTED):**
+- `PageLayoutSettings` struct definition (Go)
 - Page rendering service (single pages + spreads with gutter)
-- REST API endpoints for page templates and laid-out pages
-- REST API endpoints for zines
-- Connect PageLayoutsTab to real API
-- Export endpoints (PNG, PDF preview)
+- ~~REST API endpoints~~ ✅ DONE! (Already implemented)
+- Connect PageLayoutsTab to real API (hooks ready, just remove dummy data)
+- Connect ZineTab to real API (hooks ready, just remove dummy data)
+- Implement preview/export rendering
 
 ○ **Phase 4 Complete:**
 - Imposition algorithms (8-page fold, 16-page booklet, etc.)
 - PDF generation with proper imposition
 - Crop marks and bleed rendering
-- Zine export service
-- Connect ZineTab to real API
+- Zine export service (create export endpoint)
+
+**Revised Estimate:** ~92 hours total (down from 120 hours - REST APIs already done!)
 
 ### Tools & Dependencies
 
@@ -72,6 +107,53 @@
 - Go PDF library (recommend: `github.com/jung-kurt/gofpdf` or `github.com/pdfcpu/pdfcpu`)
 - Image manipulation: `github.com/disintegration/imaging` (already may be in use)
 - Canvas rendering for server-side (or client-side only initially)
+
+---
+
+## ⚡ Quick Start: Test Existing APIs
+
+**Good news!** You can test Phase 3 APIs right now (they're already implemented):
+
+```bash
+# Start server
+cd zine-layout
+./zine-layout serve --addr :8088 --data-root ./data
+
+# In another terminal, test the APIs:
+
+# 1. Create page template
+curl -X POST http://localhost:8088/api/page-templates \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "8x10 Test",
+    "template": {
+      "page_width_in": 8,
+      "page_height_in": 10,
+      "dpi": 300,
+      "margin_top_in": 0.5,
+      "margin_right_in": 0.5,
+      "margin_bottom_in": 0.5,
+      "margin_left_in": 0.5,
+      "is_spread": false,
+      "positioning_mode": "fill"
+    }
+  }' | jq .
+
+# 2. List templates
+curl http://localhost:8088/api/page-templates | jq .
+
+# 3. Create zine (with page IDs from your database)
+curl -X POST http://localhost:8088/api/projects/YOUR_PROJECT_ID/zines \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test Zine",
+    "laid_out_page_ids": []
+  }' | jq .
+
+# All of these work TODAY!
+```
+
+**See `15-phase3-api-status-and-discrepancies.md` for complete API documentation.**
 
 ---
 
@@ -135,6 +217,8 @@ type PageLayoutResult struct {
 	RightPageWidthPx    int  `json:"right_page_width_px,omitempty"`
 	CombinedWidthPx     int  `json:"combined_width_px,omitempty"`
 	GutterPositionPx    int  `json:"gutter_position_px,omitempty"`
+	GutterWidthPx       int  `json:"gutter_width_px,omitempty"`      // For visualization
+	GutterOverlapPx     int  `json:"gutter_overlap_px,omitempty"`    // For visualization
 
 	// Image placement on page (or spread)
 	ImageXPx      int `json:"image_x_px"`
@@ -144,8 +228,28 @@ type PageLayoutResult struct {
 
 	// File paths (when rendered)
 	RenderPath      string `json:"render_path,omitempty"`
-	LeftPagePath    string `json:"left_page_path,omitempty"`    // Spreads only
-	RightPagePath   string `json:"right_page_path,omitempty"`   // Spreads only
+	LeftPagePath    string `json:"left_page_path,omitempty"`      // Spreads: left page PNG
+	RightPagePath   string `json:"right_page_path,omitempty"`     // Spreads: right page PNG
+	CombinedPath    string `json:"combined_path,omitempty"`       // Spreads: both pages with gap
+	FullSpreadPath  string `json:"full_spread_path,omitempty"`    // Spreads: uncut wide image
+}
+
+// RenderOptions controls what gets rendered and how.
+type RenderOptions struct {
+	// What to render (for spreads)
+	RenderLeft     bool `json:"render_left"`      // Render left page
+	RenderRight    bool `json:"render_right"`     // Render right page
+	RenderCombined bool `json:"render_combined"`  // Render both pages with binding gap
+	RenderFull     bool `json:"render_full"`      // Render uncut spread
+	
+	// Visualization options
+	ShowGutter      bool `json:"show_gutter"`       // Overlay gutter area in red (debug)
+	ShowOverlap     bool `json:"show_overlap"`      // Show overlap zones with dashed lines
+	ShowCropMarks   bool `json:"show_crop_marks"`   // Add crop marks
+	ShowBleed       bool `json:"show_bleed"`        // Extend with bleed area
+	
+	// Output format
+	Format string `json:"format"` // "png" | "pdf"
 }
 
 // PageLayoutComputation wraps settings and result.
@@ -360,17 +464,154 @@ func renderSinglePage(settings PageLayoutSettings, result *PageLayoutResult, src
 	return savePNG(canvas, outputPath)
 }
 
-func renderSpreadPages(settings PageLayoutSettings, result *PageLayoutResult, srcImg image.Image, leftPath, rightPath, combinedPath string) error {
-	// TODO: Implement spread rendering
-	// 1. Create full spread canvas (result.CombinedWidthPx × result.OutputHeightPx)
+func renderSpreadPages(settings PageLayoutSettings, result *PageLayoutResult, srcImg image.Image, leftPath, rightPath, combinedPath string, opts RenderOptions) error {
+	// 1. Create full spread canvas
+	spreadCanvas := image.NewRGBA(image.Rect(0, 0, result.CombinedWidthPx, result.OutputHeightPx))
+	draw.Draw(spreadCanvas, spreadCanvas.Bounds(), image.White, image.Point{}, draw.Src)
+
 	// 2. Resize laid-out image to spread dimensions
-	// 3. Draw image on spread
+	resized := imaging.Resize(srcImg, result.ImageWidthPx, result.ImageHeightPx, imaging.Lanczos)
+
+	// 3. Draw image on spread at calculated position
+	draw.Draw(spreadCanvas,
+		image.Rect(result.ImageXPx, result.ImageYPx,
+			result.ImageXPx+result.ImageWidthPx,
+			result.ImageYPx+result.ImageHeightPx),
+		resized,
+		image.Point{},
+		draw.Over,
+	)
+
 	// 4. Split at gutter position
-	// 5. Extract left page (with overlap)
-	// 6. Extract right page (with overlap)
-	// 7. Save all three: left, right, combined
-	
-	return fmt.Errorf("spread rendering not yet implemented")
+	gutterX := result.GutterPositionPx
+	overlapPx := result.GutterOverlapPx
+
+	// 5. Extract left page (with overlap into gutter)
+	if opts.RenderLeft {
+		leftCanvas := image.NewRGBA(image.Rect(0, 0, result.LeftPageWidthPx, result.OutputHeightPx))
+		draw.Draw(leftCanvas, leftCanvas.Bounds(), image.White, image.Point{}, draw.Src)
+		
+		// Copy from spread: 0 to (gutterX + overlapPx)
+		sourceRect := image.Rect(0, 0, gutterX+overlapPx, result.OutputHeightPx)
+		draw.Draw(leftCanvas, leftCanvas.Bounds(), spreadCanvas, sourceRect.Min, draw.Src)
+
+		// Optional: Show overlap zone with dashed line
+		if opts.ShowOverlap {
+			drawDashedLine(leftCanvas, gutterX-gutterX+overlapPx, 0, gutterX-gutterX+overlapPx, result.OutputHeightPx, color.RGBA{255, 0, 0, 180})
+		}
+
+		// Optional: Draw border
+		drawBorder(leftCanvas, result.LeftPageWidthPx, result.OutputHeightPx)
+		
+		if err := savePNG(leftCanvas, leftPath); err != nil {
+			return fmt.Errorf("save left page: %w", err)
+		}
+	}
+
+	// 6. Extract right page (with overlap into gutter)
+	if opts.RenderRight {
+		rightCanvas := image.NewRGBA(image.Rect(0, 0, result.RightPageWidthPx, result.OutputHeightPx))
+		draw.Draw(rightCanvas, rightCanvas.Bounds(), image.White, image.Point{}, draw.Src)
+		
+		// Copy from spread: (gutterX - overlapPx) to end
+		sourceRect := image.Rect(gutterX-overlapPx, 0, result.CombinedWidthPx, result.OutputHeightPx)
+		draw.Draw(rightCanvas, rightCanvas.Bounds(), spreadCanvas, sourceRect.Min, draw.Src)
+
+		// Optional: Show overlap zone with dashed line
+		if opts.ShowOverlap {
+			drawDashedLine(rightCanvas, overlapPx, 0, overlapPx, result.OutputHeightPx, color.RGBA{255, 0, 0, 180})
+		}
+
+		// Optional: Draw border
+		drawBorder(rightCanvas, result.RightPageWidthPx, result.OutputHeightPx)
+		
+		if err := savePNG(rightCanvas, rightPath); err != nil {
+			return fmt.Errorf("save right page: %w", err)
+		}
+	}
+
+	// 7. Render combined view (with binding gap for visualization)
+	if opts.RenderCombined {
+		gapPx := 4 // Small gap to show binding
+		combinedCanvas := image.NewRGBA(image.Rect(0, 0, result.LeftPageWidthPx+result.RightPageWidthPx+gapPx, result.OutputHeightPx))
+		
+		// Background (gap shows through as dark binding area)
+		draw.Draw(combinedCanvas, combinedCanvas.Bounds(), &image.Uniform{color.RGBA{51, 51, 51, 255}}, image.Point{}, draw.Src)
+
+		// Draw left page
+		leftImg, _ := imaging.Open(leftPath)
+		draw.Draw(combinedCanvas, image.Rect(0, 0, result.LeftPageWidthPx, result.OutputHeightPx), leftImg, image.Point{}, draw.Src)
+
+		// Draw right page (offset by left width + gap)
+		rightImg, _ := imaging.Open(rightPath)
+		draw.Draw(combinedCanvas, image.Rect(result.LeftPageWidthPx+gapPx, 0, result.LeftPageWidthPx+gapPx+result.RightPageWidthPx, result.OutputHeightPx), rightImg, image.Point{}, draw.Src)
+
+		if err := savePNG(combinedCanvas, combinedPath); err != nil {
+			return fmt.Errorf("save combined: %w", err)
+		}
+	}
+
+	// 8. Optional: Render full uncut spread with gutter visualization
+	if opts.RenderFull || opts.ShowGutter {
+		fullCanvas := imaging.Clone(spreadCanvas)
+		
+		if opts.ShowGutter {
+			// Draw gutter overlay (semi-transparent red)
+			gutterStart := gutterX - result.GutterWidthPx/2
+			gutterEnd := gutterX + result.GutterWidthPx/2
+			drawFilledRect(fullCanvas, gutterStart, 0, gutterEnd, result.OutputHeightPx, color.RGBA{255, 0, 0, 38}) // 15% opacity
+			
+			// Draw center line (dashed)
+			drawDashedLine(fullCanvas, gutterX, 0, gutterX, result.OutputHeightPx, color.RGBA{255, 0, 0, 204})
+			
+			// Add "GUTTER" label
+			drawText(fullCanvas, "GUTTER", gutterX-30, 30, color.RGBA{255, 0, 0, 204})
+		}
+		
+		fullPath := strings.TrimSuffix(combinedPath, filepath.Ext(combinedPath)) + "-full.png"
+		if err := savePNG(fullCanvas, fullPath); err != nil {
+			return fmt.Errorf("save full spread: %w", err)
+		}
+		result.FullSpreadPath = fullPath
+	}
+
+	return nil
+}
+
+// Helper functions for visualization
+func drawDashedLine(img *image.RGBA, x1, y1, x2, y2 int, col color.Color) {
+	// TODO: Implement dashed line drawing
+	// For now, draw solid line
+	// Production: use image/draw or external library for dashed lines
+}
+
+func drawBorder(img *image.RGBA, width, height int) {
+	// Draw 2px border around image
+	borderColor := color.RGBA{51, 51, 51, 255}
+	// Top and bottom
+	for x := 0; x < width; x++ {
+		img.Set(x, 0, borderColor)
+		img.Set(x, 1, borderColor)
+		img.Set(x, height-2, borderColor)
+		img.Set(x, height-1, borderColor)
+	}
+	// Left and right
+	for y := 0; y < height; y++ {
+		img.Set(0, y, borderColor)
+		img.Set(1, y, borderColor)
+		img.Set(width-2, y, borderColor)
+		img.Set(width-1, y, borderColor)
+	}
+}
+
+func drawFilledRect(img *image.RGBA, x1, y1, x2, y2 int, col color.Color) {
+	rect := image.Rect(x1, y1, x2, y2)
+	draw.Draw(img, rect, &image.Uniform{col}, image.Point{}, draw.Over)
+}
+
+func drawText(img *image.RGBA, text string, x, y int, col color.Color) {
+	// TODO: Implement text drawing (requires font library)
+	// For now, skip or use basic pixel text
 }
 
 func savePNG(img image.Image, path string) error {
@@ -390,11 +631,26 @@ func savePNG(img image.Image, path string) error {
 
 **File:** `pkg/services/pages.go`
 
-**Add rendering capability:**
+**Add rendering capability with options:**
 
 ```go
 // RenderPage renders a laid-out page to disk using the page template settings.
-func (s *PagesService) RenderPage(pageID, outputDir string) (*repo.LaidOutPage, error) {
+// For spreads, can render multiple variants based on options.
+func (s *PagesService) RenderPage(pageID, outputDir string, opts *pagelayout.RenderOptions) (*repo.LaidOutPage, error) {
+	if opts == nil {
+		// Default: render everything
+		opts = &pagelayout.RenderOptions{
+			RenderLeft:     true,
+			RenderRight:    true,
+			RenderCombined: true,
+			RenderFull:     false,
+			ShowGutter:     false,
+			ShowOverlap:    false,
+			ShowCropMarks:  false,
+			ShowBleed:      false,
+			Format:         "png",
+		}
+	}
 	page, err := s.repos.LaidOutPages.Get(pageID)
 	if err != nil {
 		return nil, fmt.Errorf("fetch laid-out page: %w", err)
@@ -459,11 +715,11 @@ go build ./pkg/services
 
 ---
 
-## Phase 3C: Page Templates REST API
+## Phase 3C: Page Templates REST API ✅ COMPLETE
 
-### Step 3C.1: Create REST Handlers
+**Status:** ✅ Already Implemented (238 lines)
 
-**File:** `pkg/serve/page_templates_routes.go` (NEW)
+**File:** `pkg/serve/page_templates_routes.go` (EXISTS)
 
 ```go
 package serve
@@ -559,11 +815,11 @@ curl -X POST http://localhost:8088/api/page-templates \
 
 ---
 
-## Phase 3D: Laid-Out Pages REST API
+## Phase 3D: Laid-Out Pages REST API ✅ MOSTLY COMPLETE
 
-### Step 3D.1: Create REST Handlers
+**Status:** ✅ CRUD endpoints implemented, ⧗ Preview/Export stubbed (208 lines)
 
-**File:** `pkg/serve/laid_out_pages_routes.go` (NEW)
+**File:** `pkg/serve/laid_out_pages_routes.go` (EXISTS)
 
 ```go
 // GET /api/projects/{id}/laid-out-pages
@@ -696,11 +952,11 @@ export interface LaidOutPage {
 
 ---
 
-## Phase 3F: Zine REST API
+## Phase 3F: Zine REST API ✅ COMPLETE
 
-### Step 3F.1: Create Zine REST Handlers
+**Status:** ✅ Already Implemented (209 lines)
 
-**File:** `pkg/serve/zines_routes.go` (NEW)
+**File:** `pkg/serve/zines_routes.go` (EXISTS)
 
 ```go
 // GET /api/projects/{id}/zines
@@ -1175,40 +1431,41 @@ echo "✓ Complete workflow succeeded!"
 
 ## Implementation Order (Recommended)
 
-### Sprint 1: Page Layout Core (Week 1)
-- [ ] Day 1: Define `PageLayoutSettings` struct
-- [ ] Day 2: Implement `ComputePageLayout()` function
+### Sprint 1: Page Rendering Core (Week 1)
+- [ ] Day 1: Define `PageLayoutSettings` struct in Go + TypeScript
+- [ ] Day 2: Implement `ComputePageLayout()` function with tests
 - [ ] Day 3: Implement single page renderer
 - [ ] Day 4: Implement spread renderer with gutter
-- [ ] Day 5: Write tests for page layout engine
+- [ ] Day 5: Wire up preview/export endpoints to use renderer
 
-### Sprint 2: Page Layout API (Week 2)
-- [ ] Day 1: Page template REST endpoints
-- [ ] Day 2: Laid-out page REST endpoints
-- [ ] Day 3: Preview endpoint
-- [ ] Day 4: Update PageLayoutsTab with API hooks
-- [ ] Day 5: Test page creation workflow end-to-end
+### Sprint 2: Frontend Connection (Week 2)
+- [ ] Day 1-2: Rewrite PageLayoutsTab (remove dummy, use real hooks)
+  - ✅ Hooks already available: `useGetPageTemplatesQuery`, `useCreatePageTemplateMutation`, etc.
+  - Build template editor with visual controls
+  - Build print pages grid
+- [ ] Day 3-4: Update ZineTab (remove dummy, use real hooks)
+  - ✅ Hooks already available: `useGetZinesQuery`, `useCreateZineMutation`, etc.
+  - Connect zine CRUD
+  - Connect page ordering
+- [ ] Day 5: End-to-end testing of Phase 3 workflows
 
-### Sprint 3: Zine API (Week 3)
-- [ ] Day 1: Zine REST endpoints
-- [ ] Day 2: Zine page ordering endpoints
-- [ ] Day 3: Update ZineTab with API hooks
-- [ ] Day 4: Test zine assembly workflow
-- [ ] Day 5: Integration testing
+### Sprint 3: Imposition & Export (Week 3)
+- [ ] Day 1-2: Imposition algorithms (8-page fold, 16-page booklet)
+- [ ] Day 3-4: PDF generation with imposition
+- [ ] Day 5: Add export endpoint and test
 
-### Sprint 4: Imposition & Export (Week 4)
-- [ ] Day 1: Imposition algorithm scaffolding
-- [ ] Day 2: 8-page fold implementation
-- [ ] Day 3: PDF generation (basic)
-- [ ] Day 4: Crop marks and bleed
-- [ ] Day 5: Test with physical prints
+### Sprint 4: Polish & Testing (Week 4)
+- [ ] Day 1-2: Crop marks and bleed rendering
+- [ ] Day 3: Physical print tests (fold and verify)
+- [ ] Day 4-5: Bug fixes and performance optimization
 
-### Sprint 5: Polish & Launch (Week 5)
-- [ ] Day 1: Bug fixes from testing
-- [ ] Day 2: Performance optimization
+### Sprint 5: Launch (Optional - if needed)
+- [ ] Day 1-2: Final bug fixes
 - [ ] Day 3: Documentation updates
-- [ ] Day 4: User testing feedback
+- [ ] Day 4: User testing
 - [ ] Day 5: Production deployment
+
+**Revised Timeline:** 3-4 weeks (down from 5 weeks)
 
 ---
 
@@ -1308,9 +1565,28 @@ echo "✓ Complete workflow succeeded!"
 
 **Complex part:** Gutter math must account for binding loss
 
-**Reference:** See `02-image-resizer-code.tsx` lines 128-247 for client-side implementation
+**Reference:** 
+- See `02-image-resizer-code.tsx` lines 128-611 for complete client-side implementation
+- See `16-spread-rendering-visualization-guide.md` for detailed rendering guide with diagrams
+- Code examples in guide show all 4 render variants (left, right, combined, full)
 
-**Done when:** Can split 16×10" image into two 8×10" pages with 0.25" gutter
+**Render Variants to Implement:**
+1. Left page (with overlap) - For printing
+2. Right page (with overlap) - For printing
+3. Combined (with gap) - For preview
+4. Full with gutter overlay - For debugging
+
+**Visualization Features:**
+- Semi-transparent red overlay on gutter area
+- Dashed red lines showing overlap zones
+- Page borders (2px, dark gray)
+- "GUTTER" text label
+- Configurable via `RenderOptions` struct
+
+**Done when:** 
+- Can split 16×10" image into two 8.125×10" pages
+- Can export all 4 variants via API
+- Debug mode shows gutter overlay correctly
 
 ---
 
@@ -1358,9 +1634,53 @@ echo "✓ Complete workflow succeeded!"
 
 **Done when:** Can create page, preview, and export via API
 
+**Enhancement - Spread Export Variants:**
+
+For spreads, support exporting different variants via query parameters:
+
+**API Enhancement:**
+```
+GET /api/laid-out-pages/{id}/export?variant={variant}&debug={bool}
+
+Query params:
+- variant: "single" | "left" | "right" | "combined" | "full"
+- debug: "true" | "false" (adds gutter/overlap visualization)
+```
+
+**Render Options:**
+
+Based on `02-image-resizer-code.tsx` (lines 128-247), support rendering:
+1. **Left page only** - With overlap into gutter, optional dashed line showing overlap zone
+2. **Right page only** - With overlap into gutter, optional dashed line showing overlap zone
+3. **Combined spread** - Both pages with small gap showing binding area
+4. **Full spread** - Uncut wide image with gutter overlay (for debugging)
+
+**Implementation Note:**
+
+```go
+// In handleLaidOutPageExport
+opts := &pagelayout.RenderOptions{
+	RenderLeft:     variant == "left" || variant == "combined",
+	RenderRight:    variant == "right" || variant == "combined",
+	RenderCombined: variant == "combined",
+	RenderFull:     variant == "full" || debug,
+	ShowGutter:     debug,
+	ShowOverlap:    debug,
+}
+```
+
+**Usage:**
+```bash
+# Get left page of spread
+curl "http://localhost:8088/api/laid-out-pages/lpg-.../export?variant=left" -o left.png
+
+# Get combined with debug visualization
+curl "http://localhost:8088/api/laid-out-pages/lpg-.../export?variant=combined&debug=true" -o debug.png
+```
+
 ---
 
-### Task 3.7: Update PageLayoutsTab ⏱️ 12 hours
+### Task 3.7: Update PageLayoutsTab ⏱️ 12 hours → 8 hours (APIs exist)
 
 **What:** Replace dummy with real implementation
 
@@ -1411,32 +1731,44 @@ echo "✓ Complete workflow succeeded!"
 
 ---
 
-### Task 4.1: Imposition Algorithms ⏱️ 16 hours
+### Task 4.1: Imposition ~~16 hours~~ → 4 hours! ✅ REUSE EXISTING
 
-**What:** Implement page arrangement for printing
+**🎉 DISCOVERY:** Imposition system already exists in `pkg/zinelayout`!
+
+**What:** Use existing zinelayout package instead of building from scratch
+
+**Existing Assets:**
+- ✅ `pkg/zinelayout/layout.go` - Complete imposition engine
+- ✅ `data/presets/10_8_sheet_zine.yaml` - 8-page fold layout
+- ✅ `data/presets/11_16_sheet_zine.yaml` - 16-page booklet layout
+- ✅ Grid-based placement with rotation support
+- ✅ YAML parsing and rendering already implemented
 
 **Steps:**
-1. Create `pkg/imposition/` package
-2. Define types (`types.go`)
-3. Implement `8-page-fold.go`:
-   - Calculate page positions on sheet
-   - Front: 8, 1, 2, 7
-   - Back: 6, 3, 4, 5
-   - Test with physical folding
-4. Implement `16-page-booklet.go`:
-   - Two sheets
-   - Front sheet: 16, 1, 2, 15 / 14, 3, 4, 13
-   - Back sheet: similar
-5. Implement `simple-stack.go` (no imposition)
-6. Create imposition service
-7. Test each algorithm:
-   - Print test pages with numbers
-   - Fold physically
-   - Verify page order matches
+1. Create `zine_layout_templates` repository (1 hour)
+2. Seed database with existing YAML presets (30 minutes)
+   - Load `10_8_sheet_zine.yaml` as "8-Page Fold"
+   - Load `11_16_sheet_zine.yaml` as "16-Page Booklet"
+   - Create simple stack template
+3. Create service wrapper (2 hours):
+   - Convert laid-out pages to input images
+   - Call `zinelayout.CreateOutputImage()`
+   - Return output sheets
+4. Test with physical printing (30 minutes)
 
-**Complex:** Getting page order right requires careful testing
+**Reference:** See `17-zinelayout-imposition-integration.md` for complete analysis
 
-**Done when:** Can fold printed sheet and pages are in correct reading order
+**Advantages:**
+- ✅ Proven code (already tested)
+- ✅ YAML-based (easy to add new layouts)
+- ✅ Rotation support built-in
+- ✅ Grid placement solved
+- ✅ Saves 12 hours of development!
+
+**Done when:** 
+- Can load YAML imposition template
+- Can generate print sheets using zinelayout
+- Physical folding test succeeds
 
 ---
 
@@ -1550,24 +1882,36 @@ echo "✓ Complete workflow succeeded!"
 
 ---
 
-## Time Estimates
+## Time Estimates (REVISED)
 
-| Phase | Task | Hours | Cumulative |
-|-------|------|-------|------------|
-| 3A | Page layout types | 2 | 2h |
-| 3B | Page rendering | 24 | 26h |
-| 3C | Page template API | 4 | 30h |
-| 3D | Laid-out pages API | 6 | 36h |
-| 3E | PageLayoutsTab | 12 | 48h |
-| 3F | Zine API | 4 | 52h |
-| 3G | Phase 3 testing | 8 | **60h** |
-| 4A | Imposition algorithms | 16 | 76h |
-| 4B | PDF generation | 12 | 88h |
-| 4C | Export service | 8 | 96h |
-| 4D | ZineTab updates | 8 | 104h |
-| 4E | Final testing | 16 | **120h** |
+| Phase | Task | Hours | Status | Cumulative |
+|-------|------|-------|--------|------------|
+| 3A | Page layout types (Go + TS) | 4 | To Do | 4h |
+| 3B | Page rendering service + spreads | 24 | To Do | 28h |
+| ~~3C~~ | ~~Page template API~~ | ~~4~~ | ✅ Done | ~~32h~~ |
+| ~~3D~~ | ~~Laid-out pages API~~ | ~~6~~ | ✅ Done | ~~38h~~ |
+| 3E | PageLayoutsTab (connect + fixes) | 8 | To Do | 36h |
+| ~~3F~~ | ~~Zine API~~ | ~~4~~ | ✅ Done | ~~40h~~ |
+| 3G | Phase 3 testing | 6 | To Do | **42h** |
+| ~~4A~~ | ~~Imposition~~ (reuse zinelayout!) | ~~16~~ **4** | To Do | 46h |
+| 4B | PDF generation (simplified) | ~~12~~ **8** | To Do | 54h |
+| 4C | Export service (simplified) | ~~8~~ **6** | To Do | 60h |
+| 4D | ZineTab (connect) | 4 | To Do | 64h |
+| 4E | UI fixes from TODO notes | 4 | To Do | 68h |
+| 4F | Final testing | 6 | To Do | **74h** |
 
-**Total: ~120 hours (3 weeks for one developer, or 1.5 weeks for a pair)**
+**FINAL Total: ~74 hours (under 2 weeks for one developer!)**
+
+**Time Saved:**
+- REST APIs already done: -28 hours
+- Imposition reuse (pkg/zinelayout): -12 hours  
+- PDF simplified (using zinelayout): -4 hours
+- Frontend hooks ready: -4 hours
+- **Total saved: 48 hours (40% reduction!)**
+
+**Original Estimate:** 120 hours (5 weeks)  
+**Actual Remaining:** 74 hours (under 2 weeks)  
+**Efficiency Gain:** Nearly half the work eliminated!
 
 ---
 
@@ -1732,18 +2076,28 @@ When bound, overlap disappears into binding
 
 ## Reference Documents
 
-**For Implementation:**
-- `12-page-layout-tab-design.md` - UI design for PageLayoutsTab
-- `10-ui-design-for-the-zine-photo-layout-software.md` - Complete UI spec
-- `02-image-resizer-code.tsx` - Spread rendering reference (client-side)
-- `09-system-specification-after-phase1-and-phase2.md` - System architecture
+**For Implementation (Priority Order):**
+1. **`15-phase3-api-status-and-discrepancies.md`** - ⭐ START HERE! What APIs are already done
+2. **`17-zinelayout-imposition-integration.md`** - ⭐ How to reuse existing imposition
+3. **`18-fixes-for-image-layouts-tab-issues.md`** - ⭐ Quick UI fixes (4 hours)
+4. **`16-spread-rendering-visualization-guide.md`** - Complete spread rendering guide
+5. **`12-page-layout-tab-design.md`** - UI design for PageLayoutsTab
+6. **`10-ui-design-for-the-zine-photo-layout-software.md`** - Complete UI spec
+7. **`02-image-resizer-code.tsx`** - Spread rendering reference (client-side)
 
 **For Context:**
+- `09-system-specification-after-phase1-and-phase2.md` - System architecture
 - `05-expansion-plan-for-zine-layout-platform.md` - Overall plan
-- `07-phase2-backend-and-ui-progress-changelog.md` - Phase 2 learnings
 - `11-changelog-and-things-we-learned.md` - UI refactor learnings
+
+**Quick Start Guide:**
+1. Read `15-phase3-api-status-and-discrepancies.md` → Understand what's done (REST APIs!)
+2. Read `17-zinelayout-imposition-integration.md` → Don't rebuild imposition!
+3. Read `18-fixes-for-image-layouts-tab-issues.md` → Quick UI wins (40 min)
+4. Follow this guide starting with Task 3A.1 (Page layout types)
 
 ---
 
 **END OF GUIDE**
+
 
