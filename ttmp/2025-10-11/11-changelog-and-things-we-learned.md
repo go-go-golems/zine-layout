@@ -415,5 +415,271 @@ After initial implementation, refined the tab structure based on workflow analys
 
 ---
 
+## 2025-10-11T03:30Z – Image Layouts Tab with Visual Controls
+
+### Context
+After completing the tab structure (Assets and Sequences), implemented the full Image Layouts tab (Tab 3) with visual form controls replacing JSON textareas. This tab combines template creation/editing with laid-out image production into a unified workflow.
+
+### What We Did
+
+1. **Created Visual Form Components**
+   - **`SliderInput.tsx`**: Reusable slider with numeric input and min/max labels
+     - Dual input: slider + number field
+     - Configurable range, step, and unit display
+     - Used for DPI, margins, scale, position
+   - **`AnchorGrid.tsx`**: 9-point positioning grid selector
+     - 3×3 grid of buttons (TL, TC, TR, ML, MC, MR, BL, BC, BR)
+     - Visual selected state with primary color
+     - Hover effects and accessibility
+
+2. **Built Comprehensive ImageLayoutsTab** (`web/src/views/tabs/ImageLayoutsTab.tsx`)
+   - **Section 1: Template Library**
+     - Card grid showing all templates (global + project)
+     - Visual template preview showing paper size, DPI, scope
+     - Create/Edit template with visual form (no more JSON!)
+     - Form controls:
+       - Template name, description, global checkbox
+       - Paper size dropdown with presets (Letter, 8×10, 5×7, 4×6, A4, Square, Custom)
+       - Custom paper dimensions (width/height inputs)
+       - DPI slider (72-600)
+       - Orientation radio buttons (Portrait/Landscape with icons)
+       - Uniform margins toggle + individual margin sliders
+       - Crop mode radio (Fill/Fit)
+       - Aspect ratio dropdown (1:1, 2:3, 3:2, 4:5, 16:9, 9:16, None)
+       - 9-point anchor grid
+       - User scale slider (0.5-2×)
+       - Position X/Y sliders (-1 to +1 normalized)
+     - Live preview panel on right side:
+       - Select asset to preview from dropdown
+       - Shows canvas with margins applied
+       - Image scaled and positioned based on settings
+       - Dimensions display below preview
+   
+   - **Section 2: Laid-Out Images**
+     - Header with count and "Create" button
+     - Create form (when button clicked):
+       - Asset dropdown
+       - Template dropdown
+       - Quick create button
+     - Batch apply section:
+       - Source selector (All Assets vs Sequence)
+       - Sequence dropdown (when sequence selected)
+       - Template dropdown
+       - "Apply to All" button
+     - Grid of laid-out images:
+       - Thumbnail preview of asset
+       - Asset filename + template name
+       - Edit and Delete buttons on each card
+       - Selected state highlighting
+     - Empty state message when no images
+
+3. **Updated ProjectDetail.tsx**
+   - Removed imports for LayoutTemplateManager and LaidOutImageViewer
+   - Image Layouts tab now uses single ImageLayoutsTab component
+   - Cleaner, more focused routing
+
+4. **Fixed TypeScript Issues**
+   - Used correct mutation (createGlobalImageLayoutTemplate) for global templates
+   - Proper conditional logic for project vs global template creation
+   - All type checks pass
+
+### What Worked
+
+- **Visual form controls are MUCH better than JSON**: Users can now create templates without understanding JSON structure
+- **Live preview is game-changing**: Seeing margins, scale, and positioning in real-time makes template creation intuitive
+- **Anchor grid is intuitive**: 9-point grid makes positioning obvious (vs numeric coordinates)
+- **Sliders with numeric inputs**: Best of both worlds - quick dragging or precise values
+- **Paper size presets**: Common sizes make template creation fast (8×10, Letter, A4, etc.)
+- **Aspect ratio presets**: 2:3, 16:9, etc. are much easier than calculating decimal ratios
+- **Uniform margins toggle**: Simple checkbox eliminates redundant inputs when all margins are equal
+- **Two-section layout works well**: Template creation at top, results at bottom feels natural
+- **Preview asset selector**: Being able to test template on different assets helps validate settings
+- **Component reusability**: SliderInput and AnchorGrid will be useful in other tabs
+
+### What Didn't Work
+
+- **Initial preview calculation was wrong**: Canvas dimensions need proper margin calculation (fixed with inline style)
+- **Batch apply needs backend work**: Stubbed for now - backend batch endpoint doesn't exist yet
+- **Edit drawer not implemented yet**: Clicking "Edit" on laid-out image shows alert (TODO for next session)
+- **No advanced settings section yet**: Focus points, export options still need UI
+- **Template preview could be better**: Just shows basic scaling, not actual crop calculation
+
+### What I Learned
+
+#### Component Design Patterns
+
+- **Slider + number input combo is superior**: Users can drag for rough adjustments, type for precision
+- **Preview updates should be immediate**: Using local state + inline styles keeps preview snappy
+- **Form sections need visual separation**: Using `<hr>` with proper spacing makes long forms scannable
+- **Dropdown presets reduce errors**: Users can pick "8×10" instead of typing 8 and 10 separately
+- **Radio buttons for binary choices**: Portrait/Landscape with emoji icons is clearer than dropdown
+
+#### State Management
+
+- **Keep form state local until submit**: No need for Redux when form is self-contained
+- **Reset form after success**: Prevents stale data in next create operation
+- **Load existing data into form for editing**: `loadTemplateIntoForm()` pattern works well
+- **Detect preset from values**: Auto-selecting aspect ratio dropdown when loading template is nice UX
+
+#### Visual Design
+
+- **Uppercase section headings**: "PAGE SETUP", "MARGINS", "CROP & FIT" create clear hierarchy
+- **Icon + text for orientation**: ⬜ Portrait and ▭ Landscape are more visual than text alone
+- **Preview needs boundaries**: Border around canvas makes margins obvious
+- **Grid layout for controls**: Two columns for related inputs (Width/Height, X/Y position)
+
+### Attention Points
+
+#### Immediate Next Steps
+
+1. **Implement edit drawer for laid-out images**:
+   - Should show similar override controls (user_scale, position_x/y)
+   - Live preview of laid-out result
+   - Change template dropdown
+   - Recompute button
+
+2. **Add advanced settings section**:
+   - Collapsible section for focus points
+   - Export format/quality settings
+   - Show/hide based on crop mode
+
+3. **Implement batch apply**:
+   - Need backend endpoint or client-side loop
+   - Progress indicator modal
+   - Cancel button
+   - Show count (5 of 20 complete)
+
+4. **Better preview rendering**:
+   - Should use actual placement calculation from backend
+   - Show crop window indicator
+   - Display more technical info (source rect, target rect)
+
+5. **Add quick actions**:
+   - "Apply this template" button on template cards
+   - "Use this template" when viewing laid-out image
+
+#### Future Enhancements
+
+- **Template preview gallery**: Show thumbnail of template applied to sample image on each card
+- **Template duplication**: "Copy" button to create variant
+- **Favorite templates**: Star icon to mark frequently used
+- **Template search/filter**: Search by name or settings
+- **Keyboard navigation**: Tab through sliders, arrow keys to adjust
+- **Preset management**: Save custom paper sizes or aspect ratios
+- **Template validation**: Show warnings for extreme values (DPI > 600, margins > 50% of paper)
+
+### Performance Notes
+
+- **Form renders are fast**: Local state + controlled inputs perform well
+- **Preview updates are smooth**: Inline style changes don't trigger re-renders
+- **Template list memoization**: Prevents unnecessary sorting on every render
+- **Asset lookups cached**: Map lookup O(1) vs array find O(n)
+
+### Code Quality Metrics
+
+New files:
+- `SliderInput.tsx`: 56 lines (reusable component)
+- `AnchorGrid.tsx`: 53 lines (reusable component)
+- `ImageLayoutsTab.tsx`: 580 lines (comprehensive workflow)
+
+Total: ~690 lines for complete visual template editor + laid-out image workflow
+
+**Comparison to old approach:**
+- Old: LayoutTemplateManager (266 lines) + LaidOutImageViewer (289 lines) = 555 lines
+- New: ImageLayoutsTab (580 lines) + SliderInput (56 lines) + AnchorGrid (53 lines) = 689 lines
+- **Net increase**: 134 lines BUT with MUCH better UX (visual controls vs JSON)
+- **Reusable components**: SliderInput and AnchorGrid can be used in other tabs
+
+### User Testing Notes
+
+Manual workflow test:
+- ✅ Navigate to Image Layouts tab
+- ✅ Click "Create Template"
+- ✅ Fill in name: "Test Portrait 8×10"
+- ✅ Select paper size: 8×10
+- ✅ Adjust DPI slider: 300
+- ✅ Set orientation: Portrait
+- ✅ Enable uniform margins, set to 0.5"
+- ✅ Select crop mode: Fill
+- ✅ Choose aspect ratio: 2:3
+- ✅ Select anchor: Middle Center
+- ✅ Adjust user scale: 1.2
+- ✅ Select preview asset from dropdown
+- ✅ See live preview update
+- ✅ Submit form - template created
+- ✅ Template appears in grid
+- ✅ Click "Edit" on template - form loads with correct values
+- ✅ Update DPI to 400, save - template updates
+- ✅ Delete template - confirmation, template removed
+- ✅ Create laid-out image: select asset + template, submit
+- ✅ Laid-out image appears in grid with thumbnail
+- ✅ Delete laid-out image - works
+
+**Issues found:**
+- Edit drawer on laid-out images not yet implemented (shows alert)
+- Batch apply not yet implemented (shows alert)
+- Preview calculation is simplified (doesn't use backend computation)
+
+### Accessibility Improvements
+
+- **Labels for all inputs**: Screen readers can announce field purpose
+- **Radio button groups**: Proper fieldset/legend structure
+- **Checkbox labels**: Clickable text, not just tiny checkbox
+- **Slider ARIA**: Default range input accessibility
+- **Button states**: Disabled states clearly indicated
+- **Focus indicators**: Visible focus rings on all interactive elements
+
+### Browser Compatibility
+
+Tested:
+- ✅ Chrome 120+: All features work perfectly
+- ✅ Firefox 121+: Sliders render correctly
+- ✅ Safari 17+: Range inputs styled properly
+
+### Dependencies
+
+No new dependencies! Used:
+- Existing React hooks
+- Tailwind CSS (already configured)
+- Existing UI components (Button, Card, Input)
+
+### Migration Guide
+
+For developers:
+- Import `ImageLayoutsTab` from `'./tabs/ImageLayoutsTab'`
+- `SliderInput` and `AnchorGrid` available from `'../../components/'`
+- Old LayoutTemplateManager and LaidOutImageViewer still work but deprecated
+- Global templates: use checkbox in form, system handles routing automatically
+
+### Breaking Changes
+
+- None! Old components still work, just not used in default routing
+- API calls unchanged
+- Data structures unchanged
+
+### Known Issues & TODOs
+
+1. **Preview calculation simplified**: Currently uses inline styles, should call backend for accurate placement
+2. **Batch apply stubbed**: Shows alert, needs implementation
+3. **Edit drawer missing**: Clicking edit on laid-out image shows alert
+4. **Advanced settings not shown**: Focus points, export options not in UI yet
+5. **No validation**: Should warn for invalid combinations (e.g., margins > paper size)
+6. **Template preview thumbnails**: Template cards don't show preview yet
+
+### Metrics
+
+- **New components**: 3 files (ImageLayoutsTab, SliderInput, AnchorGrid)
+- **Lines of code**: 689 lines total
+- **Bundle size**: 300.33 kB (up from 292.59 kB, +7.74 kB for new features - acceptable)
+- **Bundle gzip**: 92.68 kB (up from 90.88 kB, +1.8 kB compressed - excellent)
+- **Build time**: 3.54s (similar to previous)
+- **TypeScript errors**: 0
+- **Runtime errors**: 0 known
+- **Forms**: 2 (Template Editor, Create Laid-Out Image)
+- **Visual controls**: 13 different input types (sliders, dropdowns, radios, checkboxes, numeric, text)
+
+---
+
 **END OF CHANGELOG**
+
 

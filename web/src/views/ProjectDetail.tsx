@@ -4,9 +4,7 @@ import { useGetProjectsQuery } from '../api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui';
 import { AssetsTab } from './tabs/AssetsTab';
 import { SequencesTab } from './tabs/SequencesTab';
-import { LayoutTemplateManager } from './LayoutTemplateManager';
-import { LaidOutImageViewer } from './LaidOutImageViewer';
-import { LayoutSequenceEditor } from './LayoutSequenceEditor';
+import { ImageLayoutsTab } from './tabs/ImageLayoutsTab';
 
 const formatDateTime = (iso?: string) => {
   if (!iso) return '—';
@@ -64,17 +62,17 @@ export const ProjectDetail: React.FC = () => {
             <span>🔢</span>
             <span>Sequences</span>
           </TabsTrigger>
-          <TabsTrigger value="templates" className="flex items-center space-x-2">
-            <span>📐</span>
-            <span>Templates</span>
-          </TabsTrigger>
-          <TabsTrigger value="layouts" className="flex items-center space-x-2">
+          <TabsTrigger value="image-layouts" className="flex items-center space-x-2">
             <span>🖼️</span>
-            <span>Layouts</span>
+            <span>Image Layouts</span>
           </TabsTrigger>
-          <TabsTrigger value="output" className="flex items-center space-x-2">
+          <TabsTrigger value="page-layouts" className="flex items-center space-x-2">
+            <span>📄</span>
+            <span>Page Layouts</span>
+          </TabsTrigger>
+          <TabsTrigger value="zine" className="flex items-center space-x-2">
             <span>📚</span>
-            <span>Output</span>
+            <span>Zine</span>
           </TabsTrigger>
         </TabsList>
 
@@ -86,16 +84,32 @@ export const ProjectDetail: React.FC = () => {
           {id && <SequencesTab projectId={id} />}
         </TabsContent>
 
-        <TabsContent value="templates">
-          {id && <LayoutTemplateManager projectId={id} />}
+        <TabsContent value="image-layouts">
+          {id && <ImageLayoutsTab projectId={id} />}
         </TabsContent>
 
-        <TabsContent value="layouts">
-          {id && <LaidOutImageViewer projectId={id} />}
+        <TabsContent value="page-layouts">
+          {id && (
+            <div className="p-12 text-center border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+              <div className="text-4xl mb-4">📄</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Page Layouts</h3>
+              <p className="text-gray-600 max-w-md mx-auto">
+                Multi-image page composition coming in Phase 3. This will allow you to create pages with multiple laid-out images using grid templates.
+              </p>
+                </div>
+              )}
         </TabsContent>
 
-        <TabsContent value="output">
-          {id && <LayoutSequenceEditor projectId={id} />}
+        <TabsContent value="zine">
+          {id && (
+            <div className="p-12 text-center border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+              <div className="text-4xl mb-4">📚</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Zine Assembly & Export</h3>
+              <p className="text-gray-600 max-w-md mx-auto">
+                Zine assembly, imposition templates, and print export coming in Phase 3/4. This will allow you to create complete books with proper page ordering for printing and folding.
+                        </p>
+                      </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

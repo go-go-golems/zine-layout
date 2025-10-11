@@ -127,7 +127,7 @@ export const LayoutSequenceEditor: React.FC<LayoutSequenceEditorProps> = ({ proj
   };
 
   return (
-    <Card id="layout-sequences" className="mt-8">
+    <Card className="mt-8">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -177,7 +177,7 @@ export const LayoutSequenceEditor: React.FC<LayoutSequenceEditorProps> = ({ proj
                       </button>
                       <Button
                         size="sm"
-                        variant="ghost"
+                        variant="secondary"
                         onClick={() => handleDeleteSequence(seq)}
                         disabled={deleteState.isLoading}
                       >
@@ -269,7 +269,7 @@ export const LayoutSequenceEditor: React.FC<LayoutSequenceEditorProps> = ({ proj
                               </Button>
                               <Button
                                 size="sm"
-                                variant="ghost"
+                                variant="secondary"
                                 onClick={() => handleRemoveItem(item.position)}
                                 disabled={deleteItemMutation.isLoading}
                               >

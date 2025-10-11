@@ -147,7 +147,7 @@ export const LayoutTemplateManager: React.FC<LayoutTemplateManagerProps> = ({ pr
   };
 
   return (
-    <Card id="layout-templates" className="mt-8">
+    <Card className="mt-8">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -211,7 +211,7 @@ export const LayoutTemplateManager: React.FC<LayoutTemplateManagerProps> = ({ pr
                     <Button size="sm" variant="secondary" onClick={() => handleSelectTemplate(tpl)}>
                       Edit
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleDeleteTemplate(tpl)} disabled={deleteState.isLoading}>
+                    <Button size="sm" variant="secondary" onClick={() => handleDeleteTemplate(tpl)} disabled={deleteState.isLoading}>
                       Delete
                     </Button>
                   </div>

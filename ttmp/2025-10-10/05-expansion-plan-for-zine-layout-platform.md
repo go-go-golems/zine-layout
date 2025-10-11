@@ -3,6 +3,11 @@
 
 This document provides step-by-step instructions for refactoring the zine-layout codebase to support first-class entities for image sequences, layout templates, laid-out images/pages, and complete zines. Since we're not maintaining backwards compatibility, we can start fresh with a clean database schema. Phase planning now derives from `ttmp/2025-10-10/09-system-specification-after-phase1-and-phase2.md`, and future work must replace the legacy `pkg/spread` module with the new `pkg/imagelayout` stack described there.
 
+> **Documentation cadence:**  
+> - Use `ttmp/2025-10-10/07-phase2-backend-and-ui-progress-changelog.md` as your day-by-day build log. After every meaningful step (schema change, service update, CLI run, bugfix), append a new timestamped entry describing what changed, what worked, what failed, and the next actions.  
+> - Keep `ttmp/2025-10-10/09-system-specification-after-phase1-and-phase2.md` as the canonical source of truth for the current architecture. Whenever behaviour, schema, or command inventory changes, update the relevant section in the spec immediately so newcomers have accurate reference material.  
+> - Treat this expansion plan as the checklist. As you check off items, cross‑link to the matching changelog and spec updates so the three documents stay in sync.
+
 ---
 
 ## SECTION 1: Persistence & Data Model Overhaul

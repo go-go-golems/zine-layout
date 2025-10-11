@@ -129,7 +129,7 @@ export const LaidOutImageViewer: React.FC<LaidOutImageViewerProps> = ({ projectI
   };
 
   return (
-    <Card id="laid-out-images" className="mt-8">
+    <Card className="mt-8">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -194,12 +194,13 @@ export const LaidOutImageViewer: React.FC<LaidOutImageViewerProps> = ({ projectI
             const asset = assetLookup.get(image.asset_id);
             const template = templateLookup.get(image.template_id);
             return (
-              <Card
+              <div
                 key={image.id}
-                className={`cursor-pointer border ${selectedImageId === image.id ? 'border-primary-500' : 'border-gray-200'}`}
+                className={`cursor-pointer`}
                 onClick={() => handleSelectImage(image)}
               >
-                <CardBody className="space-y-3">
+                <Card className={`border ${selectedImageId === image.id ? 'border-primary-500' : 'border-gray-200'}`}>
+                  <CardBody className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-gray-800">{asset?.filename ?? image.asset_id}</p>
@@ -207,7 +208,7 @@ export const LaidOutImageViewer: React.FC<LaidOutImageViewerProps> = ({ projectI
                     </div>
                     <Button
                       size="sm"
-                      variant="ghost"
+                      variant="secondary"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(image);
@@ -220,8 +221,9 @@ export const LaidOutImageViewer: React.FC<LaidOutImageViewerProps> = ({ projectI
                   <p className="text-xs text-gray-500">
                     Updated {new Date(image.updated_at).toLocaleString()}
                   </p>
-                </CardBody>
-              </Card>
+                  </CardBody>
+                </Card>
+              </div>
             );
           })}
           {!laidOutImagesQuery.isLoading && laidOutImages.length === 0 && (
