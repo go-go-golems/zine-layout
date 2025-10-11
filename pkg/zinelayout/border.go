@@ -34,6 +34,13 @@ func drawBorder(img *image.RGBA, rect image.Rectangle, c color.Color, borderType
 	}
 }
 
+// DrawBorder is an exported wrapper that draws a border on the image using
+// the given rectangle, color and type. This allows other packages to reuse
+// the border rendering primitives without duplicating logic.
+func DrawBorder(img *image.RGBA, rect image.Rectangle, c color.Color, borderType BorderType) {
+    drawBorder(img, rect, c, borderType)
+}
+
 func drawPlainBorder(img *image.RGBA, rect image.Rectangle, c color.Color) {
 	for x := rect.Min.X; x < rect.Max.X; x++ {
 		img.Set(x, rect.Min.Y, c)

@@ -6,7 +6,7 @@ import (
     "fmt"
     "archive/zip"
     "image"
-    _ "image/png"
+    "image/png"
     "io"
     "log"
     "math/rand"
@@ -21,6 +21,8 @@ import (
     "io/fs"
     yaml "gopkg.in/yaml.v3"
     apppkg "github.com/go-go-golems/zine-layout/pkg/app"
+    pl "github.com/go-go-golems/zine-layout/pkg/pagelayout"
+    plrender "github.com/go-go-golems/zine-layout/pkg/pagelayout/renderer"
 
     "github.com/go-go-golems/glazed/pkg/cmds"
     "github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -361,6 +363,62 @@ func (c *ServeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayer
                 }
                 return
             }
+        }
+
+        // GET /api/projects/{id}/page-preview?variant=thumbnail|full|left|right|combined
+        if len(parts) == 2 && parts[1] == "page-preview" && r.Method == http.MethodGet {
+            // For now, render first image of project into a default page settings, as Stage A skeleton
+            p, err := readProject(projectsRoot, id)
+            if err != nil {
+                status := http.StatusInternalServerError
+                if os.IsNotExist(err) { status = http.StatusNotFound }
+                http.Error(w, err.Error(), status)
+                return
+            }
+            var filePath string
+            order := p.Order
+            if len(order) == 0 { order = p.Images }
+            if len(order) == 0 {
+                http.Error(w, "no images uploaded", http.StatusBadRequest)
+                return
+            }
+            filePath = filepath.Join(projectImagesDir(projectsRoot, id), order[0])
+            f, err := os.Open(filePath)
+            if err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
+            img, _, err := image.Decode(f)
+            _ = f.Close()
+            if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+
+            // Basic settings: US Letter portrait at 300 DPI with 0.5in margins
+            settings := pl.PageLayoutSettings{
+                PageWidthIn: 8.5, PageHeightIn: 11, DPI: 300,
+                MarginTopIn: 0.5, MarginRightIn: 0.5, MarginBottomIn: 0.5, MarginLeftIn: 0.5,
+                IsSpread: false, GutterWidthIn: 0, GutterOverlapIn: 0,
+                PositioningMode: "fill",
+                AnchorPreset:    "center",
+                BorderEnabled: true,
+                BorderColor:   "0,0,0,255",
+                BorderType:    "plain",
+            }
+            if err := settings.Canonicalize(); err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+            }
+            variant := r.URL.Query().Get("variant")
+            ctx := plrender.RenderContext{ Settings: settings, Source: img, Variant: variant, ThumbnailMaxPx: 512 }
+            res, err := plrender.RenderPage(ctx)
+            if err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
+
+            // Choose variant
+            pick := variant
+            if pick == "" { pick = "thumbnail" }
+            v, ok := res.Variants[pick]
+            if !ok { v = res.Full }
+            w.Header().Set("Content-Type", "image/png")
+            // Encode PNG
+            // Use standard library png encoder
+            encodePNG(w, v)
+            return
         }
 
         // POST /api/projects/{id}/render
@@ -969,6 +1027,9 @@ func listProjectRenders(projectsRoot, id string) ([]RenderListItem, error) {
     }
     return out, nil
 }
+
+// encodePNG writes an image as PNG to w
+func encodePNG(w io.Writer, img image.Image) { _ = png.Encode(w, img) }
 
 func streamZipDir(w http.ResponseWriter, dir string) error {
     w.Header().Set("Content-Type", "application/zip")

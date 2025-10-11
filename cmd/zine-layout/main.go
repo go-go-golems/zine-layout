@@ -7,6 +7,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds"
+    pagescmds "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/pages"
 	zldoc "github.com/go-go-golems/zine-layout/pkg/doc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -71,6 +72,19 @@ func main() {
 	)
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(cobraServeCmd)
+
+    // Register pages-render command
+    pageRenderCmd, err := pagescmds.NewPageRenderCommand()
+    cobra.CheckErr(err)
+    cobraPageRenderCmd, err := cli.BuildCobraCommandFromCommand(
+        pageRenderCmd,
+        cli.WithParserConfig(cli.CobraParserConfig{
+            ShortHelpLayers: []string{layers.DefaultSlug},
+            MiddlewaresFunc: cli.CobraCommandDefaultMiddlewares,
+        }),
+    )
+    cobra.CheckErr(err)
+    rootCmd.AddCommand(cobraPageRenderCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal().Err(err).Msg("Error executing root command")
