@@ -3,7 +3,6 @@ import { BrowserRouter, Link, Route, Routes, useLocation } from 'react-router-do
 import { Health } from '../views/Health';
 import { Home } from '../views/Home';
 import { ProjectDetail } from '../views/ProjectDetail';
-import { ProjectYamlPage } from '../views/ProjectYamlPage';
 import { Projects } from '../views/Projects';
 
 const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -73,7 +72,7 @@ export const App: React.FC = () => {
           <Route path="/" element={<Home />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
-          <Route path="/projects/:id/yaml" element={<ProjectYamlPage />} />
+          <Route path="/projects/:id" element={<ProjectDetail />} />
         </Routes>
       </AppShell>
     </BrowserRouter>
