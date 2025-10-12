@@ -112,8 +112,12 @@ func (s *Server) initDatabase() error {
 	}
 	s.db = db
 	s.repos = repos
-	s.layout = services.NewLayoutService(repos)
-	s.pages = services.NewPagesService(repos)
+    s.layout = services.NewLayoutService(repos)
+    s.pages = services.NewPagesService(repos)
+    // Provide data root to services that need filesystem access
+    if s.pages != nil {
+        s.pages.SetDataRoot(s.settings.DataRoot)
+    }
 	s.zines = services.NewZinesService(repos)
 	return nil
 }

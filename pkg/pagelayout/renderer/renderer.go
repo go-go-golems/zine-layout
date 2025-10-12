@@ -2,13 +2,14 @@ package renderer
 
 import (
     "fmt"
-	"image"
-	"image/color"
-	"image/draw"
+    "image"
+    "image/color"
+    "image/draw"
 
-	xdraw "golang.org/x/image/draw"
+    xdraw "golang.org/x/image/draw"
 
-	"github.com/go-go-golems/zine-layout/pkg/pagelayout"
+    "github.com/go-go-golems/zine-layout/pkg/imagelayout"
+    "github.com/go-go-golems/zine-layout/pkg/pagelayout"
     "github.com/go-go-golems/zine-layout/pkg/zinelayout"
 )
 
@@ -27,6 +28,10 @@ type RenderContext struct {
 	Background     color.Color
 	Variant        string
 	ThumbnailMaxPx int
+    // LayoutResult provides the crop and target rectangles computed by the
+    // imagelayout engine. When provided, the renderer will crop the source
+    // image to LayoutResult.SourceRect before placement.
+    LayoutResult   *imagelayout.ViewportResult
 }
 
 type PageRenderResult struct {
@@ -52,8 +57,14 @@ func RenderPage(ctx RenderContext) (*PageRenderResult, error) {
 
 	target := ctx.Settings.ContentRectPx()
 
-	src := ctx.Source
-	srcB := src.Bounds()
+    src := ctx.Source
+    srcB := src.Bounds()
+
+    // If a viewport result is provided, crop the source to its SourceRect
+    if ctx.LayoutResult != nil {
+        src = cropSourceToRect(src, ctx.LayoutResult.SourceRect)
+        srcB = src.Bounds()
+    }
 
 	switch ctx.Settings.PositioningMode {
 	case "absolute":
@@ -128,6 +139,32 @@ func drawIntoTargetCover(dst *image.RGBA, target image.Rectangle, src image.Imag
 	offY := target.Min.Y + (target.Dy()-newH)/2
 	dstRect := image.Rect(offX, offY, offX+newW, offY+newH)
 	xdraw.CatmullRom.Scale(dst, dstRect, src, srcB, draw.Over, nil)
+}
+
+// cropSourceToRect crops the given source image to the floating-point rect
+// expressed in source pixel coordinates, clamped to the source bounds.
+// If the underlying image type does not support SubImage, a new RGBA is
+// allocated and pixels are copied.
+func cropSourceToRect(src image.Image, r imagelayout.Rect) image.Image {
+    if src == nil { return src }
+    srcB := src.Bounds()
+    if srcB.Empty() { return src }
+    // Convert float rect to integer rectangle and clamp
+    x0 := int(r.X + 0.5)
+    y0 := int(r.Y + 0.5)
+    x1 := int(r.X + r.W + 0.5)
+    y1 := int(r.Y + r.H + 0.5)
+    crop := image.Rect(x0, y0, x1, y1).Intersect(srcB)
+    if crop.Empty() {
+        return src
+    }
+    type subImager interface{ SubImage(r image.Rectangle) image.Image }
+    if si, ok := src.(subImager); ok {
+        return si.SubImage(crop)
+    }
+    out := image.NewRGBA(image.Rect(0, 0, crop.Dx(), crop.Dy()))
+    draw.Draw(out, out.Bounds(), src, crop.Min, draw.Src)
+    return out
 }
 
 func makeThumbnail(src image.Image, maxSide int) image.Image {

@@ -1,3 +1,18 @@
+## 2025-10-12
+
+- Implemented page renderer integration (Stage A/2A):
+  - Added cropping from `imagelayout.ViewportResult.SourceRect` in `pkg/pagelayout/renderer/renderer.go`.
+  - Extended `RenderContext` to accept layout results.
+  - Persisted preview variants (thumbnail/full/combined, left/right for spreads) to `projects/{project}/pages/{page}/`.
+  - Implemented `PagesService.RenderPage` to marshal metadata and update `repo.LaidOutPage.ResultJSON`.
+  - Updated preview endpoint to stream variant PNGs from disk.
+
+- Smoke-tested via CLI:
+ - Added caching headers (ETag/Last-Modified) to preview responses.
+ - Added unit tests: renderer crop uses SourceRect; spreads split dims.
+  - Created project, uploaded sample image, created image layout and page templates, created laid-out image and page, and fetched preview (`200`).
+  - Files written: `thumbnail.png`, `full.png`, `combined.png` (and `left.png`, `right.png` for spreads).
+
 # Changelog – Phase 2 Templates, Layouts & Sequences
 
 ## 2025-10-10T00:00Z – Kick-off Notes

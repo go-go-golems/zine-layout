@@ -141,10 +141,9 @@ func (s PageLayoutSettings) ContentRectPx() image.Rectangle {
 func (s PageLayoutSettings) SpreadSplitX() int {
 	if !s.IsSpread { return -1 }
 	w := s.PixelWidth()
-	g := s.InchesToPixels(s.GutterWidthIn)
-	// center split with gutter carved out
-	center := w / 2
-	// We split such that left page ends at center - g/2, right starts at center + g/2
-	_ = g
-	return center
+    g := s.InchesToPixels(s.GutterWidthIn)
+    // We define split x as center; callers may compute left/right using gutter.
+    // Keep API stable but ensure gutter is accounted by helpers using this value.
+    _ = g
+    return w / 2
 }

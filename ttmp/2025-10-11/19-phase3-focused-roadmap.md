@@ -42,8 +42,8 @@
 
 2. **Build renderer helper (thumbnail + full page).**  
    - Location: add `pkg/pagelayout/renderer/renderer.go`.  
-   - Inputs: `PageLayoutSettings`, `imagelayout.LayoutComputation` (from `pkg/services/layout.go`), plus source image path.  
-   - Use the thumbnail recipe in `ttmp/2025-10-10/17-imagelayout-rendering-algorithm-analysis.md §6` as the core algorithm: crop using `ViewportResult.SourceRect`, scale into the canvas defined by page settings, then split for spreads.  
+   - Inputs: `PageLayoutSettings`, `imagelayout.ViewportResult` (from `LayoutComputation.Result`), plus source image.  
+   - Implemented: cropping via `SourceRect`, scaling into page `ContentRectPx`, spread split, optional borders.  
    - Pseudocode structure:
      ```go
      func RenderPage(ctx RenderContext) (PageRenderResult, error) {
@@ -61,14 +61,12 @@
    - Variants to support: `thumbnail`, `left`, `right`, `combined`, `full` (see `ttmp/2025-10-11/16-spread-rendering-visualization-guide.md`). Produce file paths + metadata for each.
 
 3. **Persist render outputs.**  
-   - Extend `repo.LaidOutPage` to store render metadata if not already available (check `pkg/repo/models/laid_out_page.go`). Add columns for `render_root`, `thumbnail_rel_path`, `updated_at`.  
-   - Update migrations if necessary (create new migration file under `pkg/repo/sqlite/migrations`).  
-   - Keep files under project-scoped directory (`{data-root}/projects/{id}/pages/{pageID}/`).
+   - Implemented metadata in `LaidOutPage.ResultJSON` with variant rel paths; files under `{data-root}/projects/{id}/pages/{pageID}/`.
 
 4. **Integrate renderer with service layer.**  
-   - Modify `pkg/services/pages.go:39-118`. After creating/updating a page, invoke renderer and store result JSON + file paths.  
-   - Provide `RenderPage` and `GetPreview` helpers that `pkg/serve/laid_out_pages_routes.go` can call for `/preview` and `/export`.  
-   - On updates, delete stale files when recomputing.
+   - Implemented `PagesService.RenderPage` to generate files and persist metadata; server injects data root.  
+   - Preview endpoint calls render and streams files.  
+   - TODO: garbage collect stale files on updates.
 
 5. **Wire HTTP endpoints.**  
    - Replace 501 responses in `pkg/serve/laid_out_pages_routes.go:170-209` with real handlers that stream thumbnails/exports.  
