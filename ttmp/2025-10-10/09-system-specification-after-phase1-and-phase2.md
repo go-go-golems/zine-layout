@@ -24,6 +24,12 @@ Date: 2025-10-12
 - `GET /api/laid-out-pages/{id}/preview?variant=thumbnail|full|combined|left|right`
   - Triggers render when missing or outdated.
   - Streams PNG variant from disk based on stored metadata.
+  - Sends ETag/Last-Modified; supports conditional GET.
+## HTTP Export
+
+- `GET /api/laid-out-pages/{id}/export?variant=combined|full|left|right`
+  - Streams selected PNG variant suitable for downloads.
+  - Default `variant=combined`.
 
 ## Storage
 

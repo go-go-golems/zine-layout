@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
     "fmt"
+    "os"
 	"net/http"
     "path/filepath"
     "time"
@@ -246,5 +247,40 @@ func (s *Server) handleLaidOutPagePreview(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleLaidOutPageExport(w http.ResponseWriter, r *http.Request, pageID string) {
-	respondError(w, http.StatusNotImplemented, "page export endpoint not implemented yet")
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.pages == nil {
+		respondError(w, http.StatusInternalServerError, "pages service not initialized")
+		return
+	}
+	page, err := s.pages.RenderPage(pageID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var meta struct{ Variants map[string]string `json:"variants"` }
+	if page.ResultJSON == nil {
+		respondError(w, http.StatusInternalServerError, "render metadata missing")
+		return
+	}
+	if err := json.Unmarshal([]byte(*page.ResultJSON), &meta); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	variant := r.URL.Query().Get("variant")
+	if variant == "" { variant = "combined" }
+	rel, ok := meta.Variants[variant]
+	if !ok || rel == "" {
+		http.NotFound(w, r)
+		return
+	}
+	abs := filepath.Join(s.settings.DataRoot, filepath.FromSlash(rel))
+	http.ServeFile(w, r, abs)
 }

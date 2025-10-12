@@ -36,6 +36,7 @@ type Server struct {
 	layout       *services.LayoutService
 	pages        *services.PagesService
 	zines        *services.ZinesService
+    impose       *services.ImpositionService
 }
 
 // New constructs a Server with the provided settings.
@@ -119,6 +120,8 @@ func (s *Server) initDatabase() error {
         s.pages.SetDataRoot(s.settings.DataRoot)
     }
 	s.zines = services.NewZinesService(repos)
+    s.impose = services.NewImpositionService(repos)
+    if s.impose != nil { s.impose.SetDataRoot(s.settings.DataRoot) }
 	return nil
 }
 

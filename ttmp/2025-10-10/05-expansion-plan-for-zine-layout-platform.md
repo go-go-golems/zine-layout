@@ -9,6 +9,8 @@ Date: 2025-10-12
 - [x] Persist render outputs to project-scoped directory and store metadata in `LaidOutPage.ResultJSON`.
 - [x] Integrate with `PagesService.RenderPage`.
 - [x] Wire `/api/laid-out-pages/{id}/preview` to stream PNGs.
+ - [x] Provide `/api/laid-out-pages/{id}/export?variant=...` to stream PNG variants.
+ - [x] Add workflow CLI `laid-out-pages render` to dump variant paths.
 
 Next: Unit tests for renderer and service; spreads validation; caching headers.
 

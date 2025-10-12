@@ -14,6 +14,7 @@ func NewCommand() (*cobra.Command, error) {
 		newLaidOutPagesGetCommand,
 		newLaidOutPagesUpdateImageCommand,
 		newLaidOutPagesDeleteCommand,
+		newLaidOutPagesRenderCommand,
 	}
 
 	for _, factory := range factories {
