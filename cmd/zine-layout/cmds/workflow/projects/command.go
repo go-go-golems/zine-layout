@@ -13,6 +13,7 @@ func NewCommand() (*cobra.Command, error) {
 		newProjectsListCommand,
 		newProjectsGetCommand,
 		newProjectsCreateCommand,
+		newProjectsUpdateCommand,
 		newProjectsDeleteCommand,
 	}
 

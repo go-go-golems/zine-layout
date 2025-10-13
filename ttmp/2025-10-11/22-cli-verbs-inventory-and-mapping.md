@@ -99,6 +99,7 @@ Date: 2025-10-12
 | `zine-layout workflow projects list` | `repos.Projects.List` | `cmd/zine-layout/cmds/workflow/projects/list.go` | Enumerates all projects in the local database scoped to `--data-root`. |
 | `zine-layout workflow projects get --project-id` | `repos.Projects.Get` | `cmd/zine-layout/cmds/workflow/projects/get.go` | Prints metadata for a single project. |
 | `zine-layout workflow projects create --name --description` | `repos.Projects.Create`, `projects.EnsureProjectDirs` | `cmd/zine-layout/cmds/workflow/projects/create.go` | `--skip-scaffold` skips creating on-disk folders under `projects/`. |
+| `zine-layout workflow projects update --project-id [--name] [--description]` | `repos.Projects.Update` | `cmd/zine-layout/cmds/workflow/projects/update.go` | Renames or re-describes a project; timestamps update accordingly. |
 | `zine-layout workflow projects delete --project-id` | `repos.Projects.Delete` | `cmd/zine-layout/cmds/workflow/projects/delete.go` | Pass `--keep-artifacts` to preserve the `projects/<id>/` directory. |
 
 ### 5.3 Assets
@@ -106,6 +107,7 @@ Date: 2025-10-12
 |----------|-----------------|-----------|-------|
 | `zine-layout workflow assets list --project-id` | `repos.Assets.ListByProject` | `cmd/zine-layout/cmds/workflow/assets/list.go` | Emits filenames, rel paths, dimensions, and metadata JSON. |
 | `zine-layout workflow assets create --project-id --file path[,path...]` | `projects.SavePNGImageFromPath`, `repos.Assets.Create` | `cmd/zine-layout/cmds/workflow/assets/create.go` | Copies PNGs into `projects/<id>/images/` and records asset rows. Multiple `--file` flags are supported. |
+| `zine-layout workflow assets delete --asset-id` | `repos.Assets.Delete` | `cmd/zine-layout/cmds/workflow/assets/delete.go` | Removes the DB row and deletes the on-disk PNG if present. |
 
 ### 5.4 Image Layout Templates
 | CLI verb | Services / Repo | CLI entry | Notes |

@@ -12,6 +12,7 @@ func NewCommand() (*cobra.Command, error) {
 	factories := []func() (*cobra.Command, error){
 		newAssetsListCommand,
 		newAssetsCreateCommand,
+		newAssetsDeleteCommand,
 	}
 
 	for _, factory := range factories {
