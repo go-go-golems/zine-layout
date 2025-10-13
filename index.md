@@ -1,46 +1,43 @@
-# Implementation Marks
+# Developer Navigation Index
 
-Date: 2025-10-11
+This index highlights the primary entry points for working on image layout behaviour, rendering, and validation utilities. Each section links to the canonical Go packages, CLI verbs, and support scripts so a new contributor can quickly explore the codebase.
 
-## Phase 3 — Stage A (Page-Level Rendering)
+## Image Layout CLI (`cmd/zine-layout`)
+- **`cmd/zine-layout/main.go`** – Registers the Cobra root command and wires sub-commands, including `imagelayout`, `render`, and project workflows.
+- **`cmd/zine-layout/cmds/imagelayout/command.go`** – Declares the `imagelayout` verb group.
+- **`cmd/zine-layout/cmds/imagelayout/compute.go`** – Implements `zine-layout imagelayout compute`, mapping CLI flags to `imagelayout.ViewportSettings`, invoking the engine, and printing a JSON payload containing the settings, result, and trace data.
 
-- [x] Add `pkg/pagelayout/settings.go` with `PageLayoutSettings` and helpers
-- [x] Add `pkg/pagelayout/renderer/renderer.go` with variants: thumbnail, full, combined, left, right (left/right include gutter markers for spreads)
-- [x] HTTP preview endpoint: `GET /api/projects/{id}/page-preview?variant=thumbnail|full|left|right|combined`
-- [x] CLI command: `pages-render` (renders a single image to a page)
-- [x] Register `pages-render` in `cmd/zine-layout/main.go`
+## Image Layout Engine (`pkg/imagelayout`)
+- **`pkg/imagelayout/types.go`** – Shared data structures for viewport settings, computation results, and trace steps used by both CLI and services.
+- **`pkg/imagelayout/defaults.go`** – Provides `DefaultSettings()` used whenever a CLI call or preset omits fields.
+- **`pkg/imagelayout/engine/engine.go`** – Core placement logic. `InputsFromSettings` normalises units, DPI, orientation, crop/fit constraints, and focus data; `ComputeViewport` returns the source/target rectangles and a diagnostic trace.
+- **`pkg/imagelayout/engine/engine_test.go`** – Algorithm tests that exercise contain/cover, crop ratios, fit modes, and focus positioning.
 
-### How to run
+## Page Composition (`pkg/pagelayout`)
+- **`pkg/pagelayout/settings.go`** – Page-level sizing helpers (content rectangles, margins, spreads, border metadata).
+- **`pkg/pagelayout/renderer/renderer.go`** – Renders laid-out pages. Accepts an optional `imagelayout.ViewportResult` to crop images before scaling into the page content area and produces multiple variants (full, thumbnail, left/right spreads).
 
-- Server and web (serves API + static web if built):
+## Validation & QA Utilities (`scripts`)
+- **`scripts/imagelayout_validation/main.go`** – Generates synthetic test images, invokes `zine-layout imagelayout compute` across page, crop, and fit templates, validates geometry against the derived engine inputs, renders the resulting placements, and emits a rich HTML report (stored under `ttmp/<date>/imagelayout-validation/index.html`). Useful for manual inspection of algorithm behaviour.
+- **`scripts/pagelayout_validation/main.go`** – Builds representative zine layout specs, synthesises multi-image inputs across portrait, landscape, and square ratios, shells out to `zine-layout render`, verifies the generated page dimensions against library computations, and assembles an HTML dashboard (under `ttmp/<date>/pagelayout-validation/index.html`) with CLI traces, diagnostics, and rendered pages.
+
+## Temporary Artifacts (`ttmp/<date>`)
+- Daily folders collect generated reports, screenshots, and debugging notes. The validation scripts write inputs (`assets/`), overlays or diagnostics, render outputs (`renders/`), and `index.html` into `ttmp/<date>/imagelayout-validation/` and `ttmp/<date>/pagelayout-validation/`.
+
+## How to Explore Quickly
+1. Start with the CLI command to understand accepted flags (`cmd/zine-layout/cmds/imagelayout/compute.go`).
+2. Follow the call into the engine (`pkg/imagelayout/engine/engine.go`) for the maths behind mode-specific behaviour.
+3. Use the validation scripts to reproduce scenarios or extend coverage (`go run ./scripts/imagelayout_validation` for viewport maths, `go run ./scripts/pagelayout_validation` for full pages).
+4. For end-to-end rendering on pages, review `pkg/pagelayout/renderer/renderer.go` alongside the page validation harness outputs.
+
+## Helpful Commands
 ```bash
-go run ./cmd/zine-layout serve --data-root tmp-phase3-dev --addr :8090
+# Run the validation harness and produce the HTML report
+go run ./scripts/imagelayout_validation
+
+# Exercise page layout rendering scenarios and build the dashboard
+go run ./scripts/pagelayout_validation
+
+# Execute the existing Go unit tests
+go test ./...
 ```
-
-- Preview first project image as PNG:
-```bash
-# thumbnail (default)
-curl -sS "http://localhost:8090/api/projects/<PROJECT_ID>/page-preview" -o thumb.png
-# or specific variant
-curl -sS "http://localhost:8090/api/projects/<PROJECT_ID>/page-preview?variant=full" -o full.png
-```
-
-- CLI page render (single image):
-```bash
-go run ./cmd/zine-layout pages-render \
-  --input ./some.png \
-  --output ./page.png \
-  --page-width-in 8.5 --page-height-in 11 --dpi 300 \
-  --margin-top-in 0.5 --margin-right-in 0.5 --margin-bottom-in 0.5 --margin-left-in 0.5 \
-  --positioning-mode fill --variant thumbnail
-```
-
-### Key files
-- `pkg/pagelayout/settings.go`
-- `pkg/pagelayout/renderer/renderer.go`
-- `cmd/zine-layout/cmds/serve.go` (preview route)
-- `cmd/zine-layout/cmds/pages/render.go` (CLI)
-- `cmd/zine-layout/main.go` (command registration)
-
-Notes:
-- Preview renders the first project image into a standard 8.5x11 page at 300 DPI with 0.5in margins. Borders are enabled by default in previews. For spreads, left/right variants include inner-edge gutter markers.
