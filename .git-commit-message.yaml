@@ -1,0 +1,10 @@
+title: ":sparkles: Add page layout validation harness"
+description: |
+  - add a CLI-driven page layout validation harness that shells out to `zine-layout render`
+  - generate synthetic specs and inputs across multiple ratios, verify rendered dimensions, and publish an HTML dashboard
+  - document the new workflow and artifact locations in the developer index
+tests:
+  - name: go run ./scripts/pagelayout_validation
+    result: pass
+  - name: go test ./...
+    result: pass
