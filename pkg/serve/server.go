@@ -16,6 +16,7 @@ import (
 	"github.com/go-go-golems/zine-layout/pkg/repo"
 	sqliterepo "github.com/go-go-golems/zine-layout/pkg/repo/sqlite"
 	"github.com/go-go-golems/zine-layout/pkg/services"
+	"github.com/go-go-golems/zine-layout/pkg/presets"
 )
 
 // Settings controls how the HTTP server is configured.
@@ -80,6 +81,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 func (s *Server) prepare() error {
 	s.projectsRoot = filepath.Join(s.settings.DataRoot, "projects")
 	s.uploadsRoot = filepath.Join(s.settings.DataRoot, "uploads")
+    presetsRoot := filepath.Join(s.settings.DataRoot, "presets")
 
 	if err := os.MkdirAll(s.projectsRoot, 0o755); err != nil {
 		return fmt.Errorf("create projects root: %w", err)
@@ -87,6 +89,10 @@ func (s *Server) prepare() error {
 	if err := os.MkdirAll(s.uploadsRoot, 0o755); err != nil {
 		return fmt.Errorf("create uploads root: %w", err)
 	}
+    if err := os.MkdirAll(presetsRoot, 0o755); err != nil {
+        return fmt.Errorf("create presets root: %w", err)
+    }
+    _ = presets.SeedPresetsIfEmpty(presetsRoot)
 	return s.initDatabase()
 }
 

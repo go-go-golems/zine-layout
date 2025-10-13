@@ -94,6 +94,66 @@ func SavePNGImage(projectsRoot, projectID string, fh *multipart.FileHeader) (*Sa
 	}, nil
 }
 
+// SavePNGImageFromPath copies a PNG from the local filesystem into the project images directory.
+// It mirrors SavePNGImage but operates on an existing file path instead of multipart uploads.
+func SavePNGImageFromPath(projectsRoot, projectID, path string) (*SavedImage, error) {
+	cleanPath := filepath.Clean(path)
+	info, err := os.Stat(cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("stat source image: %w", err)
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("source path %s is a directory", cleanPath)
+	}
+	if info.Size() == 0 {
+		return nil, fmt.Errorf("source image is empty")
+	}
+	lower := strings.ToLower(cleanPath)
+	if filepath.Ext(lower) != ".png" {
+		return nil, fmt.Errorf("only .png files are supported (got %s)", filepath.Ext(cleanPath))
+	}
+	if err := EnsureProjectDirs(projectsRoot, projectID); err != nil {
+		return nil, err
+	}
+	imgDir := ProjectImagesDir(projectsRoot, projectID)
+	next := nextImageNumber(imgDir)
+	filename := fmt.Sprintf("%04d.png", next)
+	dstPath := filepath.Join(imgDir, filename)
+
+	src, err := os.Open(cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("open source image: %w", err)
+	}
+	defer src.Close()
+
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		return nil, fmt.Errorf("create destination image: %w", err)
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = dst.Close()
+		_ = os.Remove(dstPath)
+		return nil, fmt.Errorf("copy image: %w", err)
+	}
+	if err := dst.Close(); err != nil {
+		_ = os.Remove(dstPath)
+		return nil, fmt.Errorf("close destination image: %w", err)
+	}
+
+	width, height, err := readImageSize(dstPath)
+	if err != nil {
+		_ = os.Remove(dstPath)
+		return nil, err
+	}
+
+	return &SavedImage{
+		Filename: filename,
+		Bytes:    info.Size(),
+		Width:    width,
+		Height:   height,
+	}, nil
+}
+
 func nextImageNumber(dir string) int {
 	max := 0
 	entries, _ := os.ReadDir(dir)

@@ -1,20 +1,17 @@
-package zinescmd
+package assetscmd
 
 import "github.com/spf13/cobra"
 
+// NewCommand constructs the `workflow assets` command group.
 func NewCommand() (*cobra.Command, error) {
 	root := &cobra.Command{
-		Use:   "zines",
-		Short: "Manage zines",
+		Use:   "assets",
+		Short: "Manage project assets without the HTTP API",
 	}
 
 	factories := []func() (*cobra.Command, error){
-		newZinesCreateCommand,
-		newZinesListCommand,
-		newZinesGetCommand,
-		newZinesSetPagesCommand,
-		newZinesDeleteCommand,
-		newZinesExportCommand,
+		newAssetsListCommand,
+		newAssetsCreateCommand,
 	}
 
 	for _, factory := range factories {

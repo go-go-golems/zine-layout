@@ -1,20 +1,19 @@
-package zinescmd
+package projectscmd
 
 import "github.com/spf13/cobra"
 
+// NewCommand wires the `workflow projects` command group.
 func NewCommand() (*cobra.Command, error) {
 	root := &cobra.Command{
-		Use:   "zines",
-		Short: "Manage zines",
+		Use:   "projects",
+		Short: "Manage projects directly against the repositories",
 	}
 
 	factories := []func() (*cobra.Command, error){
-		newZinesCreateCommand,
-		newZinesListCommand,
-		newZinesGetCommand,
-		newZinesSetPagesCommand,
-		newZinesDeleteCommand,
-		newZinesExportCommand,
+		newProjectsListCommand,
+		newProjectsGetCommand,
+		newProjectsCreateCommand,
+		newProjectsDeleteCommand,
 	}
 
 	for _, factory := range factories {

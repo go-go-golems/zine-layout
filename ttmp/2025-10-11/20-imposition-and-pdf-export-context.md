@@ -34,21 +34,40 @@ This document equips a new developer/intern with all the context to continue wit
 
 1) PDF Export
   - Add `pkg/export/pdf.go` with a function like:
-    - `func SheetsToPDF(sheets []*services.SheetResult, out io.Writer) error`
-    - Use a maintained PDF lib (e.g., `github.com/jung-kurt/gofpdf` or `github.com/phpdave11/gofpdf`) to create a PDF.
-    - Each sheet is one PDF page; scale 1:1 pixel to point with a DPI assumption (or fit to page size from preset’s `PPI`).
+    - `func SheetsToPDF(ctx context.Context, sheets []*services.SheetResult, dpi float64, out io.Writer) error`
+    - Library: prefer `github.com/phpdave11/gofpdf` (maintained fork of gofpdf). Add to `go.mod` when implementing.
+    - Each sheet → one PDF page. Compute points from pixels using `dpi` (1 pt = 1/72 in): `points = pixels * (72.0 / dpi)`.
+    - Register each PNG as an image and place at origin with page size matching the sheet in points. Avoid recompression if possible.
+    - Suggested helpers in `pkg/export/pdf.go`:
+      - `func pixelsToPoints(px int, dpi float64) float64`
+      - `func addSheetPage(pdf *gofpdf.Fpdf, imgPath string, wPx, hPx int, dpi float64) error`
+    - Error handling: fail fast on missing files, propagate context cancellation.
 
 2) HTTP Export Endpoint
   - `pkg/serve/zines_routes.go`: add route `GET /api/zines/{id}/export?preset=<id>` to stream a generated PDF.
   - Flow:
     - Parse `preset` query; default to a sensible preset if missing (optional).
     - Call `s.impose.ImposeZine(id, preset)` → get sheets.
-    - Use `export.SheetsToPDF` to write to `w` with `Content-Type: application/pdf` and `Content-Disposition: attachment`.
+    - Use `export.SheetsToPDF` to write to `w` with headers:
+      - `Content-Type: application/pdf`
+      - `Content-Disposition: attachment; filename="<zineID>-<preset>.pdf"`
+    - Optional query: `dpi` (default 300). Validate `dpi > 0`.
+    - Consider `ETag` on content-addressed temp files later; for now, stream directly.
 
 3) CLI Verb (Workflow)
   - New file: `cmd/zine-layout/cmds/workflow/zines/export.go`.
   - Flags: `--data-root`, `--zine-id`, `--preset`, `--out` (path; if empty, write to stdout).
+  - Flags (optional): `--dpi` (default 300).
   - Use `ImpositionService` then `SheetsToPDF` to produce the PDF.
+  - Pseudocode sketch:
+    ```go
+    func newZinesExportCommand() (*cobra.Command, error) {
+      // parse flags: data-root, zine-id, preset, out, dpi
+      sheets, err := impose.ImposeZine(zineID, preset)
+      // open out (or stdout), defer close
+      err = export.SheetsToPDF(ctx, sheets, dpi, out)
+    }
+    ```
 
 ## Key Files and Symbols
 
@@ -57,6 +76,8 @@ This document equips a new developer/intern with all the context to continue wit
   - `pkg/services/zines.go`: `GetZineWithPages`, `UpdateZinePages`.
   - `pkg/services/pages.go`: `RenderPage` writes PNGs, stores `ResultJSON` variant paths.
   - `pkg/services/imposition.go`: `ImposeZine`, `SaveSheetsAsPNGs`.
+- Export
+  - `pkg/export/pdf.go`: `SheetsToPDF(ctx context.Context, sheets []*services.SheetResult, dpi float64, out io.Writer) error`.
 - Zine layout engine
   - `pkg/zinelayout/layout.go`: `ZineLayout`, `CreateOutputImage`.
   - `pkg/presets/presets.go`: helpers for presets on disk (list/seed/apply).
@@ -74,17 +95,32 @@ This document equips a new developer/intern with all the context to continue wit
 - Pages: `projects/{projectID}/pages/{pageID}/{variant}.png`.
 - Presets: `{dataRoot}/presets/{presetID}.yaml`.
 - Imposed sheets (optional): `projects/{projectID}/zines/{zineID}/imposed/sheet-XX.png`.
+  - For PDF export, images can be used directly from render locations; no need to save intermediary sheet PNGs unless debugging.
 
 ## Testing Plan (Post-PDF)
 
 - Unit tests for `SheetsToPDF`: ensure page count matches sheets, basic metadata.
 - HTTP smoke: `GET /api/zines/{id}/export?preset=...` returns `200` with `application/pdf`.
 - CLI smoke: `workflow zines export --zine-id ... --preset ... --out test.pdf` and validate file exists and non-zero size.
+  - End-to-end (server): `curl -sS -o out.pdf "http://localhost:8090/api/zines/<ZINE_ID>/export?preset=<PRESET>&dpi=300"` then `file out.pdf` and `pdfinfo out.pdf`.
 
 ## Notes and Caveats
 
 - Ensure all pages used by a zine belong to the same project (already enforced in services). The imposition uses the project’s data root to load PNGs.
 - If a page has no `combined` variant (non-spread), fallback to `full` (then `thumbnail`).
 - Large sheets: consider memory—stream PDF page-by-page if the library supports it.
+ - Orientation: page size in PDF should match sheet width/height from `ZineLayout.CreateOutputImage` (landscape vs portrait preserved).
+ - DPI: Choose a single `dpi` for conversion; mismatched DPI will change on-paper size but not pixel fidelity.
+ - Errors: if a page has no usable variant, surface a clear error with page ID; do not silently skip.
+
+---
+
+## Implementation Checklist (Copy/Paste when working)
+
+- [ ] Add dependency: `github.com/phpdave11/gofpdf`.
+- [ ] Create `pkg/export/pdf.go` with `SheetsToPDF` and helpers.
+- [ ] Implement HTTP handler in `pkg/serve/zines_routes.go` (`handleZineExport`).
+- [ ] Add workflow CLI `cmd/zine-layout/cmds/workflow/zines/export.go`.
+- [ ] Test via CLI and HTTP; update `ttmp/2025-10-10/07-phase2-backend-and-ui-progress-changelog.md`.
 
 

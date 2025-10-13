@@ -63,6 +63,8 @@ Keep these updated as you work:
 | `05-expansion-plan-for-zine-layout-platform.md` | Implementation checklist per phase with cross-links to specs/changelog. Mark progress and add instructions for future steps. |
 | `07-phase2-backend-and-ui-progress-changelog.md` | Day-by-day engineering log. Append an entry after **every** significant task (schema change, CLI test, bugfix). |
 | `09-system-specification-after-phase1-and-phase2.md` | Canonical architecture/spec. Update immediately when schemas, services, or CLI inventories change. |
+| `../2025-10-11/19-phase3-focused-roadmap.md` | Up-to-date Phase 3 plan (Stages A–D). |
+| `../2025-10-11/20-imposition-and-pdf-export-context.md` | How to finish Stage C: imposition → PDF export (symbols, commands). |
 | `04-report-on-the-current-codebase-and-how-it-can-be-used-for-the-zine-layout-software.md` | Current state analysis prior to Phase 2; useful historical context. |
 | `01-algorithm-for-resizing.md`, `02-image-resizer-code.tsx`, `03-template-resize-dsl.md` | Algorithmic references for imagelayout behaviour and DSL expectations. |
 | `06-phase1-backend-and-cli-progress-changelog.md` | Phase 1 log (legacy but informative). |

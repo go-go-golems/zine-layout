@@ -5,6 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+    "strconv"
+    "time"
+    "context"
+    "github.com/go-go-golems/zine-layout/pkg/export"
 )
 
 // Project zine routes --------------------------------------------------------
@@ -76,11 +80,14 @@ func (s *Server) handleZineRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(parts) > 1 {
+    if len(parts) > 1 {
 		switch parts[1] {
 		case "pages":
 			s.handleZinePages(w, r, zineID)
 			return
+        case "export":
+            s.handleZineExport(w, r, zineID)
+            return
 		default:
 			http.NotFound(w, r)
 			return
@@ -205,4 +212,47 @@ func (s *Server) handleZinePages(w http.ResponseWriter, r *http.Request, zineID 
 		w.Header().Set("Allow", "GET, PUT, PATCH")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Server) handleZineExport(w http.ResponseWriter, r *http.Request, zineID string) {
+    if r.Method != http.MethodGet {
+        w.Header().Set("Allow", "GET")
+        http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+        return
+    }
+    if s.impose == nil {
+        respondError(w, http.StatusInternalServerError, "imposition service not initialized")
+        return
+    }
+    preset := strings.TrimSpace(r.URL.Query().Get("preset"))
+    if preset == "" { preset = "10_8_sheet_zine" }
+    dpi := 300.0
+    if sdpi := strings.TrimSpace(r.URL.Query().Get("dpi")); sdpi != "" {
+        if v, err := strconv.ParseFloat(sdpi, 64); err == nil && v > 0 { dpi = v }
+    }
+
+    // Impose sheets
+    sheets, err := s.impose.ImposeZine(zineID, preset)
+    if err != nil {
+        if errors.Is(err, sql.ErrNoRows) {
+            http.NotFound(w, r)
+            return
+        }
+        respondError(w, http.StatusBadRequest, err.Error())
+        return
+    }
+
+    // Stream PDF directly to response
+    w.Header().Set("Content-Type", "application/pdf")
+    w.Header().Set("Content-Disposition", "attachment; filename=\""+zineID+"-"+preset+".pdf\"")
+    w.Header().Set("Cache-Control", "no-store")
+    w.Header().Set("X-Content-Type-Options", "nosniff")
+
+    ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+    defer cancel()
+
+    if err := export.SheetsToPDF(ctx, sheets, dpi, w); err != nil {
+        respondError(w, http.StatusInternalServerError, err.Error())
+        return
+    }
 }
