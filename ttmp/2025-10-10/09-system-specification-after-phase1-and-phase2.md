@@ -1,3 +1,41 @@
+# System Specification Update – Page Rendering Pipeline
+
+Date: 2025-10-12
+
+## Backend Rendering
+
+- Page layout configuration is represented by `pkg/pagelayout.PageLayoutSettings` (JSON-compatible with REST `page_templates` payloads).
+- Renderer entrypoint: `pkg/pagelayout/renderer.RenderPage(RenderContext)`.
+  - Inputs: decoded source image, `PageLayoutSettings`, optional `imagelayout.ViewportResult`.
+  - Behaviour: crops source image to `ViewportResult.SourceRect` if provided; places into page `ContentRectPx()` using `fill` or `absolute` modes; supports optional borders; splits spreads into `left`/`right` variants.
+  - Outputs: in-memory images for variants: `thumbnail`, `full`, `combined`, and optionally `left`, `right`.
+
+## Service Integration
+
+- `pkg/services/pages.go` implements `PagesService.RenderPage(pageID)`:
+  - Loads `LaidOutPage`, `PageTemplate`, `LaidOutImage` and parent `Asset`.
+  - Unmarshals template JSON → `PageLayoutSettings`, laid-out image result → `LayoutComputation`.
+  - Loads asset image from `dataRoot/projects/{project}/images/{filename}`.
+  - Calls renderer, writes variant PNGs under `projects/{project}/pages/{page}/`.
+  - Persists metadata mapping variant → relative path in `LaidOutPage.ResultJSON`.
+
+## HTTP Preview
+
+- `GET /api/laid-out-pages/{id}/preview?variant=thumbnail|full|combined|left|right`
+  - Triggers render when missing or outdated.
+  - Streams PNG variant from disk based on stored metadata.
+  - Sends ETag/Last-Modified; supports conditional GET.
+## HTTP Export
+
+- `GET /api/laid-out-pages/{id}/export?variant=combined|full|left|right`
+  - Streams selected PNG variant suitable for downloads.
+  - Default `variant=combined`.
+
+## Storage
+
+- Variant files co-located under `projects/{project}/pages/{page}/`.
+- `LaidOutPage.ResultJSON` stores `{ width, height, variants: { name: rel_path } }`.
+
 # Zine Layout Platform — System Specification (Phase 1 & 2)
 
 **Version:** 1.0  

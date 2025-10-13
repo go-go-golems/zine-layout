@@ -52,3 +52,11 @@ func Stringify(v any) (string, error) {
 	}
 	return string(b), nil
 }
+
+// ProjectsRoot returns the path where project data is stored for the provided data root.
+func ProjectsRoot(dataRoot string) string {
+	if dataRoot == "" {
+		dataRoot = "./data"
+	}
+	return filepath.Join(dataRoot, "projects")
+}

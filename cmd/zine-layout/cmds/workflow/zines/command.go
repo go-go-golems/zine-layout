@@ -14,6 +14,7 @@ func NewCommand() (*cobra.Command, error) {
 		newZinesGetCommand,
 		newZinesSetPagesCommand,
 		newZinesDeleteCommand,
+		newZinesExportCommand,
 	}
 
 	for _, factory := range factories {

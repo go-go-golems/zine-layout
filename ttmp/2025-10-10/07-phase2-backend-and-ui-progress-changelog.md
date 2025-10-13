@@ -1,3 +1,22 @@
+## 2025-10-12
+
+- Implemented page renderer integration (Stage A/2A):
+  - Added cropping from `imagelayout.ViewportResult.SourceRect` in `pkg/pagelayout/renderer/renderer.go`.
+  - Extended `RenderContext` to accept layout results.
+  - Persisted preview variants (thumbnail/full/combined, left/right for spreads) to `projects/{project}/pages/{page}/`.
+  - Implemented `PagesService.RenderPage` to marshal metadata and update `repo.LaidOutPage.ResultJSON`.
+  - Updated preview endpoint to stream variant PNGs from disk.
+
+- Smoke-tested via CLI:
+ - Added caching headers (ETag/Last-Modified) to preview responses.
+ - Added unit tests: renderer crop uses SourceRect; spreads split dims.
+ - Added workflow CLI: `workflow laid-out-pages render` to print variant paths.
+ - Added HTTP export endpoint: `/api/laid-out-pages/{id}/export?variant=combined` streams PNG.
+ - Implemented `ImpositionService` at `pkg/services/imposition.go` to read YAML presets under `data/presets/`, load rendered page images, and generate imposed sheet images via `zinelayout.ZineLayout.CreateOutputImage`.
+ - Server wires `ImpositionService` with data root for downstream PDF export work.
+  - Created project, uploaded sample image, created image layout and page templates, created laid-out image and page, and fetched preview (`200`).
+  - Files written: `thumbnail.png`, `full.png`, `combined.png` (and `left.png`, `right.png` for spreads).
+
 # Changelog – Phase 2 Templates, Layouts & Sequences
 
 ## 2025-10-10T00:00Z – Kick-off Notes

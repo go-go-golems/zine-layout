@@ -1,3 +1,19 @@
+# Expansion Plan – Phase 3 Progress Notes
+
+Date: 2025-10-12
+
+## Stage A – Page-Level Rendering Pipeline
+
+- [x] Introduce `PageLayoutSettings` (`pkg/pagelayout/settings.go`).
+- [x] Build renderer helper (`pkg/pagelayout/renderer/renderer.go`) with crop from imagelayout and spread variants.
+- [x] Persist render outputs to project-scoped directory and store metadata in `LaidOutPage.ResultJSON`.
+- [x] Integrate with `PagesService.RenderPage`.
+- [x] Wire `/api/laid-out-pages/{id}/preview` to stream PNGs.
+ - [x] Provide `/api/laid-out-pages/{id}/export?variant=...` to stream PNG variants.
+ - [x] Add workflow CLI `laid-out-pages render` to dump variant paths.
+
+Next: Unit tests for renderer and service; spreads validation; caching headers.
+
 # Expansion Plan: Transition to First-Class Zine Layout Entities
 *Detailed Implementation Guide for New Contributors*
 

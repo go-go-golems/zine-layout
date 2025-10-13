@@ -41,9 +41,9 @@
    - Ensure the JSON tags match API payloads (`page_templates_routes.go:58` expects `template` map; wire this struct via marshaling).
 
 2. **Build renderer helper (thumbnail + full page).**  
-   - Location: add `pkg/pagelayout/renderer/renderer.go`.  
-   - Inputs: `PageLayoutSettings`, `imagelayout.LayoutComputation` (from `pkg/services/layout.go`), plus source image path.  
-   - Use the thumbnail recipe in `ttmp/2025-10-10/17-imagelayout-rendering-algorithm-analysis.md §6` as the core algorithm: crop using `ViewportResult.SourceRect`, scale into the canvas defined by page settings, then split for spreads.  
+   - Implemented at `pkg/pagelayout/renderer/renderer.go`.  
+   - Inputs: `PageLayoutSettings`, `imagelayout.ViewportResult` (from `LayoutComputation.Result`), plus source image.  
+   - Done: cropping via `SourceRect`, scaling into page `ContentRectPx`, spread split (left/right), optional borders.  
    - Pseudocode structure:
      ```go
      func RenderPage(ctx RenderContext) (PageRenderResult, error) {
@@ -61,26 +61,21 @@
    - Variants to support: `thumbnail`, `left`, `right`, `combined`, `full` (see `ttmp/2025-10-11/16-spread-rendering-visualization-guide.md`). Produce file paths + metadata for each.
 
 3. **Persist render outputs.**  
-   - Extend `repo.LaidOutPage` to store render metadata if not already available (check `pkg/repo/models/laid_out_page.go`). Add columns for `render_root`, `thumbnail_rel_path`, `updated_at`.  
-   - Update migrations if necessary (create new migration file under `pkg/repo/sqlite/migrations`).  
-   - Keep files under project-scoped directory (`{data-root}/projects/{id}/pages/{pageID}/`).
+   - Done: metadata in `LaidOutPage.ResultJSON` with variant rel paths; files under `{data-root}/projects/{id}/pages/{pageID}/`.
 
 4. **Integrate renderer with service layer.**  
-   - Modify `pkg/services/pages.go:39-118`. After creating/updating a page, invoke renderer and store result JSON + file paths.  
-   - Provide `RenderPage` and `GetPreview` helpers that `pkg/serve/laid_out_pages_routes.go` can call for `/preview` and `/export`.  
-   - On updates, delete stale files when recomputing.
+   - Done: `PagesService.RenderPage` generates files and persists metadata; server injects data root.  
+   - Preview endpoint calls render and streams files with ETag/Last-Modified.  
+   - TODO: garbage collect stale files on updates.
 
 5. **Wire HTTP endpoints.**  
-   - Replace 501 responses in `pkg/serve/laid_out_pages_routes.go:170-209` with real handlers that stream thumbnails/exports.  
-   - Accept query params `variant`, `debug`, `format`; rely on renderer output map.  
-   - Add caching headers (Etag/Last-Modified) to avoid recompute storms.
+   - Done: `/api/laid-out-pages/{id}/preview?variant=...` streams PNG; `/api/laid-out-pages/{id}/export?variant=...` streams PNG for download.  
+   - Accepts `variant` param; uses stored variant paths.  
+   - Caching headers added to preview responses.
 
 6. **CLI verbs.**  
    - Follow the Glazed command patterns documented in `ttmp/2025-10-10/index.md` (“CLI verbs should use Glazed, directories follow verb groups, one file per verb”).  
-   - Create a new verb group directory `cmd/zine-layout/cmds/pages/` if it does not exist. Inside, add `render.go` (single command file) that embeds a Glazed command struct.  
-   - Wire middleware layers (parameters, output) exactly as shown in existing verbs, e.g., `cmd/zine-layout/cmds/imagelayout/compute.go`.  
-   - Ensure flags follow the standard: positional project/page identifiers, `--data-root` layer injection, and `--file` spec support when applicable.  
-   - Update `cmd/zine-layout/main.go` (or the appropriate root command registration file) to include the new verb group.
+   - Added `workflow laid-out-pages render` to print variant paths for a page.
 
 ### Stage B – Frontend Alignment
 1. **PageLayoutsTab real data.**  
@@ -105,25 +100,16 @@
 
 ### Stage C – Imposition & Export
 1. **Reuse `pkg/zinelayout`.**  
-   - Wrap existing YAML-driven layouts in a new service: `pkg/services/imposition.go`.  
-   - Pseudocode:
-     ```go
-     func (s *ImpositionService) Impose(zineID, presetID string) ([]SheetResult, error) {
-       zine, pages := s.repos.Zines.GetWithPages(zineID)
-       inputs := loadRenderedPages(pages) // reuse renderer outputs
-       layout := zinelayout.LoadPreset(presetID)
-       return layout.Render(inputs)
-     }
-     ```
-   - Support preset lookup from disk (`data/presets`) or database table (future).
+   - Implement `pkg/services/imposition.go`: load preset YAML (from `data/presets`), load rendered page PNGs, map to inputs, call `ZineLayout.CreateOutputImage` for each sheet.  
+   - Return sheet images + metadata (sizes, positions) for downstream export.
 
 2. **Export formats.**  
-   - Implement PDF assembly in `pkg/export/pdf.go` using `github.com/jung-kurt/gofpdf` or similar. Each `SheetResult` becomes a PDF page.  
-   - Provide CLI verb `zine-layout workflow zines export --id ... --preset ...`.
+   - Next: implement `pkg/export/pdf.go` to generate a single PDF: each imposed sheet → PDF page.  
+   - Provide CLI: `go run ./cmd/zine-layout workflow zines export --data-root ... --zine-id ... --preset ...`.
 
 3. **HTTP export endpoints.**  
-   - Add `/api/zines/{id}/export` streaming PDF/zip files.  
-   - Ensure long-running jobs write status logs (maybe store in `exports` table).
+   - Add `/api/zines/{id}/export?preset=...` streaming the PDF.  
+   - Consider job logging for long-running presets (future).
 
 4. **CLI verbs (workflow/zines).**  
    - Per `ttmp/2025-10-10/index.md`, place Glazed command files under `cmd/zine-layout/cmds/workflow/zines/`, keeping one verb per file (for example, `export.go` and `impose.go`).  
