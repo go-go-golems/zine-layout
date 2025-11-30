@@ -1,0 +1,30 @@
+# Example spread page settings for pagelayout CLI tools
+# Usage: zine-layout pagelayout render --source-image photo.jpg --settings page-settings-spread.yaml
+
+pageWidthIn: 17.0  # Two 8.5 inch pages
+pageHeightIn: 11.0
+dpi: 300
+
+marginTopIn: 0.0
+marginRightIn: 0.0
+marginBottomIn: 0.0
+marginLeftIn: 0.0
+
+isSpread: true
+gutterWidthIn: 0.5  # 0.5 inch gutter
+gutterOverlapIn: 0.0
+
+positioningMode: fill
+anchorPreset: ""
+
+# Absolute placement (only used when positioningMode == "absolute")
+imageXIn: 0.0
+imageYIn: 0.0
+imageWidthIn: 0.0
+imageHeightIn: 0.0
+
+# Optional page border
+borderEnabled: true
+borderColor: "#000000"
+borderType: dashed
+

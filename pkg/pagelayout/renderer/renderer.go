@@ -5,6 +5,7 @@ import (
     "image"
     "image/color"
     "image/draw"
+    "log"
 
     xdraw "golang.org/x/image/draw"
 
@@ -40,6 +41,7 @@ type PageRenderResult struct {
 }
 
 func RenderPage(ctx RenderContext) (*PageRenderResult, error) {
+	log.Printf("[pagelayout] RenderPage: Starting render")
 	if ctx.Background == nil {
 		ctx.Background = color.White
 	}
@@ -52,18 +54,24 @@ func RenderPage(ctx RenderContext) (*PageRenderResult, error) {
 
 	W := ctx.Settings.PixelWidth()
 	H := ctx.Settings.PixelHeight()
+	log.Printf("[pagelayout] Canvas dimensions: %dx%d pixels (%.2fx%.2f inches @ %.0f DPI)", W, H, ctx.Settings.PageWidthIn, ctx.Settings.PageHeightIn, ctx.Settings.DPI)
 	canvas := image.NewRGBA(image.Rect(0, 0, W, H))
 	draw.Draw(canvas, canvas.Bounds(), &image.Uniform{C: ctx.Background}, image.Point{}, draw.Src)
 
 	target := ctx.Settings.ContentRectPx()
+	log.Printf("[pagelayout] Content area: (%d,%d) to (%d,%d) = %dx%d pixels", target.Min.X, target.Min.Y, target.Max.X, target.Max.Y, target.Dx(), target.Dy())
 
     src := ctx.Source
     srcB := src.Bounds()
+    log.Printf("[pagelayout] Source image: %dx%d pixels", srcB.Dx(), srcB.Dy())
 
     // If a viewport result is provided, crop the source to its SourceRect
     if ctx.LayoutResult != nil {
+        log.Printf("[pagelayout] LayoutResult provided: cropping source to SourceRect (%.0f,%.0f,%.0f,%.0f)", 
+            ctx.LayoutResult.SourceRect.X, ctx.LayoutResult.SourceRect.Y, ctx.LayoutResult.SourceRect.W, ctx.LayoutResult.SourceRect.H)
         src = cropSourceToRect(src, ctx.LayoutResult.SourceRect)
         srcB = src.Bounds()
+        log.Printf("[pagelayout] Cropped source: %dx%d pixels", srcB.Dx(), srcB.Dy())
     }
 
 	switch ctx.Settings.PositioningMode {
@@ -73,12 +81,15 @@ func RenderPage(ctx RenderContext) (*PageRenderResult, error) {
 		y := ctx.Settings.InchesToPixels(ctx.Settings.ImageYIn)
 		w := ctx.Settings.InchesToPixels(ctx.Settings.ImageWidthIn)
 		h := ctx.Settings.InchesToPixels(ctx.Settings.ImageHeightIn)
+		log.Printf("[pagelayout] Absolute mode: placing at (%d,%d) with size %dx%d pixels", x, y, w, h)
 		if w <= 0 || h <= 0 { break }
 		dst := image.Rect(x, y, x+w, y+h).Intersect(canvas.Bounds())
 		if dst.Empty() { break }
+		log.Printf("[pagelayout] Destination rect after intersection: (%d,%d) to (%d,%d)", dst.Min.X, dst.Min.Y, dst.Max.X, dst.Max.Y)
 		xdraw.CatmullRom.Scale(canvas, dst, src, srcB, draw.Over, nil)
 	default: // "fill" and "snap" behave the same for now
 		// Scale-cover into target while preserving aspect ratio, then center-crop
+		log.Printf("[pagelayout] Fill mode: scaling to cover target area")
 		drawIntoTargetCover(canvas, target, src)
 	}
 
@@ -93,10 +104,16 @@ func RenderPage(ctx RenderContext) (*PageRenderResult, error) {
 	// full
 	variants["full"] = canvas
 	variants["combined"] = canvas
+	log.Printf("[pagelayout] Generated 'full' and 'combined' variants: %dx%d", canvas.Bounds().Dx(), canvas.Bounds().Dy())
 	// thumbnail
-	variants["thumbnail"] = makeThumbnail(canvas, ctx.ThumbnailMaxPx)
+	thumb := makeThumbnail(canvas, ctx.ThumbnailMaxPx)
+	variants["thumbnail"] = thumb
+	log.Printf("[pagelayout] Generated 'thumbnail' variant: %dx%d", thumb.Bounds().Dx(), thumb.Bounds().Dy())
 	// spread halves
     if ctx.Settings.IsSpread {
+        gutterPx := ctx.Settings.InchesToPixels(ctx.Settings.GutterWidthIn)
+        log.Printf("[pagelayout] Spread mode: splitting at center with gutter %.2f inches (%d pixels)", 
+            ctx.Settings.GutterWidthIn, gutterPx)
         leftImg, rightImg := splitSpread(canvas, ctx.Settings)
         // Add gutter markers to left/right previews at inner edges
         marker := color.RGBA{0, 0, 0, 128}
@@ -116,8 +133,11 @@ func RenderPage(ctx RenderContext) (*PageRenderResult, error) {
         }
         variants["left"] = leftImg
         variants["right"] = rightImg
+        log.Printf("[pagelayout] Generated 'left' variant: %dx%d", leftImg.Bounds().Dx(), leftImg.Bounds().Dy())
+        log.Printf("[pagelayout] Generated 'right' variant: %dx%d", rightImg.Bounds().Dx(), rightImg.Bounds().Dy())
     }
 
+	log.Printf("[pagelayout] RenderPage: Completed successfully, generated %d variants", len(variants))
 	return &PageRenderResult{Full: canvas, Variants: variants}, nil
 }
 
@@ -131,13 +151,16 @@ func drawIntoTargetCover(dst *image.RGBA, target image.Rectangle, src image.Imag
 	scaleY := float64(target.Dy()) / float64(srcB.Dy())
 	scale := scaleX
 	if scaleY > scale { scale = scaleY }
+	log.Printf("[pagelayout] Fill mode: scaleX=%.3f, scaleY=%.3f, using scale=%.3f (max)", scaleX, scaleY, scale)
 	// New scaled size
 	newW := int(float64(srcB.Dx())*scale + 0.5)
 	newH := int(float64(srcB.Dy())*scale + 0.5)
+	log.Printf("[pagelayout] Scaled image size: %dx%d pixels", newW, newH)
 	// Destination rect centered in target
 	offX := target.Min.X + (target.Dx()-newW)/2
 	offY := target.Min.Y + (target.Dy()-newH)/2
 	dstRect := image.Rect(offX, offY, offX+newW, offY+newH)
+	log.Printf("[pagelayout] Destination rect: (%d,%d) to (%d,%d)", dstRect.Min.X, dstRect.Min.Y, dstRect.Max.X, dstRect.Max.Y)
 	xdraw.CatmullRom.Scale(dst, dstRect, src, srcB, draw.Over, nil)
 }
 
@@ -196,8 +219,11 @@ func splitSpread(canvas *image.RGBA, s pagelayout.PageLayoutSettings) (image.Ima
 	if leftEnd < 0 { leftEnd = center }
 	rightStart := center + g/2
 	if rightStart > W { rightStart = center }
+	log.Printf("[pagelayout] Spread split: center=%d, gutter=%d, leftEnd=%d, rightStart=%d", center, g, leftEnd, rightStart)
 	leftRect := image.Rect(0, 0, leftEnd, b.Dy())
 	rightRect := image.Rect(rightStart, 0, W, b.Dy())
+	log.Printf("[pagelayout] Left rect: (%d,%d) to (%d,%d) = %dx%d", leftRect.Min.X, leftRect.Min.Y, leftRect.Max.X, leftRect.Max.Y, leftRect.Dx(), leftRect.Dy())
+	log.Printf("[pagelayout] Right rect: (%d,%d) to (%d,%d) = %dx%d", rightRect.Min.X, rightRect.Min.Y, rightRect.Max.X, rightRect.Max.Y, rightRect.Dx(), rightRect.Dy())
 	left := image.NewRGBA(image.Rect(0, 0, leftRect.Dx(), leftRect.Dy()))
 	right := image.NewRGBA(image.Rect(0, 0, rightRect.Dx(), rightRect.Dy()))
 	draw.Draw(left, left.Bounds(), canvas, leftRect.Min, draw.Src)

@@ -1,0 +1,22 @@
+{
+  "pageWidthIn": 8.5,
+  "pageHeightIn": 11.0,
+  "dpi": 300,
+  "marginTopIn": 0.25,
+  "marginRightIn": 0.25,
+  "marginBottomIn": 0.25,
+  "marginLeftIn": 0.25,
+  "isSpread": false,
+  "gutterWidthIn": 0.0,
+  "gutterOverlapIn": 0.0,
+  "positioningMode": "fill",
+  "anchorPreset": "",
+  "imageXIn": 0.0,
+  "imageYIn": 0.0,
+  "imageWidthIn": 0.0,
+  "imageHeightIn": 0.0,
+  "borderEnabled": false,
+  "borderColor": "#000000",
+  "borderType": "plain"
+}
+

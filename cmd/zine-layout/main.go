@@ -8,6 +8,7 @@ import (
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	apicmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/api"
 	imagelayoutcmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/imagelayout"
+	pagelayoutcmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/pagelayout"
 	rendercmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/render"
 	servecmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/serve"
 	workflowcmd "github.com/go-go-golems/zine-layout/cmd/zine-layout/cmds/workflow"
@@ -84,6 +85,10 @@ func main() {
 	imagelayoutCmd, err := imagelayoutcmd.NewCommand()
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(imagelayoutCmd)
+
+	pagelayoutCmd, err := pagelayoutcmd.NewCommand()
+	cobra.CheckErr(err)
+	rootCmd.AddCommand(pagelayoutCmd)
 
 	workflowCmd, err := workflowcmd.NewCommand()
 	cobra.CheckErr(err)

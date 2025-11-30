@@ -1,0 +1,31 @@
+# Example page settings for pagelayout CLI tools
+# Usage: zine-layout pagelayout compute --settings page-settings.yaml
+#        zine-layout pagelayout render --source-image photo.jpg --settings page-settings.yaml
+
+pageWidthIn: 8.5
+pageHeightIn: 11.0
+dpi: 300
+
+marginTopIn: 0.25
+marginRightIn: 0.25
+marginBottomIn: 0.25
+marginLeftIn: 0.25
+
+isSpread: false
+gutterWidthIn: 0.0
+gutterOverlapIn: 0.0
+
+positioningMode: fill
+anchorPreset: ""
+
+# Absolute placement (only used when positioningMode == "absolute")
+imageXIn: 0.0
+imageYIn: 0.0
+imageWidthIn: 0.0
+imageHeightIn: 0.0
+
+# Optional page border
+borderEnabled: false
+borderColor: "#000000"
+borderType: plain
+
