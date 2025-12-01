@@ -27,34 +27,28 @@ type PresentationAnalysis struct {
 }
 
 // AnalyzeFrame executes the frame normalization stage.
-func AnalyzeFrame(inp NormalizedInputs) FrameAnalysis {
-	canvasRect, ratio := buildFrame(inp.Frame)
-	contentRect := imagelayout.Rect{
-		X: 0,
-		Y: 0,
-		W: canvasRect.W,
-		H: canvasRect.H,
-	}
+func AnalyzeFrame(frame FrameInputs, clampToCanvas bool) FrameAnalysis {
+	canvasRect, ratio := buildFrame(frame)
 	return FrameAnalysis{
-		Mode:        inp.Frame.Mode,
+		Mode:        string(frame.Mode),
 		CanvasRect:  canvasRect,
-		ContentRect: contentRect,
+		ContentRect: canvasRect,
 		TargetRatio: ratio,
 		MarginsPx: MarginPixels{
-			Top:    inp.Frame.Margins.Top,
-			Right:  inp.Frame.Margins.Right,
-			Bottom: inp.Frame.Margins.Bottom,
-			Left:   inp.Frame.Margins.Left,
+			Top:    frame.Margins.Top,
+			Right:  frame.Margins.Right,
+			Bottom: frame.Margins.Bottom,
+			Left:   frame.Margins.Left,
 		},
-		ClampToCanvas: inp.Presentation.ClampToCanvas,
+		ClampToCanvas: clampToCanvas,
 	}
 }
 
 // AnalyzeCrop executes the crop normalization stage.
-func AnalyzeCrop(inp NormalizedInputs, targetRatio float64) CropAnalysis {
-	sourceRatio := safeDiv(inp.Source.Width, inp.Source.Height)
-	requestedRatio := determineRequestedRatio(inp.Crop, targetRatio, sourceRatio)
-	sourceRect, diagnostics := resolveCrop(inp.Source, inp.Crop, requestedRatio, sourceRatio)
+func AnalyzeCrop(source SourceMeta, crop CropInputs, targetRatio float64) CropAnalysis {
+	sourceRatio := safeDiv(source.Width, source.Height)
+	requestedRatio := determineRequestedRatio(crop, targetRatio, sourceRatio)
+	sourceRect, diagnostics := resolveCrop(source, crop, requestedRatio, sourceRatio)
 	return CropAnalysis{
 		SourceRect:  sourceRect,
 		Diagnostics: diagnostics,
@@ -62,8 +56,8 @@ func AnalyzeCrop(inp NormalizedInputs, targetRatio float64) CropAnalysis {
 }
 
 // AnalyzePresentation executes the presentation stage.
-func AnalyzePresentation(inp NormalizedInputs, canvasRect, sourceRect imagelayout.Rect) PresentationAnalysis {
-	targetRect, mode, scale, diagnostics := composeTarget(inp.Crop, inp.Presentation, canvasRect, sourceRect)
+func AnalyzePresentation(crop CropInputs, presentation PresentationInputs, canvasRect, sourceRect imagelayout.Rect) PresentationAnalysis {
+	targetRect, mode, scale, diagnostics := composeTarget(crop, presentation, canvasRect, sourceRect)
 	return PresentationAnalysis{
 		TargetRect:  targetRect,
 		Scale:       scale,

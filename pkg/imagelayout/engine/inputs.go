@@ -15,10 +15,11 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 
 	normalized := normalizeLayoutRequest(req)
 
-	frameMode := strings.ToLower(strings.TrimSpace(normalized.Frame.Mode))
-	if frameMode == "" {
-		frameMode = "ratio"
+	rawFrameMode := strings.ToLower(strings.TrimSpace(normalized.Frame.Mode))
+	if rawFrameMode == "" {
+		rawFrameMode = string(FrameModeRatio)
 	}
+	frameMode := FrameMode(rawFrameMode)
 
 	var (
 		canvasW  float64
@@ -32,7 +33,7 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 	)
 
 	switch frameMode {
-	case "page":
+	case FrameModePage:
 		page := normalized.Frame.Page
 		if page == nil {
 			return NormalizedInputs{}, fmt.Errorf("imagelayout: page mode requires page dimensions")
@@ -60,7 +61,7 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 		if contentW <= 0 || contentH <= 0 {
 			return NormalizedInputs{}, fmt.Errorf("imagelayout: margins exceed canvas size")
 		}
-	case "viewport":
+	case FrameModeViewport:
 		vp := normalized.Frame.Viewport
 		if vp == nil {
 			return NormalizedInputs{}, fmt.Errorf("imagelayout: viewport mode requires viewport dimensions")
@@ -74,6 +75,7 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 		contentW = canvasW
 		contentH = canvasH
 	default: // ratio (fallback)
+		frameMode = FrameModeRatio
 		ratio := normalized.Frame.Ratio
 		var ratioValue float64
 		if ratio != nil && *ratio > 0 {

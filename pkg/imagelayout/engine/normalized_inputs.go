@@ -2,6 +2,15 @@ package engine
 
 import "github.com/go-go-golems/zine-layout/pkg/imagelayout"
 
+// FrameMode enumerates supported frame modes.
+type FrameMode string
+
+const (
+	FrameModeRatio    FrameMode = "ratio"
+	FrameModePage     FrameMode = "page"
+	FrameModeViewport FrameMode = "viewport"
+)
+
 // NormalizedInputs groups the normalized data that flows through the engine.
 type NormalizedInputs struct {
 	Source       SourceMeta
@@ -18,7 +27,7 @@ type SourceMeta struct {
 
 // FrameInputs contains the resolved viewport geometry.
 type FrameInputs struct {
-	Mode       string
+	Mode       FrameMode
 	CanvasRect imagelayout.Rect
 	Margins    MarginPixels
 }

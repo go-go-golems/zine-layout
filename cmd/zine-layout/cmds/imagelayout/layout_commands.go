@@ -86,7 +86,7 @@ func (c *layoutFrameGlazeCommand) Run(ctx context.Context, parsedLayers *layers.
 	}
 	_ = layout
 	_ = meta
-	analysis := engine.AnalyzeFrame(inputs)
+	analysis := engine.AnalyzeFrame(inputs.Frame, inputs.Presentation.ClampToCanvas)
 	return printJSON(analysis)
 }
 
@@ -132,8 +132,8 @@ func (c *layoutCropGlazeCommand) Run(ctx context.Context, parsedLayers *layers.P
 	}
 	_ = layout
 	_ = meta
-	frameAnalysis := engine.AnalyzeFrame(inputs)
-	analysis := engine.AnalyzeCrop(inputs, frameAnalysis.TargetRatio)
+	frameAnalysis := engine.AnalyzeFrame(inputs.Frame, inputs.Presentation.ClampToCanvas)
+	analysis := engine.AnalyzeCrop(inputs.Source, inputs.Crop, frameAnalysis.TargetRatio)
 	return printJSON(analysis)
 }
 
@@ -179,9 +179,9 @@ func (c *layoutPresentationGlazeCommand) Run(ctx context.Context, parsedLayers *
 	}
 	_ = layout
 	_ = meta
-	frameAnalysis := engine.AnalyzeFrame(inputs)
-	cropAnalysis := engine.AnalyzeCrop(inputs, frameAnalysis.TargetRatio)
-	analysis := engine.AnalyzePresentation(inputs, frameAnalysis.CanvasRect, cropAnalysis.SourceRect)
+	frameAnalysis := engine.AnalyzeFrame(inputs.Frame, inputs.Presentation.ClampToCanvas)
+	cropAnalysis := engine.AnalyzeCrop(inputs.Source, inputs.Crop, frameAnalysis.TargetRatio)
+	analysis := engine.AnalyzePresentation(inputs.Crop, inputs.Presentation, frameAnalysis.CanvasRect, cropAnalysis.SourceRect)
 	return printJSON(analysis)
 }
 

@@ -175,13 +175,23 @@ func InputsFromSettings(settings imagelayout.ViewportSettings, meta imagelayout.
 	posX := resolveAnchor(settings, units, settings.PositionX, true)
 	posY := resolveAnchor(settings, units, settings.PositionY, false)
 
+	frameMode := FrameModePage
+	switch mode {
+	case "crop", "fit", "viewport":
+		frameMode = FrameModeViewport
+	case "ratio":
+		frameMode = FrameModeRatio
+	default:
+		frameMode = FrameModePage
+	}
+
 	return NormalizedInputs{
 		Source: SourceMeta{
 			Width:  float64(meta.Width),
 			Height: float64(meta.Height),
 		},
 		Frame: FrameInputs{
-			Mode:       mode,
+			Mode:       frameMode,
 			CanvasRect: frameRect,
 			Margins:    margins,
 		},

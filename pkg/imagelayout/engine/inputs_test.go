@@ -20,7 +20,7 @@ func TestInputsFromRequestRatioFrame(t *testing.T) {
 		t.Fatalf("InputsFromRequest: %v", err)
 	}
 
-	if inputs.Frame.Mode != "ratio" {
+	if inputs.Frame.Mode != FrameModeRatio {
 		t.Fatalf("expected ratio mode, got %s", inputs.Frame.Mode)
 	}
 	expectedCanvasW := ratio * float64(meta.Height)
@@ -63,7 +63,7 @@ func TestInputsFromRequestPageFrame(t *testing.T) {
 		t.Fatalf("InputsFromRequest: %v", err)
 	}
 
-	if inputs.Frame.Mode != "page" {
+	if inputs.Frame.Mode != FrameModePage {
 		t.Fatalf("expected page mode, got %s", inputs.Frame.Mode)
 	}
 
@@ -99,7 +99,7 @@ func TestInputsFromRequestViewportFrame(t *testing.T) {
 		t.Fatalf("InputsFromRequest: %v", err)
 	}
 
-	if inputs.Frame.Mode != "viewport" {
+	if inputs.Frame.Mode != FrameModeViewport {
 		t.Fatalf("expected viewport mode, got %s", inputs.Frame.Mode)
 	}
 	expectedCanvasW := 900 * ratio
