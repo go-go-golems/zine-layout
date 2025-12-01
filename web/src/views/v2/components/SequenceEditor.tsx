@@ -9,6 +9,7 @@ import {
 } from '../../../api';
 import { SequenceItem } from './SequenceItem';
 import { AssetPicker } from './AssetPicker';
+import { SequenceSlideshow } from './SequenceSlideshow';
 import { Button } from '../../../components/ui';
 
 interface SequenceEditorProps {
@@ -49,6 +50,9 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
   const [isAddingGap, setIsAddingGap] = useState(false);
   const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false);
   const [isAddingImages, setIsAddingImages] = useState(false);
+  const [isSlideshowOpen, setIsSlideshowOpen] = useState(false);
+  const [slideshowStartIndex, setSlideshowStartIndex] = useState(0);
+  const [slideshowViewMode, setSlideshowViewMode] = useState<'single' | 'spread'>('single');
 
   const sortedItems = useMemo(() => {
     if (!sequenceData?.items) return [];
@@ -59,6 +63,10 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
     const map = new Map(assets.map((asset) => [asset.id, asset]));
     return map;
   }, [assets]);
+
+  const defaultStartPosition = sortedItems[0]?.position ?? 0;
+  const firstImagePosition =
+    sortedItems.find((item) => !item.is_gap && item.asset_id)?.position ?? defaultStartPosition;
 
   // Debounced reorder function - use ref to persist across renders
   const reorderRef = useRef<ReturnType<typeof debounce>>();
@@ -76,13 +84,11 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
   const debouncedReorder = reorderRef.current;
 
   const handleDragStart = (index: number) => {
-    console.log('🟢 Drag start:', index);
     setDragSourceIndex(index);
     setDragTargetIndex(null);
   };
 
   const handleDragEnd = () => {
-    console.log('🔴 Drag end');
     setDragSourceIndex(null);
     setDragTargetIndex(null);
   };
@@ -93,7 +99,6 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
   };
 
   const handleDragEnter = (index: number) => {
-    console.log('🎯 Drag enter:', index, 'source:', dragSourceIndex);
     if (dragSourceIndex !== null && dragSourceIndex !== index) {
       setDragTargetIndex(index);
     }
@@ -121,7 +126,6 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
       // correct insertion position without adjustment.
       const insertIndex = targetIndex;
       
-      console.log('💧 Drop: source', sourceIndex, '→ target', targetIndex, '→ insert', insertIndex);
       newItems.splice(insertIndex, 0, removed);
 
       // Update positions
@@ -207,10 +211,9 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
         {sequenceData.sequence.description && (
           <p className="text-gray-600 mt-1">{sequenceData.sequence.description}</p>
         )}
-        <p className="text-xs text-purple-600 mt-2">🔄 TEST: Frontend v2.1 - Drag feedback enabled</p>
       </div>
 
-      <div className="mb-4 flex gap-2 items-center">
+      <div className="mb-4 flex flex-wrap gap-2 items-center">
         <Button
           onClick={() => setIsAssetPickerOpen(true)}
           disabled={isAddingImages}
@@ -221,6 +224,32 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
         <Button onClick={handleAddGap} disabled={isAddingGap} size="sm" variant="secondary">
           {isAddingGap ? 'Adding...' : '+ Add Gap'}
         </Button>
+        {sortedItems.filter((item) => !item.is_gap && item.asset_id).length > 0 && (
+          <Button
+            onClick={() => {
+              setSlideshowStartIndex(firstImagePosition);
+              setSlideshowViewMode('single');
+              setIsSlideshowOpen(true);
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            ▶ Preview Slideshow
+          </Button>
+        )}
+        {sortedItems.length > 0 && (
+          <Button
+            onClick={() => {
+              setSlideshowStartIndex(defaultStartPosition);
+              setSlideshowViewMode('spread');
+              setIsSlideshowOpen(true);
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            📖 View as Book Spread
+          </Button>
+        )}
         {isReordering && (
           <span className="text-sm text-gray-500 flex items-center">
             <svg className="w-4 h-4 mr-1 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -238,6 +267,16 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
         onClose={() => setIsAssetPickerOpen(false)}
         onSelect={handleAddImages}
         multiple={true}
+      />
+
+      <SequenceSlideshow
+        items={sortedItems}
+        assets={assetLookup}
+        projectId={projectId}
+        isOpen={isSlideshowOpen}
+        onClose={() => setIsSlideshowOpen(false)}
+        initialIndex={slideshowStartIndex}
+        initialViewMode={slideshowViewMode}
       />
 
       {sortedItems.length === 0 ? (
@@ -262,14 +301,15 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
             const showDropIndicator = dragSourceIndex !== null && isDropTarget && dragSourceIndex !== index;
             const dropIndicatorOnRight = dragSourceIndex !== null && dragSourceIndex < index;
 
-            if (showDropIndicator) {
-              console.log('📍 Drop indicator at index:', index, 'side:', dropIndicatorOnRight ? 'right' : 'left');
-            }
-
             return (
               <div
                 key={`${item.sequence_id}-${item.position}`}
                 className="relative"
+                onDoubleClick={() => {
+                  setSlideshowStartIndex(item.position);
+                  setSlideshowViewMode(item.is_gap ? 'spread' : 'single');
+                  setIsSlideshowOpen(true);
+                }}
               >
                 {/* Drop indicator - shows where item will be inserted */}
                 {showDropIndicator && (
