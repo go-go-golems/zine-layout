@@ -15,9 +15,7 @@ type layoutParamSettings struct {
 	SourceWidth         int     `glazed.parameter:"source-width"`
 	SourceHeight        int     `glazed.parameter:"source-height"`
 	FrameMode           string  `glazed.parameter:"frame-mode"`
-	FrameFill           string  `glazed.parameter:"frame-fill"`
 	FrameRatio          float64 `glazed.parameter:"frame-ratio"`
-	FrameFitAxis        string  `glazed.parameter:"frame-fit-axis"`
 	FramePageWidth      float64 `glazed.parameter:"frame-page-width-in"`
 	FramePageHeight     float64 `glazed.parameter:"frame-page-height-in"`
 	FramePageDPI        float64 `glazed.parameter:"frame-page-dpi"`
@@ -80,9 +78,7 @@ func specParameterDefinitions() []*parameters.ParameterDefinition {
 func frameOnlyParameterDefinitions() []*parameters.ParameterDefinition {
 	return []*parameters.ParameterDefinition{
 		parameters.NewParameterDefinition("frame-mode", parameters.ParameterTypeString, parameters.WithHelp("Frame mode: ratio|page|viewport")),
-		parameters.NewParameterDefinition("frame-fill", parameters.ParameterTypeString, parameters.WithHelp("Frame fill strategy (contain|cover)")),
 		parameters.NewParameterDefinition("frame-ratio", parameters.ParameterTypeFloat, parameters.WithHelp("Frame ratio when mode=ratio")),
-		parameters.NewParameterDefinition("frame-fit-axis", parameters.ParameterTypeString, parameters.WithHelp("Fit axis for viewport frames (auto|width|height)")),
 		parameters.NewParameterDefinition("frame-page-width-in", parameters.ParameterTypeFloat, parameters.WithHelp("Page width (inches) when mode=page")),
 		parameters.NewParameterDefinition("frame-page-height-in", parameters.ParameterTypeFloat, parameters.WithHelp("Page height (inches) when mode=page")),
 		parameters.NewParameterDefinition("frame-page-dpi", parameters.ParameterTypeFloat, parameters.WithHelp("Page DPI when mode=page")),
@@ -147,14 +143,8 @@ func buildLayoutFromSettings(parsedLayers *layers.ParsedLayers, settings *layout
 	if parameterSet(parsedLayers, "frame-mode") {
 		layout.Frame.Mode = settings.FrameMode
 	}
-	if parameterSet(parsedLayers, "frame-fill") && settings.FrameFill != "" {
-		layout.Frame.Fill = settings.FrameFill
-	}
 	if parameterSet(parsedLayers, "frame-ratio") && settings.FrameRatio > 0 {
 		layout.Frame.Ratio = &settings.FrameRatio
-	}
-	if parameterSet(parsedLayers, "frame-fit-axis") && settings.FrameFitAxis != "" {
-		layout.Frame.FitAxis = settings.FrameFitAxis
 	}
 
 	if parameterSet(parsedLayers, "frame-page-width-in") ||

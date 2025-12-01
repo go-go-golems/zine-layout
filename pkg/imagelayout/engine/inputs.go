@@ -120,7 +120,7 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 
 	cropRatio := normalized.Crop.Ratio
 	if cropRatio == nil {
-		value := safeDiv(canvasW, canvasH)
+		value := safeDiv(contentW, contentH)
 		cropRatio = &value
 	}
 
