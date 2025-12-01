@@ -203,3 +203,32 @@ func TestFocusPointCentersSource(t *testing.T) {
 		t.Fatalf("expected focus info in trace")
 	}
 }
+
+func TestComputeViewportWithCropZoomAndPresentationOffsets(t *testing.T) {
+	req := imagelayout.DefaultLayoutRequest()
+	val := 1.0
+	req.Frame.Mode = "ratio"
+	req.Frame.Ratio = &val
+	req.Crop.Strategy = "manual"
+	req.Crop.Zoom = 2.0
+	req.Crop.Pan = imagelayout.Vec2{X: 0, Y: 0}
+	req.Presentation.OffsetPx = imagelayout.Vec2Px{X: 40, Y: -12}
+	req.Presentation.ClampToCanvas = false
+
+	meta := imagelayout.ImageMeta{Width: 4000, Height: 4000}
+	inputs, err := InputsFromRequest(req, meta)
+	if err != nil {
+		t.Fatalf("InputsFromRequest: %v", err)
+	}
+
+	result, _ := ComputeViewport(inputs)
+	if !almostEqual(result.SourceRect.W, 2000) {
+		t.Fatalf("expected zoomed width 2000, got %f", result.SourceRect.W)
+	}
+	if !almostEqual(result.SourceRect.H, 2000) {
+		t.Fatalf("expected zoomed height 2000, got %f", result.SourceRect.H)
+	}
+	if !almostEqual(result.TargetRect.X, 40) || !almostEqual(result.TargetRect.Y, -12) {
+		t.Fatalf("unexpected presentation offsets %f %f", result.TargetRect.X, result.TargetRect.Y)
+	}
+}

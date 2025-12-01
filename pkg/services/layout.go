@@ -23,9 +23,9 @@ func NewLayoutService(repos *repo.Repositories) *LayoutService {
 
 // LayoutComputation captures the canonical persisted payload for a laid-out image.
 type LayoutComputation struct {
-	Settings imagelayout.ViewportSettings `json:"settings"`
-	Result   imagelayout.ViewportResult   `json:"result"`
-	Trace    *imagelayout.Trace           `json:"trace,omitempty"`
+	Layout imagelayout.LayoutRequest  `json:"layout"`
+	Result imagelayout.ViewportResult `json:"result"`
+	Trace  *imagelayout.Trace         `json:"trace,omitempty"`
 }
 
 // CreateLaidOutImage renders placement metadata for an asset/template pair and persists the record.
@@ -50,22 +50,22 @@ func (s *LayoutService) CreateLaidOutImage(projectID, assetID, templateID string
 		return nil, fmt.Errorf("template %s not available for project %s", templateID, projectID)
 	}
 
-	settings, normalizedOverrides, err := mergeTemplateSettings(template.SettingsJSON, overridesJSON)
+	layout, normalizedOverrides, err := mergeTemplateLayout(template.SettingsJSON, overridesJSON)
 	if err != nil {
-		return nil, fmt.Errorf("merge settings: %w", err)
+		return nil, fmt.Errorf("merge layout: %w", err)
 	}
 
 	meta := imagelayout.ImageMeta{Width: asset.Width, Height: asset.Height}
-	inputs, err := engine.InputsFromSettings(settings, meta)
+	inputs, err := engine.InputsFromRequest(layout, meta)
 	if err != nil {
 		return nil, fmt.Errorf("build inputs: %w", err)
 	}
 
 	result, trace := engine.ComputeViewport(inputs)
 	payload := LayoutComputation{
-		Settings: settings,
-		Result:   result,
-		Trace:    trace,
+		Layout: layout,
+		Result: result,
+		Trace:  trace,
 	}
 	resultBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -114,22 +114,22 @@ func (s *LayoutService) RecomputeLaidOutImage(record *repo.LaidOutImage) error {
 		return fmt.Errorf("template %s not available for project %s", record.TemplateID, record.ProjectID)
 	}
 
-	settings, normalizedOverrides, err := mergeTemplateSettings(template.SettingsJSON, record.OverridesJSON)
+	layout, normalizedOverrides, err := mergeTemplateLayout(template.SettingsJSON, record.OverridesJSON)
 	if err != nil {
-		return fmt.Errorf("merge settings: %w", err)
+		return fmt.Errorf("merge layout: %w", err)
 	}
 
 	meta := imagelayout.ImageMeta{Width: asset.Width, Height: asset.Height}
-	inputs, err := engine.InputsFromSettings(settings, meta)
+	inputs, err := engine.InputsFromRequest(layout, meta)
 	if err != nil {
 		return fmt.Errorf("build inputs: %w", err)
 	}
 
 	result, trace := engine.ComputeViewport(inputs)
 	payload := LayoutComputation{
-		Settings: settings,
-		Result:   result,
-		Trace:    trace,
+		Layout: layout,
+		Result: result,
+		Trace:  trace,
 	}
 	resultBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -177,24 +177,24 @@ func (s *LayoutService) ApplyTemplateToSequence(projectID, sequenceID, templateI
 	return results, nil
 }
 
-// mergeTemplateSettings applies override JSON onto base template settings and returns canonical override JSON.
-func mergeTemplateSettings(baseJSON string, overridesJSON *string) (imagelayout.ViewportSettings, *string, error) {
+// mergeTemplateLayout applies override JSON onto base template layout and returns canonical override JSON.
+func mergeTemplateLayout(baseJSON string, overridesJSON *string) (imagelayout.LayoutRequest, *string, error) {
 	var baseMap map[string]any
 	if err := json.Unmarshal([]byte(baseJSON), &baseMap); err != nil {
-		return imagelayout.ViewportSettings{}, nil, fmt.Errorf("decode template settings: %w", err)
+		return imagelayout.LayoutRequest{}, nil, fmt.Errorf("decode template layout: %w", err)
 	}
 
 	var normalizedOverrides *string
 	if overridesJSON != nil && *overridesJSON != "" {
 		var overridesMap map[string]any
 		if err := json.Unmarshal([]byte(*overridesJSON), &overridesMap); err != nil {
-			return imagelayout.ViewportSettings{}, nil, fmt.Errorf("decode overrides: %w", err)
+			return imagelayout.LayoutRequest{}, nil, fmt.Errorf("decode overrides: %w", err)
 		}
 		baseMap = deepMerge(baseMap, overridesMap)
 		if len(overridesMap) > 0 {
 			buf, err := json.Marshal(overridesMap)
 			if err != nil {
-				return imagelayout.ViewportSettings{}, nil, fmt.Errorf("encode overrides: %w", err)
+				return imagelayout.LayoutRequest{}, nil, fmt.Errorf("encode overrides: %w", err)
 			}
 			str := strings.TrimSpace(string(buf))
 			if str != "" && str != "null" && str != "{}" {
@@ -206,14 +206,14 @@ func mergeTemplateSettings(baseJSON string, overridesJSON *string) (imagelayout.
 
 	mergedBytes, err := json.Marshal(baseMap)
 	if err != nil {
-		return imagelayout.ViewportSettings{}, nil, fmt.Errorf("encode merged settings: %w", err)
+		return imagelayout.LayoutRequest{}, nil, fmt.Errorf("encode merged layout: %w", err)
 	}
 
-	var settings imagelayout.ViewportSettings
-	if err := json.Unmarshal(mergedBytes, &settings); err != nil {
-		return imagelayout.ViewportSettings{}, nil, fmt.Errorf("decode merged settings: %w", err)
+	var layout imagelayout.LayoutRequest
+	if err := json.Unmarshal(mergedBytes, &layout); err != nil {
+		return imagelayout.LayoutRequest{}, nil, fmt.Errorf("decode merged layout: %w", err)
 	}
-	return settings, normalizedOverrides, nil
+	return layout, normalizedOverrides, nil
 }
 
 func deepMerge(base, overrides map[string]any) map[string]any {

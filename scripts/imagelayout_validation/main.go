@@ -28,7 +28,7 @@ type scenario struct {
 	ID          string
 	Name        string
 	Description string
-	Args        []string
+	BuildLayout func(sz sizeSpec) imagelayout.LayoutRequest
 }
 
 type sizeSpec struct {
@@ -65,74 +65,131 @@ func main() {
 			ID:          "page-contain",
 			Name:        "Page / Contain",
 			Description: "Default page mode with contain behaviour inside the printable area.",
-			Args:        []string{"--paper-width-in", "8.5", "--paper-height-in", "11", "--dpi", "300"},
+			BuildLayout: func(_ sizeSpec) imagelayout.LayoutRequest {
+				layout := imagelayout.DefaultLayoutRequest()
+				layout.Frame.Mode = "page"
+				layout.Frame.Fill = "contain"
+				layout.Frame.Page = &imagelayout.PageFrame{
+					WidthIn:     8.5,
+					HeightIn:    11,
+					DPI:         300,
+					Orientation: "portrait",
+					MarginsIn:   layout.Frame.Page.MarginsIn,
+				}
+				layout.Crop.Strategy = "auto"
+				return layout
+			},
 		},
 		{
 			ID:          "page-cover",
 			Name:        "Page / Cover",
 			Description: "Page mode forcing cover scaling inside the printable area.",
-			Args:        []string{"--paper-width-in", "8.5", "--paper-height-in", "11", "--dpi", "300", "--crop-to-fill"},
+			BuildLayout: func(_ sizeSpec) imagelayout.LayoutRequest {
+				layout := imagelayout.DefaultLayoutRequest()
+				layout.Frame.Mode = "page"
+				layout.Frame.Fill = "cover"
+				layout.Frame.Page = &imagelayout.PageFrame{
+					WidthIn:     8.5,
+					HeightIn:    11,
+					DPI:         300,
+					Orientation: "portrait",
+					MarginsIn:   layout.Frame.Page.MarginsIn,
+				}
+				layout.Crop.Strategy = "auto"
+				return layout
+			},
 		},
 		{
 			ID:          "page-landscape-anchor",
 			Name:        "Page / Landscape Anchor",
 			Description: "Landscape orientation using the top-left anchor preset.",
-			Args: []string{
-				"--paper-width-in", "8.5",
-				"--paper-height-in", "11",
-				"--dpi", "200",
-				"--orientation", "landscape",
-				"--anchor-preset", "top-left",
+			BuildLayout: func(_ sizeSpec) imagelayout.LayoutRequest {
+				layout := imagelayout.DefaultLayoutRequest()
+				layout.Frame.Mode = "page"
+				layout.Frame.Fill = "contain"
+				layout.Frame.Page = &imagelayout.PageFrame{
+					WidthIn:     8.5,
+					HeightIn:    11,
+					DPI:         200,
+					Orientation: "landscape",
+					MarginsIn:   layout.Frame.Page.MarginsIn,
+				}
+				layout.Crop.Strategy = "anchor"
+				layout.Crop.Anchor = "top-left"
+				return layout
 			},
 		},
 		{
 			ID:          "crop-ratio",
 			Name:        "Crop / Ratio",
 			Description: "Crop mode constrained to a 3:2 ratio.",
-			Args: []string{
-				"--mode", "crop",
-				"--crop-ratio", "1.5",
-				"--crop-to-fill",
+			BuildLayout: func(_ sizeSpec) imagelayout.LayoutRequest {
+				layout := imagelayout.DefaultLayoutRequest()
+				ratio := 1.5
+				layout.Frame.Mode = "ratio"
+				layout.Frame.Ratio = &ratio
+				layout.Frame.Fill = "cover"
+				layout.Crop.Strategy = "auto"
+				return layout
 			},
 		},
 		{
 			ID:          "crop-dimensions",
 			Name:        "Crop / Fixed Dimensions",
 			Description: "Crop mode with explicit pixel dimensions.",
-			Args: []string{
-				"--mode", "crop",
-				"--crop-width", "1600",
-				"--crop-height", "900",
+			BuildLayout: func(_ sizeSpec) imagelayout.LayoutRequest {
+				layout := imagelayout.DefaultLayoutRequest()
+				layout.Frame.Mode = "ratio"
+				ratio := 1600.0 / 900.0
+				layout.Frame.Ratio = &ratio
+				layout.Frame.Fill = "contain"
+				layout.Crop.Strategy = "auto"
+				return layout
 			},
 		},
 		{
 			ID:          "fit-width",
 			Name:        "Fit / Width",
 			Description: "Fit mode driven by a target width.",
-			Args: []string{
-				"--mode", "fit",
-				"--fit-mode", "width",
-				"--fit-width", "1200",
+			BuildLayout: func(_ sizeSpec) imagelayout.LayoutRequest {
+				layout := imagelayout.DefaultLayoutRequest()
+				layout.Frame.Mode = "viewport"
+				layout.Frame.Viewport = &imagelayout.ViewportFrame{
+					Width:  1200,
+					Height: 0,
+				}
+				layout.Frame.FitAxis = "width"
+				return layout
 			},
 		},
 		{
 			ID:          "fit-height",
 			Name:        "Fit / Height",
 			Description: "Fit mode driven by a target height.",
-			Args: []string{
-				"--mode", "fit",
-				"--fit-mode", "height",
-				"--fit-height", "900",
+			BuildLayout: func(_ sizeSpec) imagelayout.LayoutRequest {
+				layout := imagelayout.DefaultLayoutRequest()
+				layout.Frame.Mode = "viewport"
+				layout.Frame.Viewport = &imagelayout.ViewportFrame{
+					Width:  0,
+					Height: 900,
+				}
+				layout.Frame.FitAxis = "height"
+				return layout
 			},
 		},
 		{
 			ID:          "fit-auto",
 			Name:        "Fit / Auto",
 			Description: "Fit mode with both target dimensions provided.",
-			Args: []string{
-				"--mode", "fit",
-				"--fit-width", "1400",
-				"--fit-height", "700",
+			BuildLayout: func(_ sizeSpec) imagelayout.LayoutRequest {
+				layout := imagelayout.DefaultLayoutRequest()
+				layout.Frame.Mode = "viewport"
+				layout.Frame.Viewport = &imagelayout.ViewportFrame{
+					Width:  1400,
+					Height: 700,
+				}
+				layout.Frame.FitAxis = "auto"
+				return layout
 			},
 		},
 	}
@@ -210,7 +267,13 @@ func executeScenario(cliPath string, sc scenario, sz sizeSpec, root string) runR
 	}
 	res.SourceImage = relPath(assetPath)
 
-	cmdArgs := append([]string{"imagelayout", "compute", "--source-width", fmt.Sprint(sz.Width), "--source-height", fmt.Sprint(sz.Height)}, sc.Args...)
+	specPath, err := writeScenarioSpec(sc, sz, root)
+	if err != nil {
+		res.Error = err
+		return res
+	}
+
+	cmdArgs := []string{"imagelayout", "compute", "--spec", specPath}
 	res.Command = cliPath + " " + strings.Join(cmdArgs, " ")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -219,10 +282,10 @@ func executeScenario(cliPath string, sc scenario, sz sizeSpec, root string) runR
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
+	execErr := cmd.Run()
 	res.RawOutput = stdout.Bytes()
-	if err != nil {
-		res.Error = fmt.Errorf("command failed: %w (stderr: %s)", err, stderr.String())
+	if execErr != nil {
+		res.Error = fmt.Errorf("command failed: %w (stderr: %s)", execErr, stderr.String())
 		return res
 	}
 
@@ -233,13 +296,12 @@ func executeScenario(cliPath string, sc scenario, sz sizeSpec, root string) runR
 	}
 	res.Computation = &comp
 
-	inputs, err := engine.InputsFromSettings(comp.Settings, imagelayout.ImageMeta{Width: sz.Width, Height: sz.Height})
+	inputs, err := engine.InputsFromRequest(comp.Layout, imagelayout.ImageMeta{Width: sz.Width, Height: sz.Height})
 	if err != nil {
 		res.Error = fmt.Errorf("derive inputs: %w", err)
 		return res
 	}
 	res.Inputs = inputs
-
 	res.Validation = validateComputation(comp, inputs)
 
 	renderPath, overlayPath, err := renderOutputs(root, sc.ID, sz.ID, img, comp, inputs)
@@ -251,9 +313,33 @@ func executeScenario(cliPath string, sc scenario, sz sizeSpec, root string) runR
 	res.OverlayImage = relPath(overlayPath)
 
 	res.TraceJSON = marshalPretty(comp.Trace)
-	res.SettingsJSON = marshalPretty(comp.Settings)
+	res.SettingsJSON = marshalPretty(comp.Layout)
 	res.ResultJSON = marshalPretty(comp.Result)
+
 	return res
+}
+
+func writeScenarioSpec(sc scenario, sz sizeSpec, root string) (string, error) {
+	layout := sc.BuildLayout(sz)
+	doc := specDocument{
+		Layout: layout,
+	}
+	doc.Image.Width = sz.Width
+	doc.Image.Height = sz.Height
+
+	data, err := yaml.Marshal(doc)
+	if err != nil {
+		return "", fmt.Errorf("marshal spec: %w", err)
+	}
+	specDir := filepath.Join(root, "specs")
+	if err := os.MkdirAll(specDir, 0o755); err != nil {
+		return "", err
+	}
+	specPath := filepath.Join(specDir, fmt.Sprintf("%s-%s.yaml", sc.ID, sz.ID))
+	if err := os.WriteFile(specPath, data, 0o644); err != nil {
+		return "", err
+	}
+	return specPath, nil
 }
 
 func relPath(path string) string {

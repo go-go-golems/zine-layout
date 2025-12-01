@@ -42,17 +42,23 @@ type Inputs struct {
 	CropToFill   bool
 	CropWidthPx  float64
 	CropHeightPx float64
+	CropZoom     float64
+	CropExtent   float64
 
 	FitMode     string
 	FitWidthPx  float64
 	FitHeightPx float64
 
-	UserScale float64
-	PositionX float64
-	PositionY float64
-	Units     string
+	UserScale           float64
+	PositionX           float64
+	PositionY           float64
+	Units               string
+	PresentationOffsetX float64
+	PresentationOffsetY float64
+	PresentationUnits   string
 
-	Focus *imagelayout.FocusPoint
+	Focus         *imagelayout.FocusPoint
+	ClampToCanvas bool
 }
 
 // InputsFromSettings converts persisted settings and image metadata into algorithm inputs.
@@ -187,29 +193,35 @@ func InputsFromSettings(settings imagelayout.ViewportSettings, meta imagelayout.
 	}
 
 	return Inputs{
-		Mode:           mode,
-		SourceW:        float64(meta.Width),
-		SourceH:        float64(meta.Height),
-		CanvasW:        canvasW,
-		CanvasH:        canvasH,
-		ContentW:       contentW,
-		ContentH:       contentH,
-		MarginTopPx:    mt,
-		MarginRightPx:  mr,
-		MarginBottomPx: mb,
-		MarginLeftPx:   ml,
-		CropRatio:      ratio,
-		CropToFill:     settings.CropToFill,
-		CropWidthPx:    cropWidth,
-		CropHeightPx:   cropHeight,
-		FitMode:        fitMode,
-		FitWidthPx:     fitWidth,
-		FitHeightPx:    fitHeight,
-		UserScale:      scale,
-		PositionX:      resolveAnchor(settings, units, settings.PositionX, true),
-		PositionY:      resolveAnchor(settings, units, settings.PositionY, false),
-		Units:          units,
-		Focus:          settings.Focus,
+		Mode:                mode,
+		SourceW:             float64(meta.Width),
+		SourceH:             float64(meta.Height),
+		CanvasW:             canvasW,
+		CanvasH:             canvasH,
+		ContentW:            contentW,
+		ContentH:            contentH,
+		MarginTopPx:         mt,
+		MarginRightPx:       mr,
+		MarginBottomPx:      mb,
+		MarginLeftPx:        ml,
+		CropRatio:           ratio,
+		CropToFill:          settings.CropToFill,
+		CropWidthPx:         cropWidth,
+		CropHeightPx:        cropHeight,
+		FitMode:             fitMode,
+		FitWidthPx:          fitWidth,
+		FitHeightPx:         fitHeight,
+		UserScale:           scale,
+		PositionX:           resolveAnchor(settings, units, settings.PositionX, true),
+		PositionY:           resolveAnchor(settings, units, settings.PositionY, false),
+		Units:               units,
+		CropZoom:            1.0,
+		CropExtent:          1.0,
+		PresentationOffsetX: resolveAnchor(settings, units, settings.PositionX, true),
+		PresentationOffsetY: resolveAnchor(settings, units, settings.PositionY, false),
+		PresentationUnits:   units,
+		Focus:               settings.Focus,
+		ClampToCanvas:       true,
 	}, nil
 }
 
@@ -262,124 +274,15 @@ func ComputeViewport(inp Inputs) (imagelayout.ViewportResult, *imagelayout.Trace
 		})
 	}
 
-	canvasRect := imagelayout.Rect{
-		X: inp.MarginLeftPx,
-		Y: inp.MarginTopPx,
-		W: inp.ContentW,
-		H: inp.ContentH,
-	}
-	if inp.Mode != "page" {
-		canvasRect = imagelayout.Rect{
-			X: 0,
-			Y: 0,
-			W: inp.ContentW,
-			H: inp.ContentH,
-		}
-	}
-
-	targetW := canvasRect.W
-	targetH := canvasRect.H
-	targetRatio := safeDiv(targetW, targetH)
-
+	canvasRect, targetRatio := buildFrame(inp)
 	sourceRatio := safeDiv(inp.SourceW, inp.SourceH)
-	requestedRatio := sourceRatio
-	if inp.CropRatio != nil {
-		requestedRatio = *inp.CropRatio
-	} else if inp.CropToFill && targetRatio > 0 {
-		requestedRatio = targetRatio
-	}
+	requestedRatio := determineRequestedRatio(inp, targetRatio, sourceRatio)
 
-	var sx, sy, sw, sh float64 = 0, 0, inp.SourceW, inp.SourceH
-	var rangeX, rangeY float64
-	focusApplied := false
-	if requestedRatio > 0 && inp.SourceW > 0 && inp.SourceH > 0 {
-		switch {
-		case sourceRatio > requestedRatio:
-			// crop width
-			sh = inp.SourceH
-			sw = sh * requestedRatio
-			rangeX = math.Max(0, inp.SourceW-sw)
-			if inp.Focus == nil {
-				sx = computeOffset(inp.Units, inp.PositionX, rangeX)
-			}
-		case sourceRatio < requestedRatio:
-			sw = inp.SourceW
-			sh = sw / requestedRatio
-			rangeY = math.Max(0, inp.SourceH-sh)
-			if inp.Focus == nil {
-				sy = computeOffset(inp.Units, inp.PositionY, rangeY)
-			}
-		default:
-			rangeX = math.Max(0, inp.SourceW-sw)
-			rangeY = math.Max(0, inp.SourceH-sh)
-			if inp.Focus == nil {
-				sx = computeOffset(inp.Units, inp.PositionX, rangeX)
-				sy = computeOffset(inp.Units, inp.PositionY, rangeY)
-			}
-		}
-	} else {
-		rangeX = math.Max(0, inp.SourceW-sw)
-		rangeY = math.Max(0, inp.SourceH-sh)
-	}
+	sourceRect, cropStep := resolveCrop(inp, requestedRatio, sourceRatio)
+	addStep("crop", cropStep)
 
-	focusInfo := map[string]interface{}{}
-	if inp.Focus != nil {
-		focusApplied = true
-		fx := clampFloat(inp.Focus.SourceX, 0, inp.SourceW)
-		fy := clampFloat(inp.Focus.SourceY, 0, inp.SourceH)
-		targetNX := resolveFocusTarget(inp.Focus.TargetX, sw)
-		targetNY := resolveFocusTarget(inp.Focus.TargetY, sh)
-		sx = clampFloat(fx-targetNX*sw, 0, rangeX)
-		sy = clampFloat(fy-targetNY*sh, 0, rangeY)
-		focusInfo["focus_source_x"] = fx
-		focusInfo["focus_source_y"] = fy
-		focusInfo["focus_target_x"] = targetNX
-		focusInfo["focus_target_y"] = targetNY
-	}
-
-	addStep("crop", map[string]interface{}{
-		"sx": sx, "sy": sy, "sw": sw, "sh": sh,
-		"source_ratio":    sourceRatio,
-		"requested_ratio": requestedRatio,
-		"range_x":         rangeX,
-		"range_y":         rangeY,
-		"focus_applied":   focusApplied,
-	})
-	if focusApplied {
-		trace.Steps[len(trace.Steps)-1].Data["focus"] = focusInfo
-	}
-
-	scaleX := safeDiv(targetW, sw)
-	scaleY := safeDiv(targetH, sh)
-	mode := "contain"
-	scale := math.Min(scaleX, scaleY)
-	if inp.CropToFill {
-		mode = "cover"
-		scale = math.Max(scaleX, scaleY)
-	}
-	scale *= inp.UserScale
-
-	dstW := sw * scale
-	dstH := sh * scale
-	tx, ty := positionOffsets(inp.Units, inp.PositionX, inp.PositionY, targetW, targetH, dstW, dstH)
-	addStep("scale", map[string]interface{}{
-		"scale_x": scaleX,
-		"scale_y": scaleY,
-		"final":   scale,
-		"mode":    mode,
-		"dst_w":   dstW,
-		"dst_h":   dstH,
-		"tx":      tx,
-		"ty":      ty,
-	})
-
-	targetRect := imagelayout.Rect{
-		X: canvasRect.X + tx,
-		Y: canvasRect.Y + ty,
-		W: dstW,
-		H: dstH,
-	}
-	sourceRect := imagelayout.Rect{X: sx, Y: sy, W: sw, H: sh}
+	targetRect, mode, scale, scaleStep := composeTarget(inp, canvasRect, sourceRect)
+	addStep("scale", scaleStep)
 
 	result := imagelayout.ViewportResult{
 		SourceRect: sourceRect,
@@ -396,6 +299,160 @@ func ComputeViewport(inp Inputs) (imagelayout.ViewportResult, *imagelayout.Trace
 	})
 
 	return result, trace
+}
+
+func buildFrame(inp Inputs) (imagelayout.Rect, float64) {
+	rect := imagelayout.Rect{
+		X: inp.MarginLeftPx,
+		Y: inp.MarginTopPx,
+		W: inp.ContentW,
+		H: inp.ContentH,
+	}
+	if inp.Mode != "page" {
+		rect = imagelayout.Rect{
+			X: 0,
+			Y: 0,
+			W: inp.ContentW,
+			H: inp.ContentH,
+		}
+	}
+	return rect, safeDiv(rect.W, rect.H)
+}
+
+func determineRequestedRatio(inp Inputs, targetRatio, sourceRatio float64) float64 {
+	if inp.CropRatio != nil && *inp.CropRatio > 0 {
+		return *inp.CropRatio
+	}
+	if inp.CropToFill && targetRatio > 0 {
+		return targetRatio
+	}
+	return sourceRatio
+}
+
+func resolveCrop(inp Inputs, requestedRatio, sourceRatio float64) (imagelayout.Rect, map[string]interface{}) {
+	sw := inp.SourceW
+	sh := inp.SourceH
+
+	if requestedRatio > 0 && inp.SourceW > 0 && inp.SourceH > 0 {
+		switch {
+		case sourceRatio > requestedRatio:
+			sh = inp.SourceH
+			sw = sh * requestedRatio
+		case sourceRatio < requestedRatio:
+			sw = inp.SourceW
+			sh = sw / requestedRatio
+		default:
+			// keep source dimensions
+		}
+	}
+
+	scale := computeCropScale(inp.CropExtent, inp.CropZoom)
+	sw = clampFloat(sw*scale, 1, inp.SourceW)
+	sh = clampFloat(sh*scale, 1, inp.SourceH)
+
+	rangeX := math.Max(0, inp.SourceW-sw)
+	rangeY := math.Max(0, inp.SourceH-sh)
+
+	sx := 0.0
+	sy := 0.0
+	focusApplied := false
+	var focusInfo map[string]interface{}
+
+	if inp.Focus != nil {
+		focusApplied = true
+		focusInfo = map[string]interface{}{}
+		fx := clampFloat(inp.Focus.SourceX, 0, inp.SourceW)
+		fy := clampFloat(inp.Focus.SourceY, 0, inp.SourceH)
+		targetNX := resolveFocusTarget(inp.Focus.TargetX, sw)
+		targetNY := resolveFocusTarget(inp.Focus.TargetY, sh)
+		sx = clampFloat(fx-targetNX*sw, 0, rangeX)
+		sy = clampFloat(fy-targetNY*sh, 0, rangeY)
+		focusInfo["focus_source_x"] = fx
+		focusInfo["focus_source_y"] = fy
+		focusInfo["focus_target_x"] = targetNX
+		focusInfo["focus_target_y"] = targetNY
+	} else {
+		sx = computeOffset(inp.Units, inp.PositionX, rangeX)
+		sy = computeOffset(inp.Units, inp.PositionY, rangeY)
+	}
+
+	data := map[string]interface{}{
+		"sx":              sx,
+		"sy":              sy,
+		"sw":              sw,
+		"sh":              sh,
+		"source_ratio":    sourceRatio,
+		"requested_ratio": requestedRatio,
+		"range_x":         rangeX,
+		"range_y":         rangeY,
+		"focus_applied":   focusApplied,
+		"crop_zoom":       inp.CropZoom,
+		"crop_extent":     inp.CropExtent,
+	}
+	if focusApplied {
+		data["focus"] = focusInfo
+	}
+
+	return imagelayout.Rect{X: sx, Y: sy, W: sw, H: sh}, data
+}
+
+func computeCropScale(extent, zoom float64) float64 {
+	scale := 1.0
+	if extent > 0 && extent <= 1 {
+		scale *= extent
+	}
+	if zoom > 0 {
+		scale /= zoom
+	}
+	if scale <= 0 {
+		return 1.0
+	}
+	return scale
+}
+
+func composeTarget(inp Inputs, canvasRect, sourceRect imagelayout.Rect) (imagelayout.Rect, string, float64, map[string]interface{}) {
+	targetW := canvasRect.W
+	targetH := canvasRect.H
+
+	scaleX := safeDiv(targetW, sourceRect.W)
+	scaleY := safeDiv(targetH, sourceRect.H)
+
+	mode := "contain"
+	scale := math.Min(scaleX, scaleY)
+	if inp.CropToFill {
+		mode = "cover"
+		scale = math.Max(scaleX, scaleY)
+	}
+	scale *= inp.UserScale
+
+	dstW := sourceRect.W * scale
+	dstH := sourceRect.H * scale
+	offsetUnits := inp.PresentationUnits
+	if offsetUnits == "" {
+		offsetUnits = inp.Units
+	}
+	tx, ty := positionOffsets(offsetUnits, inp.PresentationOffsetX, inp.PresentationOffsetY, targetW, targetH, dstW, dstH)
+
+	targetRect := imagelayout.Rect{
+		X: canvasRect.X + tx,
+		Y: canvasRect.Y + ty,
+		W: dstW,
+		H: dstH,
+	}
+
+	data := map[string]interface{}{
+		"scale_x":            scaleX,
+		"scale_y":            scaleY,
+		"final":              scale,
+		"mode":               mode,
+		"dst_w":              dstW,
+		"dst_h":              dstH,
+		"tx":                 tx,
+		"ty":                 ty,
+		"presentation_units": offsetUnits,
+	}
+
+	return targetRect, mode, scale, data
 }
 
 func safeDiv(a, b float64) float64 {
