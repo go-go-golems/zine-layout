@@ -55,12 +55,6 @@ export interface CropState {
   anchorPreset: string;
 }
 
-export interface PresentationState {
-  offsetX: number;
-  offsetY: number;
-  clampToCanvas: boolean;
-}
-
 export interface PreviewState {
   assetId: string;
   result: ImageLayoutComputation | null;
@@ -83,7 +77,6 @@ export interface ImageLayoutsEditorState {
   meta: MetaState;
   frame: FrameState;
   crop: CropState;
-  presentation: PresentationState;
   preview: PreviewState;
 }
 
@@ -109,12 +102,6 @@ const initialCropState = (): CropState => ({
   anchorPreset: "middle-center",
 });
 
-const initialPresentationState = (): PresentationState => ({
-  offsetX: 0,
-  offsetY: 0,
-  clampToCanvas: false,
-});
-
 const initialPreviewState = (): PreviewState => ({
   assetId: "",
   result: null,
@@ -135,8 +122,7 @@ const initialState = (): ImageLayoutsEditorState => ({
   meta: initialMetaState(),
   frame: initialFrameState(),
   crop: initialCropState(),
-  presentation: initialPresentationState(),
-  preview: initialPreviewState(),
+    preview: initialPreviewState(),
 });
 
 const aspectRatioFromValue = (value: number | null): AspectRatioKey => {
@@ -170,10 +156,6 @@ const buildLayoutFromState = (state: ImageLayoutsEditorState): ImageLayoutReques
       pan: { x: state.crop.panX, y: state.crop.panY },
       units: "normalized",
       focus: null,
-    },
-    presentation: {
-      offset_px: { x: state.presentation.offsetX, y: state.presentation.offsetY },
-      clamp_to_canvas: state.presentation.clampToCanvas,
     },
     export: {
       format: "png",
@@ -276,9 +258,8 @@ const imageLayoutsEditorSlice = createSlice({
       const maybeLayout = action.payload.settings as any;
       const frame = maybeLayout?.frame ?? null;
       const crop = maybeLayout?.crop ?? null;
-      const presentation = maybeLayout?.presentation ?? null;
 
-    if (frame && crop && presentation) {
+      if (frame && crop) {
         if (frame.mode === "page" && frame.page) {
           next.frame.paperWidth = frame.page.width_in ?? next.frame.paperWidth;
           next.frame.paperHeight = frame.page.height_in ?? next.frame.paperHeight;
@@ -309,11 +290,6 @@ const imageLayoutsEditorSlice = createSlice({
         next.crop.panX = crop.pan?.x ?? next.crop.panX;
         next.crop.panY = crop.pan?.y ?? next.crop.panY;
         next.crop.anchorPreset = crop.anchor ?? next.crop.anchorPreset;
-
-        next.presentation.offsetX = presentation.offset_px?.x ?? next.presentation.offsetX;
-        next.presentation.offsetY = presentation.offset_px?.y ?? next.presentation.offsetY;
-        next.presentation.clampToCanvas =
-          presentation.clamp_to_canvas ?? next.presentation.clampToCanvas;
 
         return next;
       }
@@ -346,10 +322,6 @@ const imageLayoutsEditorSlice = createSlice({
       next.crop.panX = legacy.position_x ?? next.crop.panX;
       next.crop.panY = legacy.position_y ?? next.crop.panY;
       next.crop.anchorPreset = legacy.anchor_preset ?? next.crop.anchorPreset;
-
-      next.presentation.offsetX = 0;
-      next.presentation.offsetY = 0;
-      next.presentation.clampToCanvas = false;
       return next;
     },
     setTemplateName(state, action: PayloadAction<string>) {
@@ -432,15 +404,6 @@ const imageLayoutsEditorSlice = createSlice({
     setAnchorPreset(state, action: PayloadAction<string>) {
       state.crop.anchorPreset = action.payload;
     },
-    setOffsetX(state, action: PayloadAction<number>) {
-      state.presentation.offsetX = action.payload;
-    },
-    setOffsetY(state, action: PayloadAction<number>) {
-      state.presentation.offsetY = action.payload;
-    },
-    setClampToCanvas(state, action: PayloadAction<boolean>) {
-      state.presentation.clampToCanvas = action.payload;
-    },
     setPreviewAssetId(state, action: PayloadAction<string>) {
       state.preview.assetId = action.payload;
     },
@@ -503,9 +466,6 @@ export const {
   setPanX,
   setPanY,
   setAnchorPreset,
-  setOffsetX,
-  setOffsetY,
-  setClampToCanvas,
   setPreviewAssetId,
   setCompareOpen,
   setPreviewError,

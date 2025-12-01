@@ -36,13 +36,6 @@ func ComputeViewport(inp NormalizedInputs) (imagelayout.ViewportResult, *imagela
 				"pan_y":        inp.Crop.PanY,
 				"focus":        inp.Crop.Focus,
 			},
-			"presentation": map[string]interface{}{
-				"user_scale":      inp.Presentation.UserScale,
-				"offset_units":    inp.Presentation.OffsetUnits,
-				"offset_x":        inp.Presentation.OffsetX,
-				"offset_y":        inp.Presentation.OffsetY,
-				"clamp_to_canvas": inp.Presentation.ClampToCanvas,
-			},
 		},
 	}
 
@@ -60,7 +53,7 @@ func ComputeViewport(inp NormalizedInputs) (imagelayout.ViewportResult, *imagela
 	sourceRect, cropStep := resolveCrop(inp.Source, inp.Crop, requestedRatio, sourceRatio)
 	addStep("crop", cropStep)
 
-	targetRect, mode, scale, scaleStep := composeTarget(inp.Crop, inp.Presentation, contentRect, sourceRect)
+	targetRect, mode, scale, scaleStep := composeTarget(inp.Crop, contentRect, sourceRect)
 	addStep("scale", scaleStep)
 
 	result := imagelayout.ViewportResult{
@@ -181,7 +174,7 @@ func computeCropScale(extent, zoom float64) float64 {
 	return scale
 }
 
-func composeTarget(crop CropInputs, presentation PresentationInputs, contentRect, sourceRect imagelayout.Rect) (imagelayout.Rect, string, float64, map[string]interface{}) {
+func composeTarget(crop CropInputs, contentRect, sourceRect imagelayout.Rect) (imagelayout.Rect, string, float64, map[string]interface{}) {
 	targetW := contentRect.W
 	targetH := contentRect.H
 
@@ -194,33 +187,24 @@ func composeTarget(crop CropInputs, presentation PresentationInputs, contentRect
 		mode = "cover"
 		scale = math.Max(scaleX, scaleY)
 	}
-	scale *= presentation.UserScale
 
 	dstW := sourceRect.W * scale
 	dstH := sourceRect.H * scale
-	offsetUnits := presentation.OffsetUnits
-	if offsetUnits == "" {
-		offsetUnits = crop.Units
-	}
-	tx, ty := positionOffsets(offsetUnits, presentation.OffsetX, presentation.OffsetY, targetW, targetH, dstW, dstH)
 
 	targetRect := imagelayout.Rect{
-		X: contentRect.X + tx,
-		Y: contentRect.Y + ty,
+		X: contentRect.X,
+		Y: contentRect.Y,
 		W: dstW,
 		H: dstH,
 	}
 
 	data := map[string]interface{}{
-		"scale_x":            scaleX,
-		"scale_y":            scaleY,
-		"final":              scale,
-		"mode":               mode,
-		"dst_w":              dstW,
-		"dst_h":              dstH,
-		"tx":                 tx,
-		"ty":                 ty,
-		"presentation_units": offsetUnits,
+		"scale_x": scaleX,
+		"scale_y": scaleY,
+		"final":   scale,
+		"mode":    mode,
+		"dst_w":   dstW,
+		"dst_h":   dstH,
 	}
 
 	return targetRect, mode, scale, data
@@ -233,6 +217,16 @@ func safeDiv(a, b float64) float64 {
 	return a / b
 }
 
+func clampFloat(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
 func computeOffset(units string, value float64, rangePx float64) float64 {
 	if rangePx <= 0 {
 		return 0
@@ -243,27 +237,6 @@ func computeOffset(units string, value float64, rangePx float64) float64 {
 	}
 	half := rangePx / 2
 	return clampFloat(value, -half, half) + half
-}
-
-func positionOffsets(units string, px, py float64, targetW, targetH, dstW, dstH float64) (float64, float64) {
-	if units == "px" {
-		return px, py
-	}
-	freeX := targetW - dstW
-	freeY := targetH - dstH
-	tx := (clampFloat(px, -1, 1) * freeX) / 2
-	ty := (clampFloat(py, -1, 1) * freeY) / 2
-	return tx, ty
-}
-
-func clampFloat(v, lo, hi float64) float64 {
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
 }
 
 func resolveFocusTarget(value, length float64) float64 {

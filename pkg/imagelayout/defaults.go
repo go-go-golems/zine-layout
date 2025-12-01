@@ -14,11 +14,6 @@ func DefaultLayoutRequest() LayoutRequest {
 			Zoom:     1.0,
 			Units:    "normalized",
 		},
-		Presentation: PresentationSpec{
-			UserScale:     1.0,
-			OffsetPx:      Vec2Px{X: 0, Y: 0},
-			ClampToCanvas: true,
-		},
 		Export: ExportOptions{
 			Format:           "png",
 			Quality:          90,

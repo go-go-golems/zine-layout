@@ -34,13 +34,6 @@ func newLayoutCommand() *cobra.Command {
 		panic(err)
 	}
 	layoutCmd.AddCommand(cropCmd)
-
-	presCmd, err := newLayoutPresentationCmd()
-	if err != nil {
-		panic(err)
-	}
-	layoutCmd.AddCommand(presCmd)
-
 	return layoutCmd
 }
 
@@ -86,7 +79,7 @@ func (c *layoutFrameGlazeCommand) Run(ctx context.Context, parsedLayers *layers.
 	}
 	_ = layout
 	_ = meta
-	analysis := engine.AnalyzeFrame(inputs.Frame, inputs.Presentation.ClampToCanvas)
+	analysis := engine.AnalyzeFrame(inputs.Frame)
 	return printJSON(analysis)
 }
 
@@ -132,56 +125,8 @@ func (c *layoutCropGlazeCommand) Run(ctx context.Context, parsedLayers *layers.P
 	}
 	_ = layout
 	_ = meta
-	frameAnalysis := engine.AnalyzeFrame(inputs.Frame, inputs.Presentation.ClampToCanvas)
+	frameAnalysis := engine.AnalyzeFrame(inputs.Frame)
 	analysis := engine.AnalyzeCrop(inputs.Source, inputs.Crop, frameAnalysis.TargetRatio)
-	return printJSON(analysis)
-}
-
-type layoutPresentationGlazeCommand struct {
-	*cmds.CommandDescription
-}
-
-var _ cmds.BareCommand = (*layoutPresentationGlazeCommand)(nil)
-
-func newLayoutPresentationCmd() (*cobra.Command, error) {
-	glazedLayer, err := settings.NewGlazedParameterLayers()
-	if err != nil {
-		return nil, errors.Wrap(err, "create glazed parameter layer")
-	}
-	cmd := &layoutPresentationGlazeCommand{
-		CommandDescription: cmds.NewCommandDescription(
-			"layout-presentation",
-			cmds.WithShort("Analyze presentation normalization (use --spec or flags)"),
-			cmds.WithFlags(presentationVerbParameterDefinitions()...),
-			cmds.WithLayersList(glazedLayer),
-		),
-	}
-	cobraCmd, err := cli.BuildCobraCommandFromCommand(cmd, cli.WithParserConfig(cli.CobraParserConfig{
-		ShortHelpLayers: []string{layers.DefaultSlug},
-		MiddlewaresFunc: cli.CobraCommandDefaultMiddlewares,
-	}))
-	if err != nil {
-		return nil, err
-	}
-	cobraCmd.Use = "presentation"
-	cobraCmd.Short = "Analyze presentation stage"
-	return cobraCmd, nil
-}
-
-func (c *layoutPresentationGlazeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayers) error {
-	settings := &layoutParamSettings{}
-	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, settings); err != nil {
-		return err
-	}
-	layout, meta, inputs, err := buildLayoutFromSettings(parsedLayers, settings)
-	if err != nil {
-		return err
-	}
-	_ = layout
-	_ = meta
-	frameAnalysis := engine.AnalyzeFrame(inputs.Frame, inputs.Presentation.ClampToCanvas)
-	cropAnalysis := engine.AnalyzeCrop(inputs.Source, inputs.Crop, frameAnalysis.TargetRatio)
-	analysis := engine.AnalyzePresentation(inputs.Crop, inputs.Presentation, frameAnalysis.CanvasRect, cropAnalysis.SourceRect)
 	return printJSON(analysis)
 }
 

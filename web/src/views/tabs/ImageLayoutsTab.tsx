@@ -29,7 +29,6 @@ import {
   setPreviewAssetId,
   setAnchorPreset,
   setAspectRatio,
-  setClampToCanvas,
   setCompareOpen,
   setCropStrategy,
   setDpi,
@@ -40,8 +39,6 @@ import {
   setMarginLeft,
   setMarginRight,
   setMarginTop,
-  setOffsetX,
-  setOffsetY,
   setOrientation,
   setPanX,
   setPanY,
@@ -474,13 +471,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                       setPanY={(val) => dispatch(setPanY(val))}
                       zoom={editor.crop.zoom}
                       setZoom={(val) => dispatch(setZoom(val))}
-                      offsetX={editor.presentation.offsetX}
-                      setOffsetX={(val) => dispatch(setOffsetX(val))}
-                      offsetY={editor.presentation.offsetY}
-                      setOffsetY={(val) => dispatch(setOffsetY(val))}
-                      clampToCanvas={editor.presentation.clampToCanvas}
-                        setClampToCanvas={(val) => dispatch(setClampToCanvas(val))}
-                      />
+                    />
 
                       {/* Submit Buttons */}
                       <div className="flex justify-end space-x-3 pt-4">

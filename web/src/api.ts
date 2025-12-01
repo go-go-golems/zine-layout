@@ -86,11 +86,6 @@ export interface ImageLayoutVec2 {
   y: number;
 }
 
-export interface ImageLayoutVec2Px {
-  x: number;
-  y: number;
-}
-
 export interface ImageLayoutFrameSpec {
   mode: 'ratio' | 'page' | 'viewport';
   ratio?: number | null;
@@ -111,16 +106,9 @@ export interface ImageLayoutCropSpec {
   units?: 'normalized' | 'px';
 }
 
-export interface ImageLayoutPresentationSpec {
-  user_scale?: number;
-  offset_px?: ImageLayoutVec2Px;
-  clamp_to_canvas?: boolean;
-}
-
 export interface ImageLayoutRequest {
   frame: ImageLayoutFrameSpec;
   crop: ImageLayoutCropSpec;
-  presentation: ImageLayoutPresentationSpec;
   export: ImageLayoutExportOptions;
 }
 

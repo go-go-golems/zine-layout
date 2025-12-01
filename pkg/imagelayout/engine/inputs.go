@@ -137,15 +137,6 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 		cropExtent = 1.0
 	}
 
-	presUnits := "normalized"
-	presOffsetX := 0.0
-	presOffsetY := 0.0
-	if normalized.Presentation.OffsetPx != (imagelayout.Vec2Px{}) {
-		presUnits = "px"
-		presOffsetX = normalized.Presentation.OffsetPx.X
-		presOffsetY = normalized.Presentation.OffsetPx.Y
-	}
-
 	canvasRect := imagelayout.Rect{
 		X: 0,
 		Y: 0,
@@ -197,13 +188,6 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 			PanX:       posX,
 			PanY:       posY,
 			Focus:      normalized.Crop.Focus,
-		},
-		Presentation: PresentationInputs{
-			UserScale:     normalized.Presentation.UserScale,
-			OffsetUnits:   presUnits,
-			OffsetX:       presOffsetX,
-			OffsetY:       presOffsetY,
-			ClampToCanvas: normalized.Presentation.ClampToCanvas,
 		},
 	}
 
@@ -294,22 +278,6 @@ func normalizeLayoutRequest(req imagelayout.LayoutRequest) imagelayout.LayoutReq
 	}
 	if req.Crop.Units != "" {
 		out.Crop.Units = req.Crop.Units
-	}
-
-	// Presentation overrides
-	if req.Presentation.UserScale != 0 {
-		out.Presentation.UserScale = req.Presentation.UserScale
-	}
-	if req.Presentation.OffsetPx != (imagelayout.Vec2Px{}) {
-		out.Presentation.OffsetPx = req.Presentation.OffsetPx
-	}
-	if !req.Presentation.ClampToCanvas {
-		out.Presentation.ClampToCanvas = false
-	}
-
-	// Export overrides
-	if req.Export != (imagelayout.ExportOptions{}) {
-		out.Export = req.Export
 	}
 
 	return out

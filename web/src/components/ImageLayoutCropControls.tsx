@@ -16,12 +16,6 @@ interface Props {
   setPanY: (value: number) => void;
   zoom: number;
   setZoom: (value: number) => void;
-  offsetX: number;
-  setOffsetX: (value: number) => void;
-  offsetY: number;
-  setOffsetY: (value: number) => void;
-  clampToCanvas: boolean;
-  setClampToCanvas: (value: boolean) => void;
 }
 
 export const ImageLayoutCropControls: React.FC<Props> = ({
@@ -35,12 +29,6 @@ export const ImageLayoutCropControls: React.FC<Props> = ({
   setPanY,
   zoom,
   setZoom,
-  offsetX,
-  setOffsetX,
-  offsetY,
-  setOffsetY,
-  clampToCanvas,
-  setClampToCanvas,
 }) => {
   return (
     <div className="space-y-4">
@@ -103,31 +91,6 @@ export const ImageLayoutCropControls: React.FC<Props> = ({
         step={0.01}
         unit="×"
       />
-
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          label="Offset X (px)"
-          type="number"
-          value={offsetX}
-          onChange={(e) => setOffsetX(parseFloat(e.target.value) || 0)}
-        />
-        <Input
-          label="Offset Y (px)"
-          type="number"
-          value={offsetY}
-          onChange={(e) => setOffsetY(parseFloat(e.target.value) || 0)}
-        />
-      </div>
-
-      <label className="flex items-center space-x-2 text-sm text-gray-700">
-        <input
-          type="checkbox"
-          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-          checked={clampToCanvas}
-          onChange={(e) => setClampToCanvas(e.target.checked)}
-        />
-        <span>Clamp to canvas</span>
-      </label>
     </div>
   );
 };

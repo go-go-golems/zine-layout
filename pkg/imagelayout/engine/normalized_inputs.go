@@ -13,10 +13,9 @@ const (
 
 // NormalizedInputs groups the normalized data that flows through the engine.
 type NormalizedInputs struct {
-	Source       SourceMeta
-	Frame        FrameInputs
-	Crop         CropInputs
-	Presentation PresentationInputs
+	Source SourceMeta
+	Frame  FrameInputs
+	Crop   CropInputs
 }
 
 // SourceMeta describes the source image dimensions.
@@ -43,15 +42,6 @@ type CropInputs struct {
 	PanX       float64
 	PanY       float64
 	Focus      *imagelayout.FocusPoint
-}
-
-// PresentationInputs stores post-crop adjustments.
-type PresentationInputs struct {
-	UserScale     float64
-	OffsetUnits   string
-	OffsetX       float64
-	OffsetY       float64
-	ClampToCanvas bool
 }
 
 // MarginPixels describes resolved margin sizes (in pixels).

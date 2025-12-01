@@ -11,39 +11,35 @@ import (
 )
 
 type layoutParamSettings struct {
-	Spec                  string  `glazed.parameter:"spec"`
-	SourceWidth           int     `glazed.parameter:"source-width"`
-	SourceHeight          int     `glazed.parameter:"source-height"`
-	FrameMode             string  `glazed.parameter:"frame-mode"`
-	FrameFill             string  `glazed.parameter:"frame-fill"`
-	FrameRatio            float64 `glazed.parameter:"frame-ratio"`
-	FrameFitAxis          string  `glazed.parameter:"frame-fit-axis"`
-	FramePageWidth        float64 `glazed.parameter:"frame-page-width-in"`
-	FramePageHeight       float64 `glazed.parameter:"frame-page-height-in"`
-	FramePageDPI          float64 `glazed.parameter:"frame-page-dpi"`
-	FramePageOrient       string  `glazed.parameter:"frame-page-orientation"`
-	FrameMarginTop        float64 `glazed.parameter:"frame-margin-top-in"`
-	FrameMarginRight      float64 `glazed.parameter:"frame-margin-right-in"`
-	FrameMarginBottom     float64 `glazed.parameter:"frame-margin-bottom-in"`
-	FrameMarginLeft       float64 `glazed.parameter:"frame-margin-left-in"`
-	FrameViewportWidth    float64 `glazed.parameter:"frame-viewport-width"`
-	FrameViewportHeight   float64 `glazed.parameter:"frame-viewport-height"`
-	CropStrategy          string  `glazed.parameter:"crop-strategy"`
-	CropRatio             float64 `glazed.parameter:"crop-ratio"`
-	CropZoom              float64 `glazed.parameter:"crop-zoom"`
-	CropExtent            float64 `glazed.parameter:"crop-extent"`
-	CropAnchor            string  `glazed.parameter:"crop-anchor"`
-	CropPanX              float64 `glazed.parameter:"crop-pan-x"`
-	CropPanY              float64 `glazed.parameter:"crop-pan-y"`
-	FocalSourceX          float64 `glazed.parameter:"crop-focus-source-x"`
-	FocalSourceY          float64 `glazed.parameter:"crop-focus-source-y"`
-	FocalTargetX          float64 `glazed.parameter:"crop-focus-target-x"`
-	FocalTargetY          float64 `glazed.parameter:"crop-focus-target-y"`
-	CropUnits             string  `glazed.parameter:"crop-units"`
-	PresentationUserScale float64 `glazed.parameter:"presentation-user-scale"`
-	PresentationOffsetX   float64 `glazed.parameter:"presentation-offset-x"`
-	PresentationOffsetY   float64 `glazed.parameter:"presentation-offset-y"`
-	PresentationClamp     bool    `glazed.parameter:"presentation-clamp"`
+	Spec                string  `glazed.parameter:"spec"`
+	SourceWidth         int     `glazed.parameter:"source-width"`
+	SourceHeight        int     `glazed.parameter:"source-height"`
+	FrameMode           string  `glazed.parameter:"frame-mode"`
+	FrameFill           string  `glazed.parameter:"frame-fill"`
+	FrameRatio          float64 `glazed.parameter:"frame-ratio"`
+	FrameFitAxis        string  `glazed.parameter:"frame-fit-axis"`
+	FramePageWidth      float64 `glazed.parameter:"frame-page-width-in"`
+	FramePageHeight     float64 `glazed.parameter:"frame-page-height-in"`
+	FramePageDPI        float64 `glazed.parameter:"frame-page-dpi"`
+	FramePageOrient     string  `glazed.parameter:"frame-page-orientation"`
+	FrameMarginTop      float64 `glazed.parameter:"frame-margin-top-in"`
+	FrameMarginRight    float64 `glazed.parameter:"frame-margin-right-in"`
+	FrameMarginBottom   float64 `glazed.parameter:"frame-margin-bottom-in"`
+	FrameMarginLeft     float64 `glazed.parameter:"frame-margin-left-in"`
+	FrameViewportWidth  float64 `glazed.parameter:"frame-viewport-width"`
+	FrameViewportHeight float64 `glazed.parameter:"frame-viewport-height"`
+	CropStrategy        string  `glazed.parameter:"crop-strategy"`
+	CropRatio           float64 `glazed.parameter:"crop-ratio"`
+	CropZoom            float64 `glazed.parameter:"crop-zoom"`
+	CropExtent          float64 `glazed.parameter:"crop-extent"`
+	CropAnchor          string  `glazed.parameter:"crop-anchor"`
+	CropPanX            float64 `glazed.parameter:"crop-pan-x"`
+	CropPanY            float64 `glazed.parameter:"crop-pan-y"`
+	FocalSourceX        float64 `glazed.parameter:"crop-focus-source-x"`
+	FocalSourceY        float64 `glazed.parameter:"crop-focus-source-y"`
+	FocalTargetX        float64 `glazed.parameter:"crop-focus-target-x"`
+	FocalTargetY        float64 `glazed.parameter:"crop-focus-target-y"`
+	CropUnits           string  `glazed.parameter:"crop-units"`
 }
 
 func layoutParameterDefinitions() []*parameters.ParameterDefinition {
@@ -65,21 +61,11 @@ func cropVerbParameterDefinitions() []*parameters.ParameterDefinition {
 	)
 }
 
-func presentationVerbParameterDefinitions() []*parameters.ParameterDefinition {
-	return joinParameterDefs(
-		specParameterDefinitions(),
-		frameOnlyParameterDefinitions(),
-		cropOnlyParameterDefinitions(),
-		presentationOnlyParameterDefinitions(),
-	)
-}
-
 func computeParameterDefinitions() []*parameters.ParameterDefinition {
 	return joinParameterDefs(
 		specParameterDefinitions(),
 		frameOnlyParameterDefinitions(),
 		cropOnlyParameterDefinitions(),
-		presentationOnlyParameterDefinitions(),
 	)
 }
 
@@ -124,15 +110,6 @@ func cropOnlyParameterDefinitions() []*parameters.ParameterDefinition {
 		parameters.NewParameterDefinition("crop-focus-target-x", parameters.ParameterTypeFloat, parameters.WithHelp("Focus target X (0..1 or px)")),
 		parameters.NewParameterDefinition("crop-focus-target-y", parameters.ParameterTypeFloat, parameters.WithHelp("Focus target Y (0..1 or px)")),
 		parameters.NewParameterDefinition("crop-units", parameters.ParameterTypeString, parameters.WithHelp("Units for manual pan offsets (normalized|px)")),
-	}
-}
-
-func presentationOnlyParameterDefinitions() []*parameters.ParameterDefinition {
-	return []*parameters.ParameterDefinition{
-		parameters.NewParameterDefinition("presentation-user-scale", parameters.ParameterTypeFloat, parameters.WithHelp("Optional user scale multiplier")),
-		parameters.NewParameterDefinition("presentation-offset-x", parameters.ParameterTypeFloat, parameters.WithHelp("Presentation offset X in pixels")),
-		parameters.NewParameterDefinition("presentation-offset-y", parameters.ParameterTypeFloat, parameters.WithHelp("Presentation offset Y in pixels")),
-		parameters.NewParameterDefinition("presentation-clamp", parameters.ParameterTypeBool, parameters.WithDefault(true), parameters.WithHelp("Clamp presentation offsets to canvas")),
 	}
 }
 
@@ -280,19 +257,6 @@ func buildLayoutFromSettings(parsedLayers *layers.ParsedLayers, settings *layout
 	}
 	if parameterSet(parsedLayers, "crop-units") && settings.CropUnits != "" {
 		layout.Crop.Units = settings.CropUnits
-	}
-
-	if parameterSet(parsedLayers, "presentation-user-scale") && settings.PresentationUserScale > 0 {
-		layout.Presentation.UserScale = settings.PresentationUserScale
-	}
-	if parameterSet(parsedLayers, "presentation-offset-x") || parameterSet(parsedLayers, "presentation-offset-y") {
-		layout.Presentation.OffsetPx = imagelayout.Vec2Px{
-			X: settings.PresentationOffsetX,
-			Y: settings.PresentationOffsetY,
-		}
-	}
-	if parameterSet(parsedLayers, "presentation-clamp") {
-		layout.Presentation.ClampToCanvas = settings.PresentationClamp
 	}
 
 	inputs, err := engine.InputsFromRequest(layout, meta)

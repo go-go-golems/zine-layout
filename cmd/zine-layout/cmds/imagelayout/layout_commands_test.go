@@ -54,26 +54,6 @@ func TestLayoutCropCommand(t *testing.T) {
 	}
 }
 
-func TestLayoutPresentationCommand(t *testing.T) {
-	layout := imagelayout.DefaultLayoutRequest()
-	layout.Frame.Mode = "ratio"
-	specPath := writeTestSpec(t, layout, 2800, 2800)
-
-	cmd, err := NewCommand()
-	if err != nil {
-		t.Fatalf("NewCommand: %v", err)
-	}
-	cmd.SetArgs([]string{"layout", "presentation", "--spec", specPath})
-	output := executeAndCapture(t, cmd)
-	var analysis engine.PresentationAnalysis
-	if err := json.Unmarshal(bytes_trimSpaceBytes(output), &analysis); err != nil {
-		t.Fatalf("decode presentation json: %v", err)
-	}
-	if analysis.Scale <= 0 {
-		t.Fatalf("scale must be positive, got %f", analysis.Scale)
-	}
-}
-
 func TestLayoutFrameWithFlags(t *testing.T) {
 	cmd, err := NewCommand()
 	if err != nil {
@@ -110,7 +90,6 @@ func TestComputeCommandWithFlags(t *testing.T) {
 		"--frame-page-height-in", "11",
 		"--frame-page-dpi", "300",
 		"--crop-strategy", "auto",
-		"--presentation-user-scale", "1.1",
 	})
 	output := executeAndCapture(t, cmd)
 	var comp imagelayout.Computation

@@ -28,7 +28,6 @@ type ExportOptions struct {
 type LayoutRequest struct {
 	Frame        FrameSpec        `json:"frame"`
 	Crop         CropSpec         `json:"crop"`
-	Presentation PresentationSpec `json:"presentation"`
 	Export       ExportOptions    `json:"export"`
 }
 
@@ -89,19 +88,6 @@ type CropSpec struct {
 type Vec2 struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
-}
-
-// Vec2Px stores offsets in absolute pixels for presentation adjustments.
-type Vec2Px struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-}
-
-// PresentationSpec captures user adjustments applied after frame+crop.
-type PresentationSpec struct {
-	UserScale     float64 `json:"user_scale"`
-	OffsetPx      Vec2Px  `json:"offset_px"`
-	ClampToCanvas bool    `json:"clamp_to_canvas"`
 }
 
 // ViewportResult describes the geometry outcome of placement.

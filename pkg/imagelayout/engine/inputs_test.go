@@ -39,9 +39,6 @@ func TestInputsFromRequestRatioFrame(t *testing.T) {
 	if !almostEqual(inputs.Crop.Zoom, 1.0) || !almostEqual(inputs.Crop.Extent, 1.0) {
 		t.Fatalf("expected default crop zoom/extent of 1")
 	}
-	if inputs.Presentation.OffsetUnits != "normalized" {
-		t.Fatalf("expected normalized presentation units")
-	}
 }
 
 func TestInputsFromRequestPageFrame(t *testing.T) {
@@ -120,49 +117,5 @@ func TestInputsFromRequestViewportFrame(t *testing.T) {
 	}
 	if !almostEqual(inputs.Frame.ContentRect.W, inputs.Frame.CanvasRect.W) || !almostEqual(inputs.Frame.ContentRect.H, inputs.Frame.CanvasRect.H) {
 		t.Fatalf("content should match canvas in viewport mode")
-	}
-}
-
-func TestInputsFromRequestCropZoomAndPresentation(t *testing.T) {
-	req := imagelayout.DefaultLayoutRequest()
-	req.Frame.Mode = "ratio"
-	val := 1.0
-	req.Frame.Ratio = &val
-	req.Crop.Strategy = "manual"
-	req.Crop.Pan = imagelayout.Vec2{X: 0.25, Y: -0.25}
-	req.Crop.Zoom = 2.0
-	req.Crop.Extent = 0.8
-	req.Crop.Units = "normalized"
-	req.Presentation.UserScale = 1.25
-	req.Presentation.OffsetPx = imagelayout.Vec2Px{X: 24, Y: -18}
-	req.Presentation.ClampToCanvas = false
-
-	meta := imagelayout.ImageMeta{Width: 5000, Height: 5000}
-
-	inputs, err := InputsFromRequest(req, meta)
-	if err != nil {
-		t.Fatalf("InputsFromRequest: %v", err)
-	}
-
-	if !almostEqual(inputs.Crop.Zoom, 2.0) {
-		t.Fatalf("expected crop zoom 2 got %.2f", inputs.Crop.Zoom)
-	}
-	if !almostEqual(inputs.Crop.Extent, 0.8) {
-		t.Fatalf("expected crop extent 0.8 got %.2f", inputs.Crop.Extent)
-	}
-	if inputs.Crop.Units != "normalized" {
-		t.Fatalf("expected crop units normalized")
-	}
-	if inputs.Presentation.OffsetUnits != "px" {
-		t.Fatalf("expected presentation units px")
-	}
-	if !almostEqual(inputs.Presentation.OffsetX, 24) || !almostEqual(inputs.Presentation.OffsetY, -18) {
-		t.Fatalf("unexpected presentation offsets %f %f", inputs.Presentation.OffsetX, inputs.Presentation.OffsetY)
-	}
-	if inputs.Presentation.UserScale != 1.25 {
-		t.Fatalf("user scale mismatch")
-	}
-	if inputs.Presentation.ClampToCanvas {
-		t.Fatalf("expected clamp to canvas disabled")
 	}
 }

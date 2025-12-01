@@ -19,7 +19,6 @@ describe("imageLayoutsEditorSlice", () => {
     expect(layout.frame.page?.width_in).toBeCloseTo(8);
     expect(layout.frame.page?.height_in).toBeCloseTo(10);
     expect(layout.crop.strategy).toBe("auto");
-    expect(layout.presentation.user_scale).toBe(1);
   });
 
   it("loads template data in new format", () => {
@@ -52,11 +51,6 @@ describe("imageLayoutsEditorSlice", () => {
           units: "normalized",
           focus: null,
         },
-        presentation: {
-          user_scale: 1.1,
-          offset_px: { x: 2, y: -2 },
-          clamp_to_canvas: true,
-        },
         export: {
           format: "png",
           quality: 90,
@@ -73,8 +67,6 @@ describe("imageLayoutsEditorSlice", () => {
     expect(state.frame.margins.bottom).toBeCloseTo(0.75);
     expect(state.frame.aspectRatio).toBe("1:1 (Square)");
     expect(state.crop.anchorPreset).toBe("center");
-    expect(state.presentation.offsetX).toBe(2);
-    expect(state.presentation.clampToCanvas).toBe(true);
   });
 
   it("preserves preview asset when starting a new create session", () => {
