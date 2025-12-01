@@ -124,47 +124,13 @@ export interface ImageLayoutRequest {
   export: ImageLayoutExportOptions;
 }
 
-export interface ImageLayoutViewportSettings {
-  mode?: 'page' | 'crop' | 'fit';
-  paper_width_in: number;
-  paper_height_in: number;
-  dpi: number;
-  orientation: 'portrait' | 'landscape';
-  is_spread?: boolean;
-  margin_top_in: number;
-  margin_right_in: number;
-  margin_bottom_in: number;
-  margin_left_in: number;
-  gutter_in?: number | null;
-  crop_ratio?: number | null;
-  crop_to_fill: boolean;
-  crop_width_px?: number | null;
-  crop_height_px?: number | null;
-  fit_mode?: 'width' | 'height' | 'auto';
-  fit_width_px?: number | null;
-  fit_height_px?: number | null;
-  user_scale: number;
-  position_x: number;
-  position_y: number;
-  units: 'normalized' | 'px';
-  anchor_preset?: string;
-  focus?: ImageLayoutFocusPoint | null;
-  export: ImageLayoutExportOptions;
-}
-
-export type ImageLayoutTemplateSettingsPayload =
-  | ImageLayoutViewportSettings
-  | (Partial<ImageLayoutViewportSettings> & Record<string, unknown>);
-
 export interface ImageLayoutTemplate {
   id: string;
   project_id?: string | null;
   scope: 'global' | 'project';
   name: string;
   description?: string;
-  // During migration we accept either legacy viewport settings or the new layout request.
-  // New clients should send ImageLayoutRequest.
-  settings: ImageLayoutViewportSettings | ImageLayoutRequest;
+  settings: ImageLayoutRequest;
   created_at: string;
   updated_at: string;
 }
@@ -189,7 +155,6 @@ export interface ImageLayoutTrace {
 
 export interface ImageLayoutComputation {
   layout?: ImageLayoutRequest;
-  settings?: ImageLayoutViewportSettings;
   result: ImageLayoutViewportResult;
   trace?: ImageLayoutTrace;
 }
@@ -201,7 +166,7 @@ export interface LaidOutImage {
   project_id: string;
   asset_id: string;
   template_id: string;
-  overrides?: Partial<ImageLayoutRequest> | Partial<ImageLayoutViewportSettings> | null;
+  overrides?: Partial<ImageLayoutRequest> | null;
   result?: ImageLayoutComputation;
   created_at: string;
   updated_at: string;
@@ -781,7 +746,7 @@ export const api = createApi({
         projectId: string;
         assetId: string;
         templateId: string;
-        overrides?: Partial<ImageLayoutRequest> | Partial<ImageLayoutViewportSettings>;
+        overrides?: Partial<ImageLayoutRequest>;
       }
     >({
       query: ({ projectId, assetId, templateId, overrides }) => ({
@@ -803,7 +768,7 @@ export const api = createApi({
       {
         id: string;
         templateId?: string;
-        overrides?: Partial<ImageLayoutRequest> | Partial<ImageLayoutViewportSettings>;
+        overrides?: Partial<ImageLayoutRequest>;
       }
     >({
       query: ({ id, templateId, overrides }) => ({

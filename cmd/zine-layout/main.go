@@ -15,7 +15,6 @@ import (
 	zldoc "github.com/go-go-golems/zine-layout/pkg/doc"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // docs are embedded by pkg/doc/embed.go
@@ -23,20 +22,13 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "zine-layout",
 	Short: "Zine page layout engine",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		err := logging.InitLoggerFromViper()
-		cobra.CheckErr(err)
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return logging.InitLoggerFromCobra(cmd)
 	},
 }
 
 func initRoot() (*help.HelpSystem, error) {
 	if err := logging.AddLoggingLayerToRootCommand(rootCmd, rootCmd.Use); err != nil {
-		return nil, err
-	}
-	if err := viper.BindPFlags(rootCmd.PersistentFlags()); err != nil {
-		return nil, err
-	}
-	if err := logging.InitLoggerFromViper(); err != nil {
 		return nil, err
 	}
 	hs := help.NewHelpSystem()

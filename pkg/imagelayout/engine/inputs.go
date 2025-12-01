@@ -7,6 +7,19 @@ import (
 	"github.com/go-go-golems/zine-layout/pkg/imagelayout"
 )
 
+var anchorPresets = map[string][2]float64{
+	"top-left":      {-1, -1},
+	"top":           {0, -1},
+	"top-right":     {1, -1},
+	"left":          {-1, 0},
+	"center":        {0, 0},
+	"middle-center": {0, 0},
+	"right":         {1, 0},
+	"bottom-left":   {-1, 1},
+	"bottom":        {0, 1},
+	"bottom-right":  {1, 1},
+}
+
 // InputsFromRequest converts the refactored LayoutRequest payload into engine inputs.
 func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta) (NormalizedInputs, error) {
 	if meta.Width <= 0 || meta.Height <= 0 {
