@@ -20,23 +20,23 @@ func TestInputsFromRequestRatioFrame(t *testing.T) {
 		t.Fatalf("InputsFromRequest: %v", err)
 	}
 
-	if inputs.Mode != "ratio" {
-		t.Fatalf("expected ratio mode, got %s", inputs.Mode)
+	if inputs.Frame.Mode != "ratio" {
+		t.Fatalf("expected ratio mode, got %s", inputs.Frame.Mode)
 	}
 	expectedCanvasW := ratio * float64(meta.Height)
-	if !almostEqual(inputs.CanvasW, expectedCanvasW) {
-		t.Fatalf("unexpected canvas width: %f", inputs.CanvasW)
+	if !almostEqual(inputs.Frame.CanvasRect.W, expectedCanvasW) {
+		t.Fatalf("unexpected canvas width: %f", inputs.Frame.CanvasRect.W)
 	}
-	if inputs.CropRatio == nil || !almostEqual(*inputs.CropRatio, ratio) {
+	if inputs.Crop.Ratio == nil || !almostEqual(*inputs.Crop.Ratio, ratio) {
 		t.Fatalf("expected crop ratio %.2f", ratio)
 	}
-	if inputs.MarginTopPx != 0 || inputs.MarginLeftPx != 0 {
+	if inputs.Frame.Margins.Top != 0 || inputs.Frame.Margins.Left != 0 {
 		t.Fatalf("ratio mode should not have margins")
 	}
-	if !almostEqual(inputs.CropZoom, 1.0) || !almostEqual(inputs.CropExtent, 1.0) {
+	if !almostEqual(inputs.Crop.Zoom, 1.0) || !almostEqual(inputs.Crop.Extent, 1.0) {
 		t.Fatalf("expected default crop zoom/extent of 1")
 	}
-	if inputs.PresentationUnits != "normalized" {
+	if inputs.Presentation.OffsetUnits != "normalized" {
 		t.Fatalf("expected normalized presentation units")
 	}
 }
@@ -63,19 +63,21 @@ func TestInputsFromRequestPageFrame(t *testing.T) {
 		t.Fatalf("InputsFromRequest: %v", err)
 	}
 
-	if inputs.Mode != "page" {
-		t.Fatalf("expected page mode, got %s", inputs.Mode)
+	if inputs.Frame.Mode != "page" {
+		t.Fatalf("expected page mode, got %s", inputs.Frame.Mode)
 	}
 
 	expectedCanvasW := float64(10 * 300)
 	expectedCanvasH := float64(8 * 300)
-	if !almostEqual(inputs.CanvasW, expectedCanvasW) || !almostEqual(inputs.CanvasH, expectedCanvasH) {
-		t.Fatalf("unexpected canvas size %fx%f", inputs.CanvasW, inputs.CanvasH)
+	canvasW := inputs.Frame.CanvasRect.W + inputs.Frame.Margins.Left + inputs.Frame.Margins.Right
+	canvasH := inputs.Frame.CanvasRect.H + inputs.Frame.Margins.Top + inputs.Frame.Margins.Bottom
+	if !almostEqual(canvasW, expectedCanvasW) || !almostEqual(canvasH, expectedCanvasH) {
+		t.Fatalf("unexpected canvas size %fx%f", canvasW, canvasH)
 	}
-	if inputs.MarginTopPx <= 0 || inputs.MarginLeftPx <= 0 {
+	if inputs.Frame.Margins.Top <= 0 || inputs.Frame.Margins.Left <= 0 {
 		t.Fatalf("expected positive margins for page mode")
 	}
-	if inputs.ContentW >= inputs.CanvasW || inputs.ContentH >= inputs.CanvasH {
+	if inputs.Frame.CanvasRect.W >= canvasW || inputs.Frame.CanvasRect.H >= canvasH {
 		t.Fatalf("content should be smaller than canvas once margins applied")
 	}
 }
@@ -97,15 +99,15 @@ func TestInputsFromRequestViewportFrame(t *testing.T) {
 		t.Fatalf("InputsFromRequest: %v", err)
 	}
 
-	if inputs.Mode != "viewport" {
-		t.Fatalf("expected viewport mode, got %s", inputs.Mode)
+	if inputs.Frame.Mode != "viewport" {
+		t.Fatalf("expected viewport mode, got %s", inputs.Frame.Mode)
 	}
 	expectedCanvasW := 900 * ratio
-	if !almostEqual(inputs.CanvasW, expectedCanvasW) {
-		t.Fatalf("expected derived width %.2f got %.2f", expectedCanvasW, inputs.CanvasW)
+	if !almostEqual(inputs.Frame.CanvasRect.W, expectedCanvasW) {
+		t.Fatalf("expected derived width %.2f got %.2f", expectedCanvasW, inputs.Frame.CanvasRect.W)
 	}
-	if !almostEqual(inputs.CanvasH, 900) {
-		t.Fatalf("expected canvas height 900 got %.2f", inputs.CanvasH)
+	if !almostEqual(inputs.Frame.CanvasRect.H, 900) {
+		t.Fatalf("expected canvas height 900 got %.2f", inputs.Frame.CanvasRect.H)
 	}
 }
 
@@ -130,25 +132,25 @@ func TestInputsFromRequestCropZoomAndPresentation(t *testing.T) {
 		t.Fatalf("InputsFromRequest: %v", err)
 	}
 
-	if !almostEqual(inputs.CropZoom, 2.0) {
-		t.Fatalf("expected crop zoom 2 got %.2f", inputs.CropZoom)
+	if !almostEqual(inputs.Crop.Zoom, 2.0) {
+		t.Fatalf("expected crop zoom 2 got %.2f", inputs.Crop.Zoom)
 	}
-	if !almostEqual(inputs.CropExtent, 0.8) {
-		t.Fatalf("expected crop extent 0.8 got %.2f", inputs.CropExtent)
+	if !almostEqual(inputs.Crop.Extent, 0.8) {
+		t.Fatalf("expected crop extent 0.8 got %.2f", inputs.Crop.Extent)
 	}
-	if inputs.Units != "normalized" {
+	if inputs.Crop.Units != "normalized" {
 		t.Fatalf("expected crop units normalized")
 	}
-	if inputs.PresentationUnits != "px" {
+	if inputs.Presentation.OffsetUnits != "px" {
 		t.Fatalf("expected presentation units px")
 	}
-	if !almostEqual(inputs.PresentationOffsetX, 24) || !almostEqual(inputs.PresentationOffsetY, -18) {
-		t.Fatalf("unexpected presentation offsets %f %f", inputs.PresentationOffsetX, inputs.PresentationOffsetY)
+	if !almostEqual(inputs.Presentation.OffsetX, 24) || !almostEqual(inputs.Presentation.OffsetY, -18) {
+		t.Fatalf("unexpected presentation offsets %f %f", inputs.Presentation.OffsetX, inputs.Presentation.OffsetY)
 	}
-	if inputs.UserScale != 1.25 {
+	if inputs.Presentation.UserScale != 1.25 {
 		t.Fatalf("user scale mismatch")
 	}
-	if inputs.ClampToCanvas {
+	if inputs.Presentation.ClampToCanvas {
 		t.Fatalf("expected clamp to canvas disabled")
 	}
 }

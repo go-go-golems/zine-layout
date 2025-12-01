@@ -20,54 +20,13 @@ var anchorPresets = map[string][2]float64{
 	"bottom-right": {1, 1},
 }
 
-// Inputs collects normalized values derived from settings + image metadata.
-type Inputs struct {
-	Mode string
-
-	SourceW float64
-	SourceH float64
-
-	CanvasW float64
-	CanvasH float64
-
-	ContentW float64
-	ContentH float64
-
-	MarginTopPx    float64
-	MarginRightPx  float64
-	MarginBottomPx float64
-	MarginLeftPx   float64
-
-	CropRatio    *float64
-	CropToFill   bool
-	CropWidthPx  float64
-	CropHeightPx float64
-	CropZoom     float64
-	CropExtent   float64
-
-	FitMode     string
-	FitWidthPx  float64
-	FitHeightPx float64
-
-	UserScale           float64
-	PositionX           float64
-	PositionY           float64
-	Units               string
-	PresentationOffsetX float64
-	PresentationOffsetY float64
-	PresentationUnits   string
-
-	Focus         *imagelayout.FocusPoint
-	ClampToCanvas bool
-}
-
 // InputsFromSettings converts persisted settings and image metadata into algorithm inputs.
-func InputsFromSettings(settings imagelayout.ViewportSettings, meta imagelayout.ImageMeta) (Inputs, error) {
+func InputsFromSettings(settings imagelayout.ViewportSettings, meta imagelayout.ImageMeta) (NormalizedInputs, error) {
 	if meta.Width <= 0 || meta.Height <= 0 {
-		return Inputs{}, fmt.Errorf("imagelayout: invalid source dimensions %dx%d", meta.Width, meta.Height)
+		return NormalizedInputs{}, fmt.Errorf("imagelayout: invalid source dimensions %dx%d", meta.Width, meta.Height)
 	}
 	if settings.DPI <= 0 {
-		return Inputs{}, fmt.Errorf("imagelayout: dpi must be positive")
+		return NormalizedInputs{}, fmt.Errorf("imagelayout: dpi must be positive")
 	}
 
 	mode := strings.ToLower(strings.TrimSpace(settings.Mode))
@@ -86,7 +45,7 @@ func InputsFromSettings(settings imagelayout.ViewportSettings, meta imagelayout.
 	canvasW := widthIn * settings.DPI
 	canvasH := heightIn * settings.DPI
 	if canvasW <= 0 || canvasH <= 0 {
-		return Inputs{}, fmt.Errorf("imagelayout: canvas dimensions must be positive")
+		return NormalizedInputs{}, fmt.Errorf("imagelayout: canvas dimensions must be positive")
 	}
 
 	mt := settings.MarginTopIn * settings.DPI
@@ -97,7 +56,7 @@ func InputsFromSettings(settings imagelayout.ViewportSettings, meta imagelayout.
 	contentW := canvasW - (ml + mr)
 	contentH := canvasH - (mt + mb)
 	if contentW <= 0 || contentH <= 0 {
-		return Inputs{}, fmt.Errorf("imagelayout: margins exceed canvas size")
+		return NormalizedInputs{}, fmt.Errorf("imagelayout: margins exceed canvas size")
 	}
 
 	units := strings.ToLower(strings.TrimSpace(settings.Units))
@@ -105,13 +64,13 @@ func InputsFromSettings(settings imagelayout.ViewportSettings, meta imagelayout.
 		units = "normalized"
 	}
 	if units != "normalized" && units != "px" {
-		return Inputs{}, fmt.Errorf("imagelayout: unsupported position units %q", settings.Units)
+		return NormalizedInputs{}, fmt.Errorf("imagelayout: unsupported position units %q", settings.Units)
 	}
 
 	var ratio *float64
 	if settings.CropRatio != nil {
 		if *settings.CropRatio <= 0 {
-			return Inputs{}, fmt.Errorf("imagelayout: crop ratio must be > 0")
+			return NormalizedInputs{}, fmt.Errorf("imagelayout: crop ratio must be > 0")
 		}
 		value := *settings.CropRatio
 		ratio = &value
@@ -189,39 +148,60 @@ func InputsFromSettings(settings imagelayout.ViewportSettings, meta imagelayout.
 	}
 
 	if canvasW <= 0 || canvasH <= 0 {
-		return Inputs{}, fmt.Errorf("imagelayout: resulting canvas dimensions must be positive")
+		return NormalizedInputs{}, fmt.Errorf("imagelayout: resulting canvas dimensions must be positive")
 	}
 
-	return Inputs{
-		Mode:                mode,
-		SourceW:             float64(meta.Width),
-		SourceH:             float64(meta.Height),
-		CanvasW:             canvasW,
-		CanvasH:             canvasH,
-		ContentW:            contentW,
-		ContentH:            contentH,
-		MarginTopPx:         mt,
-		MarginRightPx:       mr,
-		MarginBottomPx:      mb,
-		MarginLeftPx:        ml,
-		CropRatio:           ratio,
-		CropToFill:          settings.CropToFill,
-		CropWidthPx:         cropWidth,
-		CropHeightPx:        cropHeight,
-		FitMode:             fitMode,
-		FitWidthPx:          fitWidth,
-		FitHeightPx:         fitHeight,
-		UserScale:           scale,
-		PositionX:           resolveAnchor(settings, units, settings.PositionX, true),
-		PositionY:           resolveAnchor(settings, units, settings.PositionY, false),
-		Units:               units,
-		CropZoom:            1.0,
-		CropExtent:          1.0,
-		PresentationOffsetX: resolveAnchor(settings, units, settings.PositionX, true),
-		PresentationOffsetY: resolveAnchor(settings, units, settings.PositionY, false),
-		PresentationUnits:   units,
-		Focus:               settings.Focus,
-		ClampToCanvas:       true,
+	frameRect := imagelayout.Rect{
+		X: ml,
+		Y: mt,
+		W: contentW,
+		H: contentH,
+	}
+	if mode != "page" {
+		frameRect.X = 0
+		frameRect.Y = 0
+	}
+
+	margins := MarginPixels{
+		Top:    mt,
+		Right:  mr,
+		Bottom: mb,
+		Left:   ml,
+	}
+	if mode != "page" {
+		margins = MarginPixels{}
+	}
+
+	posX := resolveAnchor(settings, units, settings.PositionX, true)
+	posY := resolveAnchor(settings, units, settings.PositionY, false)
+
+	return NormalizedInputs{
+		Source: SourceMeta{
+			Width:  float64(meta.Width),
+			Height: float64(meta.Height),
+		},
+		Frame: FrameInputs{
+			Mode:       mode,
+			CanvasRect: frameRect,
+			Margins:    margins,
+		},
+		Crop: CropInputs{
+			Ratio:      ratio,
+			CropToFill: settings.CropToFill,
+			Zoom:       1.0,
+			Extent:     1.0,
+			Units:      units,
+			PanX:       posX,
+			PanY:       posY,
+			Focus:      settings.Focus,
+		},
+		Presentation: PresentationInputs{
+			UserScale:     scale,
+			OffsetUnits:   units,
+			OffsetX:       posX,
+			OffsetY:       posY,
+			ClampToCanvas: true,
+		},
 	}, nil
 }
 
@@ -251,19 +231,35 @@ func resolveAnchor(settings imagelayout.ViewportSettings, units string, fallback
 }
 
 // ComputeViewport calculates viewport placement and trace data.
-func ComputeViewport(inp Inputs) (imagelayout.ViewportResult, *imagelayout.Trace) {
+func ComputeViewport(inp NormalizedInputs) (imagelayout.ViewportResult, *imagelayout.Trace) {
 	trace := &imagelayout.Trace{
 		Inputs: map[string]interface{}{
-			"mode":         inp.Mode,
-			"source_w":     inp.SourceW,
-			"source_h":     inp.SourceH,
-			"canvas_w":     inp.CanvasW,
-			"canvas_h":     inp.CanvasH,
-			"content_w":    inp.ContentW,
-			"content_h":    inp.ContentH,
-			"user_scale":   inp.UserScale,
-			"units":        inp.Units,
-			"crop_to_fill": inp.CropToFill,
+			"source": map[string]float64{
+				"width":  inp.Source.Width,
+				"height": inp.Source.Height,
+			},
+			"frame": map[string]interface{}{
+				"mode":        inp.Frame.Mode,
+				"canvas_rect": inp.Frame.CanvasRect,
+				"margins_px":  inp.Frame.Margins,
+			},
+			"crop": map[string]interface{}{
+				"ratio":        pointerValue(inp.Crop.Ratio),
+				"crop_to_fill": inp.Crop.CropToFill,
+				"zoom":         inp.Crop.Zoom,
+				"extent":       inp.Crop.Extent,
+				"units":        inp.Crop.Units,
+				"pan_x":        inp.Crop.PanX,
+				"pan_y":        inp.Crop.PanY,
+				"focus":        inp.Crop.Focus,
+			},
+			"presentation": map[string]interface{}{
+				"user_scale":      inp.Presentation.UserScale,
+				"offset_units":    inp.Presentation.OffsetUnits,
+				"offset_x":        inp.Presentation.OffsetX,
+				"offset_y":        inp.Presentation.OffsetY,
+				"clamp_to_canvas": inp.Presentation.ClampToCanvas,
+			},
 		},
 	}
 
@@ -274,14 +270,14 @@ func ComputeViewport(inp Inputs) (imagelayout.ViewportResult, *imagelayout.Trace
 		})
 	}
 
-	canvasRect, targetRatio := buildFrame(inp)
-	sourceRatio := safeDiv(inp.SourceW, inp.SourceH)
-	requestedRatio := determineRequestedRatio(inp, targetRatio, sourceRatio)
+	canvasRect, targetRatio := buildFrame(inp.Frame)
+	sourceRatio := safeDiv(inp.Source.Width, inp.Source.Height)
+	requestedRatio := determineRequestedRatio(inp.Crop, targetRatio, sourceRatio)
 
-	sourceRect, cropStep := resolveCrop(inp, requestedRatio, sourceRatio)
+	sourceRect, cropStep := resolveCrop(inp.Source, inp.Crop, requestedRatio, sourceRatio)
 	addStep("crop", cropStep)
 
-	targetRect, mode, scale, scaleStep := composeTarget(inp, canvasRect, sourceRect)
+	targetRect, mode, scale, scaleStep := composeTarget(inp.Crop, inp.Presentation, canvasRect, sourceRect)
 	addStep("scale", scaleStep)
 
 	result := imagelayout.ViewportResult{
@@ -301,70 +297,57 @@ func ComputeViewport(inp Inputs) (imagelayout.ViewportResult, *imagelayout.Trace
 	return result, trace
 }
 
-func buildFrame(inp Inputs) (imagelayout.Rect, float64) {
-	rect := imagelayout.Rect{
-		X: inp.MarginLeftPx,
-		Y: inp.MarginTopPx,
-		W: inp.ContentW,
-		H: inp.ContentH,
-	}
-	if inp.Mode != "page" {
-		rect = imagelayout.Rect{
-			X: 0,
-			Y: 0,
-			W: inp.ContentW,
-			H: inp.ContentH,
-		}
-	}
+func buildFrame(frame FrameInputs) (imagelayout.Rect, float64) {
+	rect := frame.CanvasRect
 	return rect, safeDiv(rect.W, rect.H)
 }
 
-func determineRequestedRatio(inp Inputs, targetRatio, sourceRatio float64) float64 {
-	if inp.CropRatio != nil && *inp.CropRatio > 0 {
-		return *inp.CropRatio
+func determineRequestedRatio(crop CropInputs, targetRatio, sourceRatio float64) float64 {
+	if crop.Ratio != nil && *crop.Ratio > 0 {
+		return *crop.Ratio
 	}
-	if inp.CropToFill && targetRatio > 0 {
+	if crop.CropToFill && targetRatio > 0 {
 		return targetRatio
 	}
 	return sourceRatio
 }
 
-func resolveCrop(inp Inputs, requestedRatio, sourceRatio float64) (imagelayout.Rect, map[string]interface{}) {
-	sw := inp.SourceW
-	sh := inp.SourceH
+func resolveCrop(source SourceMeta, crop CropInputs, requestedRatio, sourceRatio float64) (imagelayout.Rect, map[string]interface{}) {
+	sw := source.Width
+	sh := source.Height
 
-	if requestedRatio > 0 && inp.SourceW > 0 && inp.SourceH > 0 {
+	if requestedRatio > 0 && source.Width > 0 && source.Height > 0 {
 		switch {
 		case sourceRatio > requestedRatio:
-			sh = inp.SourceH
+			sh = source.Height
 			sw = sh * requestedRatio
 		case sourceRatio < requestedRatio:
-			sw = inp.SourceW
+			sw = source.Width
 			sh = sw / requestedRatio
 		default:
 			// keep source dimensions
 		}
 	}
 
-	scale := computeCropScale(inp.CropExtent, inp.CropZoom)
-	sw = clampFloat(sw*scale, 1, inp.SourceW)
-	sh = clampFloat(sh*scale, 1, inp.SourceH)
+	scale := computeCropScale(crop.Extent, crop.Zoom)
+	sw = clampFloat(sw*scale, 1, source.Width)
+	sh = clampFloat(sh*scale, 1, source.Height)
 
-	rangeX := math.Max(0, inp.SourceW-sw)
-	rangeY := math.Max(0, inp.SourceH-sh)
+	rangeX := math.Max(0, source.Width-sw)
+	rangeY := math.Max(0, source.Height-sh)
 
 	sx := 0.0
 	sy := 0.0
 	focusApplied := false
 	var focusInfo map[string]interface{}
 
-	if inp.Focus != nil {
+	if crop.Focus != nil {
 		focusApplied = true
 		focusInfo = map[string]interface{}{}
-		fx := clampFloat(inp.Focus.SourceX, 0, inp.SourceW)
-		fy := clampFloat(inp.Focus.SourceY, 0, inp.SourceH)
-		targetNX := resolveFocusTarget(inp.Focus.TargetX, sw)
-		targetNY := resolveFocusTarget(inp.Focus.TargetY, sh)
+		fx := clampFloat(crop.Focus.SourceX, 0, source.Width)
+		fy := clampFloat(crop.Focus.SourceY, 0, source.Height)
+		targetNX := resolveFocusTarget(crop.Focus.TargetX, sw)
+		targetNY := resolveFocusTarget(crop.Focus.TargetY, sh)
 		sx = clampFloat(fx-targetNX*sw, 0, rangeX)
 		sy = clampFloat(fy-targetNY*sh, 0, rangeY)
 		focusInfo["focus_source_x"] = fx
@@ -372,8 +355,8 @@ func resolveCrop(inp Inputs, requestedRatio, sourceRatio float64) (imagelayout.R
 		focusInfo["focus_target_x"] = targetNX
 		focusInfo["focus_target_y"] = targetNY
 	} else {
-		sx = computeOffset(inp.Units, inp.PositionX, rangeX)
-		sy = computeOffset(inp.Units, inp.PositionY, rangeY)
+		sx = computeOffset(crop.Units, crop.PanX, rangeX)
+		sy = computeOffset(crop.Units, crop.PanY, rangeY)
 	}
 
 	data := map[string]interface{}{
@@ -386,8 +369,8 @@ func resolveCrop(inp Inputs, requestedRatio, sourceRatio float64) (imagelayout.R
 		"range_x":         rangeX,
 		"range_y":         rangeY,
 		"focus_applied":   focusApplied,
-		"crop_zoom":       inp.CropZoom,
-		"crop_extent":     inp.CropExtent,
+		"crop_zoom":       crop.Zoom,
+		"crop_extent":     crop.Extent,
 	}
 	if focusApplied {
 		data["focus"] = focusInfo
@@ -410,7 +393,7 @@ func computeCropScale(extent, zoom float64) float64 {
 	return scale
 }
 
-func composeTarget(inp Inputs, canvasRect, sourceRect imagelayout.Rect) (imagelayout.Rect, string, float64, map[string]interface{}) {
+func composeTarget(crop CropInputs, presentation PresentationInputs, canvasRect, sourceRect imagelayout.Rect) (imagelayout.Rect, string, float64, map[string]interface{}) {
 	targetW := canvasRect.W
 	targetH := canvasRect.H
 
@@ -419,19 +402,19 @@ func composeTarget(inp Inputs, canvasRect, sourceRect imagelayout.Rect) (imagela
 
 	mode := "contain"
 	scale := math.Min(scaleX, scaleY)
-	if inp.CropToFill {
+	if crop.CropToFill {
 		mode = "cover"
 		scale = math.Max(scaleX, scaleY)
 	}
-	scale *= inp.UserScale
+	scale *= presentation.UserScale
 
 	dstW := sourceRect.W * scale
 	dstH := sourceRect.H * scale
-	offsetUnits := inp.PresentationUnits
+	offsetUnits := presentation.OffsetUnits
 	if offsetUnits == "" {
-		offsetUnits = inp.Units
+		offsetUnits = crop.Units
 	}
-	tx, ty := positionOffsets(offsetUnits, inp.PresentationOffsetX, inp.PresentationOffsetY, targetW, targetH, dstW, dstH)
+	tx, ty := positionOffsets(offsetUnits, presentation.OffsetX, presentation.OffsetY, targetW, targetH, dstW, dstH)
 
 	targetRect := imagelayout.Rect{
 		X: canvasRect.X + tx,

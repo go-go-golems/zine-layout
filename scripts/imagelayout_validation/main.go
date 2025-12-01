@@ -22,6 +22,7 @@ import (
 
 	"github.com/go-go-golems/zine-layout/pkg/imagelayout"
 	"github.com/go-go-golems/zine-layout/pkg/imagelayout/engine"
+	"gopkg.in/yaml.v3"
 )
 
 type scenario struct {
@@ -48,7 +49,7 @@ type runResult struct {
 	Command       string
 	RawOutput     []byte
 	Computation   *imagelayout.Computation
-	Inputs        engine.Inputs
+	Inputs        engine.NormalizedInputs
 	Validation    validationResult
 	SourceImage   string
 	RenderedImage string
@@ -57,6 +58,14 @@ type runResult struct {
 	SettingsJSON  string
 	ResultJSON    string
 	Error         error
+}
+
+type specDocument struct {
+	Layout imagelayout.LayoutRequest `json:"layout" yaml:"layout"`
+	Image  struct {
+		Width  int `json:"width" yaml:"width"`
+		Height int `json:"height" yaml:"height"`
+	} `json:"image" yaml:"image"`
 }
 
 func main() {
@@ -401,7 +410,7 @@ func clampColor(v float64) uint8 {
 	return uint8(v + 0.5)
 }
 
-func validateComputation(comp imagelayout.Computation, inputs engine.Inputs) validationResult {
+func validateComputation(comp imagelayout.Computation, inputs engine.NormalizedInputs) validationResult {
 	vr := validationResult{}
 	addMsg := func(msg string) { vr.Messages = append(vr.Messages, msg) }
 	addErr := func(format string, args ...interface{}) {
@@ -414,7 +423,8 @@ func validateComputation(comp imagelayout.Computation, inputs engine.Inputs) val
 		addMsg(fmt.Sprintf("canvas %.2fx%.2f", comp.Result.CanvasRect.W, comp.Result.CanvasRect.H))
 	}
 
-	if diff := math.Abs(comp.Result.CanvasRect.W-inputs.ContentW) + math.Abs(comp.Result.CanvasRect.H-inputs.ContentH); diff > 1e-4 {
+	targetCanvas := inputs.Frame.CanvasRect
+	if diff := math.Abs(comp.Result.CanvasRect.W-targetCanvas.W) + math.Abs(comp.Result.CanvasRect.H-targetCanvas.H); diff > 1e-4 {
 		addErr("canvas rect mismatch derived content size: diff=%.4f", diff)
 	} else {
 		addMsg("canvas rect matches derived content size")
@@ -443,9 +453,9 @@ func validateComputation(comp imagelayout.Computation, inputs engine.Inputs) val
 	return vr
 }
 
-func renderOutputs(root, scenarioID, sizeID string, src image.Image, comp imagelayout.Computation, inputs engine.Inputs) (string, string, error) {
-	canvasW := int(math.Round(inputs.CanvasW))
-	canvasH := int(math.Round(inputs.CanvasH))
+func renderOutputs(root, scenarioID, sizeID string, src image.Image, comp imagelayout.Computation, inputs engine.NormalizedInputs) (string, string, error) {
+	canvasW := int(math.Round(inputs.Frame.CanvasRect.W + inputs.Frame.Margins.Left + inputs.Frame.Margins.Right))
+	canvasH := int(math.Round(inputs.Frame.CanvasRect.H + inputs.Frame.Margins.Top + inputs.Frame.Margins.Bottom))
 	if canvasW <= 0 {
 		canvasW = int(math.Round(comp.Result.CanvasRect.W + comp.Result.CanvasRect.X))
 	}

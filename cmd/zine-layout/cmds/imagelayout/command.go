@@ -15,5 +15,7 @@ func NewCommand() (*cobra.Command, error) {
 	}
 	root.AddCommand(computeCmd)
 
+	root.AddCommand(newLayoutCommand())
+
 	return root, nil
 }

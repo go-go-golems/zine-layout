@@ -7,10 +7,10 @@ import (
 	"github.com/go-go-golems/zine-layout/pkg/imagelayout"
 )
 
-// InputsFromRequest converts the refactored LayoutRequest payload into engine Inputs.
-func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta) (Inputs, error) {
+// InputsFromRequest converts the refactored LayoutRequest payload into engine inputs.
+func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta) (NormalizedInputs, error) {
 	if meta.Width <= 0 || meta.Height <= 0 {
-		return Inputs{}, fmt.Errorf("imagelayout: invalid source dimensions %dx%d", meta.Width, meta.Height)
+		return NormalizedInputs{}, fmt.Errorf("imagelayout: invalid source dimensions %dx%d", meta.Width, meta.Height)
 	}
 
 	normalized := normalizeLayoutRequest(req)
@@ -35,11 +35,11 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 	case "page":
 		page := normalized.Frame.Page
 		if page == nil {
-			return Inputs{}, fmt.Errorf("imagelayout: page mode requires page dimensions")
+			return NormalizedInputs{}, fmt.Errorf("imagelayout: page mode requires page dimensions")
 		}
 		dpi := page.DPI
 		if dpi <= 0 {
-			return Inputs{}, fmt.Errorf("imagelayout: page dpi must be positive")
+			return NormalizedInputs{}, fmt.Errorf("imagelayout: page dpi must be positive")
 		}
 		widthIn := page.WidthIn
 		heightIn := page.HeightIn
@@ -47,7 +47,7 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 			widthIn, heightIn = page.HeightIn, page.WidthIn
 		}
 		if widthIn <= 0 || heightIn <= 0 {
-			return Inputs{}, fmt.Errorf("imagelayout: page dimensions must be positive")
+			return NormalizedInputs{}, fmt.Errorf("imagelayout: page dimensions must be positive")
 		}
 		canvasW = widthIn * dpi
 		canvasH = heightIn * dpi
@@ -58,16 +58,16 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 		contentW = canvasW - (ml + mr)
 		contentH = canvasH - (mt + mb)
 		if contentW <= 0 || contentH <= 0 {
-			return Inputs{}, fmt.Errorf("imagelayout: margins exceed canvas size")
+			return NormalizedInputs{}, fmt.Errorf("imagelayout: margins exceed canvas size")
 		}
 	case "viewport":
 		vp := normalized.Frame.Viewport
 		if vp == nil {
-			return Inputs{}, fmt.Errorf("imagelayout: viewport mode requires viewport dimensions")
+			return NormalizedInputs{}, fmt.Errorf("imagelayout: viewport mode requires viewport dimensions")
 		}
 		dims, err := resolveViewportDims(vp, normalized.Frame.Ratio, meta)
 		if err != nil {
-			return Inputs{}, err
+			return NormalizedInputs{}, err
 		}
 		canvasW = dims[0]
 		canvasH = dims[1]
@@ -98,7 +98,7 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 		cropUnits = "normalized"
 	}
 	if cropUnits != "normalized" && cropUnits != "px" {
-		return Inputs{}, fmt.Errorf("imagelayout: unsupported crop units %q", normalized.Crop.Units)
+		return NormalizedInputs{}, fmt.Errorf("imagelayout: unsupported crop units %q", normalized.Crop.Units)
 	}
 
 	cropRatio := normalized.Crop.Ratio
@@ -129,31 +129,54 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 		presOffsetY = normalized.Presentation.OffsetPx.Y
 	}
 
-	inputs := Inputs{
-		Mode:                frameMode,
-		SourceW:             float64(meta.Width),
-		SourceH:             float64(meta.Height),
-		CanvasW:             canvasW,
-		CanvasH:             canvasH,
-		ContentW:            contentW,
-		ContentH:            contentH,
-		MarginTopPx:         mt,
-		MarginRightPx:       mr,
-		MarginBottomPx:      mb,
-		MarginLeftPx:        ml,
-		CropRatio:           cropRatio,
-		CropToFill:          cropToFill,
-		UserScale:           normalized.Presentation.UserScale,
-		PositionX:           posX,
-		PositionY:           posY,
-		Units:               cropUnits,
-		CropZoom:            cropZoom,
-		CropExtent:          cropExtent,
-		PresentationOffsetX: presOffsetX,
-		PresentationOffsetY: presOffsetY,
-		PresentationUnits:   presUnits,
-		Focus:               normalized.Crop.Focus,
-		ClampToCanvas:       normalized.Presentation.ClampToCanvas,
+	frameRect := imagelayout.Rect{
+		X: ml,
+		Y: mt,
+		W: contentW,
+		H: contentH,
+	}
+	if frameMode != "page" {
+		frameRect.X = 0
+		frameRect.Y = 0
+	}
+
+	margins := MarginPixels{
+		Top:    mt,
+		Right:  mr,
+		Bottom: mb,
+		Left:   ml,
+	}
+	if frameMode != "page" {
+		margins = MarginPixels{}
+	}
+
+	inputs := NormalizedInputs{
+		Source: SourceMeta{
+			Width:  float64(meta.Width),
+			Height: float64(meta.Height),
+		},
+		Frame: FrameInputs{
+			Mode:       frameMode,
+			CanvasRect: frameRect,
+			Margins:    margins,
+		},
+		Crop: CropInputs{
+			Ratio:      cropRatio,
+			CropToFill: cropToFill,
+			Zoom:       cropZoom,
+			Extent:     cropExtent,
+			Units:      cropUnits,
+			PanX:       posX,
+			PanY:       posY,
+			Focus:      normalized.Crop.Focus,
+		},
+		Presentation: PresentationInputs{
+			UserScale:     normalized.Presentation.UserScale,
+			OffsetUnits:   presUnits,
+			OffsetX:       presOffsetX,
+			OffsetY:       presOffsetY,
+			ClampToCanvas: normalized.Presentation.ClampToCanvas,
+		},
 	}
 
 	return inputs, nil

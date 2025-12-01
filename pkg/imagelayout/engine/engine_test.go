@@ -164,8 +164,8 @@ func TestAnchorPresetBottomRight(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InputsFromSettings: %v", err)
 	}
-	if !almostEqual(inputs.PositionX, 1) || !almostEqual(inputs.PositionY, 1) {
-		t.Fatalf("anchor preset not applied correctly: %f %f", inputs.PositionX, inputs.PositionY)
+	if !almostEqual(inputs.Crop.PanX, 1) || !almostEqual(inputs.Crop.PanY, 1) {
+		t.Fatalf("anchor preset not applied correctly: %f %f", inputs.Crop.PanX, inputs.Crop.PanY)
 	}
 
 	result, _ := ComputeViewport(inputs)
