@@ -56,7 +56,6 @@ export interface CropState {
 }
 
 export interface PresentationState {
-  userScale: number;
   offsetX: number;
   offsetY: number;
   clampToCanvas: boolean;
@@ -67,9 +66,6 @@ export interface PreviewState {
   result: ImageLayoutComputation | null;
   error: string | null;
   isLoading: boolean;
-  isRenderLoading: boolean;
-  renderUrl: string | null;
-  renderError: string | null;
   compareOpen: boolean;
 }
 
@@ -114,7 +110,6 @@ const initialCropState = (): CropState => ({
 });
 
 const initialPresentationState = (): PresentationState => ({
-  userScale: 1,
   offsetX: 0,
   offsetY: 0,
   clampToCanvas: false,
@@ -125,9 +120,6 @@ const initialPreviewState = (): PreviewState => ({
   result: null,
   error: null,
   isLoading: false,
-  isRenderLoading: false,
-  renderUrl: null,
-  renderError: null,
   compareOpen: false,
 });
 
@@ -180,7 +172,6 @@ const buildLayoutFromState = (state: ImageLayoutsEditorState): ImageLayoutReques
       focus: null,
     },
     presentation: {
-      user_scale: state.presentation.userScale,
       offset_px: { x: state.presentation.offsetX, y: state.presentation.offsetY },
       clamp_to_canvas: state.presentation.clampToCanvas,
     },
@@ -236,36 +227,6 @@ export const previewLayoutThunk = createAsyncThunk<
   }
 });
 
-export const renderLayoutThunk = createAsyncThunk<
-  string,
-  { projectId: string },
-  { state: RootState; rejectValue: string }
->("imageLayoutsEditor/render", async ({ projectId }, thunkAPI) => {
-  const state = thunkAPI.getState();
-  const editor = state.imageLayoutsEditor;
-  const assetId = editor.preview.assetId;
-
-  if (!assetId) {
-    return thunkAPI.rejectWithValue("Select an asset to render");
-  }
-  try {
-    const layout = selectCurrentLayout(state);
-    const blob = await thunkAPI
-      .dispatch(
-        api.endpoints.renderLayoutRequest.initiate({
-          projectId,
-          layout,
-          assetId,
-        }),
-      )
-      .unwrap();
-    return URL.createObjectURL(blob);
-  } catch (err: any) {
-    const msg = err?.data?.error ?? err?.error ?? err?.message ?? "Render failed";
-    return thunkAPI.rejectWithValue(typeof msg === "string" ? msg : "Render failed");
-  }
-});
-
 const imageLayoutsEditorSlice = createSlice({
   name: "imageLayoutsEditor",
   initialState: initialState(),
@@ -317,7 +278,7 @@ const imageLayoutsEditorSlice = createSlice({
       const crop = maybeLayout?.crop ?? null;
       const presentation = maybeLayout?.presentation ?? null;
 
-      if (frame && crop && presentation) {
+    if (frame && crop && presentation) {
         if (frame.mode === "page" && frame.page) {
           next.frame.paperWidth = frame.page.width_in ?? next.frame.paperWidth;
           next.frame.paperHeight = frame.page.height_in ?? next.frame.paperHeight;
@@ -349,7 +310,6 @@ const imageLayoutsEditorSlice = createSlice({
         next.crop.panY = crop.pan?.y ?? next.crop.panY;
         next.crop.anchorPreset = crop.anchor ?? next.crop.anchorPreset;
 
-        next.presentation.userScale = presentation.user_scale ?? next.presentation.userScale;
         next.presentation.offsetX = presentation.offset_px?.x ?? next.presentation.offsetX;
         next.presentation.offsetY = presentation.offset_px?.y ?? next.presentation.offsetY;
         next.presentation.clampToCanvas =
@@ -387,7 +347,6 @@ const imageLayoutsEditorSlice = createSlice({
       next.crop.panY = legacy.position_y ?? next.crop.panY;
       next.crop.anchorPreset = legacy.anchor_preset ?? next.crop.anchorPreset;
 
-      next.presentation.userScale = legacy.user_scale ?? next.presentation.userScale;
       next.presentation.offsetX = 0;
       next.presentation.offsetY = 0;
       next.presentation.clampToCanvas = false;
@@ -473,9 +432,6 @@ const imageLayoutsEditorSlice = createSlice({
     setAnchorPreset(state, action: PayloadAction<string>) {
       state.crop.anchorPreset = action.payload;
     },
-    setUserScale(state, action: PayloadAction<number>) {
-      state.presentation.userScale = action.payload;
-    },
     setOffsetX(state, action: PayloadAction<number>) {
       state.presentation.offsetX = action.payload;
     },
@@ -496,11 +452,7 @@ const imageLayoutsEditorSlice = createSlice({
       state.preview.result = action.payload ? null : state.preview.result;
     },
     clearRender(state) {
-      if (state.preview.renderUrl) {
-        URL.revokeObjectURL(state.preview.renderUrl);
-      }
-      state.preview.renderUrl = null;
-      state.preview.renderError = null;
+      // No-op: render artifacts are handled outside Redux.
     },
   },
   extraReducers: (builder) => {
@@ -521,24 +473,6 @@ const imageLayoutsEditorSlice = createSlice({
           (typeof action.payload === "string" && action.payload) ||
           action.error.message ||
           "Preview failed";
-      })
-      .addCase(renderLayoutThunk.pending, (state) => {
-        state.preview.isRenderLoading = true;
-        state.preview.renderError = null;
-      })
-      .addCase(renderLayoutThunk.fulfilled, (state, action) => {
-        if (state.preview.renderUrl) {
-          URL.revokeObjectURL(state.preview.renderUrl);
-        }
-        state.preview.isRenderLoading = false;
-        state.preview.renderUrl = action.payload;
-      })
-      .addCase(renderLayoutThunk.rejected, (state, action) => {
-        state.preview.isRenderLoading = false;
-        state.preview.renderError =
-          (typeof action.payload === "string" && action.payload) ||
-          action.error.message ||
-          "Render failed";
       });
   },
 });
@@ -569,7 +503,6 @@ export const {
   setPanX,
   setPanY,
   setAnchorPreset,
-  setUserScale,
   setOffsetX,
   setOffsetY,
   setClampToCanvas,

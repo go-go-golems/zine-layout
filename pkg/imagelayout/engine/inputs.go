@@ -43,6 +43,8 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 		mr       float64
 		mb       float64
 		ml       float64
+		contentX float64
+		contentY float64
 	)
 
 	switch frameMode {
@@ -144,15 +146,25 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 		presOffsetY = normalized.Presentation.OffsetPx.Y
 	}
 
-	frameRect := imagelayout.Rect{
-		X: ml,
-		Y: mt,
+	canvasRect := imagelayout.Rect{
+		X: 0,
+		Y: 0,
+		W: canvasW,
+		H: canvasH,
+	}
+
+	if frameMode != "page" {
+		contentX, contentY = 0, 0
+		mt, mr, mb, ml = 0, 0, 0, 0
+	} else {
+		contentX = ml
+		contentY = mt
+	}
+	contentRect := imagelayout.Rect{
+		X: contentX,
+		Y: contentY,
 		W: contentW,
 		H: contentH,
-	}
-	if frameMode != "page" {
-		frameRect.X = 0
-		frameRect.Y = 0
 	}
 
 	margins := MarginPixels{
@@ -171,9 +183,10 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 			Height: float64(meta.Height),
 		},
 		Frame: FrameInputs{
-			Mode:       frameMode,
-			CanvasRect: frameRect,
-			Margins:    margins,
+			Mode:        frameMode,
+			CanvasRect:  canvasRect,
+			ContentRect: contentRect,
+			Margins:     margins,
 		},
 		Crop: CropInputs{
 			Ratio:      cropRatio,

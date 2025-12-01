@@ -28,11 +28,11 @@ type PresentationAnalysis struct {
 
 // AnalyzeFrame executes the frame normalization stage.
 func AnalyzeFrame(frame FrameInputs, clampToCanvas bool) FrameAnalysis {
-	canvasRect, ratio := buildFrame(frame)
+	canvasRect, contentRect, ratio := buildFrame(frame)
 	return FrameAnalysis{
 		Mode:        string(frame.Mode),
 		CanvasRect:  canvasRect,
-		ContentRect: canvasRect,
+		ContentRect: contentRect,
 		TargetRatio: ratio,
 		MarginsPx: MarginPixels{
 			Top:    frame.Margins.Top,
@@ -56,8 +56,8 @@ func AnalyzeCrop(source SourceMeta, crop CropInputs, targetRatio float64) CropAn
 }
 
 // AnalyzePresentation executes the presentation stage.
-func AnalyzePresentation(crop CropInputs, presentation PresentationInputs, canvasRect, sourceRect imagelayout.Rect) PresentationAnalysis {
-	targetRect, mode, scale, diagnostics := composeTarget(crop, presentation, canvasRect, sourceRect)
+func AnalyzePresentation(crop CropInputs, presentation PresentationInputs, contentRect, sourceRect imagelayout.Rect) PresentationAnalysis {
+	targetRect, mode, scale, diagnostics := composeTarget(crop, presentation, contentRect, sourceRect)
 	return PresentationAnalysis{
 		TargetRect:  targetRect,
 		Scale:       scale,

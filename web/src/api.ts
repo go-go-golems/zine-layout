@@ -751,7 +751,7 @@ export const api = createApi({
     }),
 
     renderLayoutRequest: builder.mutation<
-      Blob,
+      { url: string },
       { projectId: string; layout: ImageLayoutRequest; assetId: string }
     >({
       async queryFn({ projectId, layout, assetId }, _api, _extraOptions, fetchWithBQ) {
@@ -765,7 +765,9 @@ export const api = createApi({
         if (response.error) {
           return { error: response.error };
         }
-        return { data: response.data as Blob };
+        const blob = response.data as Blob;
+        const url = URL.createObjectURL(blob);
+        return { data: { url } };
       },
     }),
 

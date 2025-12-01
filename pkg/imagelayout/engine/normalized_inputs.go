@@ -27,9 +27,10 @@ type SourceMeta struct {
 
 // FrameInputs contains the resolved viewport geometry.
 type FrameInputs struct {
-	Mode       FrameMode
-	CanvasRect imagelayout.Rect
-	Margins    MarginPixels
+	Mode        FrameMode
+	CanvasRect  imagelayout.Rect
+	ContentRect imagelayout.Rect
+	Margins     MarginPixels
 }
 
 // CropInputs captures the normalized crop configuration.

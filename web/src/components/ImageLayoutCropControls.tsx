@@ -16,8 +16,6 @@ interface Props {
   setPanY: (value: number) => void;
   zoom: number;
   setZoom: (value: number) => void;
-  userScale: number;
-  setUserScale: (value: number) => void;
   offsetX: number;
   setOffsetX: (value: number) => void;
   offsetY: number;
@@ -37,8 +35,6 @@ export const ImageLayoutCropControls: React.FC<Props> = ({
   setPanY,
   zoom,
   setZoom,
-  userScale,
-  setUserScale,
   offsetX,
   setOffsetX,
   offsetY,
@@ -105,16 +101,6 @@ export const ImageLayoutCropControls: React.FC<Props> = ({
         min={0.5}
         max={2}
         step={0.01}
-        unit="×"
-      />
-
-      <SliderInput
-        label="User Scale"
-        value={userScale}
-        onChange={setUserScale}
-        min={0.5}
-        max={2}
-        step={0.05}
         unit="×"
       />
 

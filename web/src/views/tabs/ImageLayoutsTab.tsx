@@ -20,13 +20,13 @@ import { ImageLayoutPreviewPanel } from "../../components/ImageLayoutPreviewPane
 import { LaidOutImagesGrid } from "../../components/LaidOutImagesGrid";
 import { useAppDispatch, useAppSelector } from "../../hooks/redux";
 import {
-  clearRender,
   previewLayoutThunk,
-  renderLayoutThunk,
   resetForm,
   selectCurrentLayout,
   selectImageLayoutsEditor,
   selectPreviewState,
+  setPreviewError,
+  setPreviewAssetId,
   setAnchorPreset,
   setAspectRatio,
   setClampToCanvas,
@@ -48,12 +48,9 @@ import {
   setPaperHeight,
   setPaperSize,
   setPaperWidth,
-  setPreviewAssetId,
-  setPreviewError,
   setTemplateDescription,
   setTemplateName,
   setUniformMargins,
-  setUserScale,
   setZoom,
   startCreate,
   startEdit,
@@ -68,6 +65,9 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
   const editor = useAppSelector(selectImageLayoutsEditor);
   const previewState = useAppSelector(selectPreviewState);
   const currentLayout = useAppSelector(selectCurrentLayout);
+  const [renderUrl, setRenderUrl] = useState<string | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [isRenderLoading, setIsRenderLoading] = useState(false);
 
   const templatesQuery = useGetImageLayoutTemplatesQuery({ projectId });
   const assetsQuery = useGetAssetsQuery({ projectId });
@@ -108,19 +108,58 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
   const previewTarget = previewState.result?.result?.target_rect;
   const previewSource = previewState.result?.result?.source_rect;
 
+  const previewDepsKey = useMemo(
+    () => JSON.stringify({ layout: currentLayout, assetId: previewState.assetId }),
+    [currentLayout, previewState.assetId],
+  );
+
+  const previewPayload = useMemo(
+    () => ({
+      layout: currentLayout,
+      asset_id: previewState.assetId || undefined,
+      asset: previewAsset
+        ? {
+            id: previewAsset.id,
+            filename: previewAsset.filename,
+            width: previewAsset.width,
+            height: previewAsset.height,
+          }
+        : null,
+    }),
+    [currentLayout, previewAsset, previewState.assetId],
+  );
+
+  const canvasRect = useMemo(() => {
+    const backend = previewState.result?.result?.canvas_rect;
+    if (backend) return backend;
+    const page = currentLayout.frame.page;
+    if (page) {
+      return {
+        w: page.width_in * page.dpi,
+        h: page.height_in * page.dpi,
+        x: 0,
+        y: 0,
+      };
+    }
+    return null;
+  }, [currentLayout, previewState.result]);
+
   const previewCanvasScale = useMemo(() => {
-    if (!previewCanvas) return 1;
-    const safeW = Math.max(previewCanvas.w, 1);
-    const safeH = Math.max(previewCanvas.h, 1);
+    if (!canvasRect) return 1;
+    const safeW = Math.max(canvasRect.w, 1);
+    const safeH = Math.max(canvasRect.h, 1);
     return Math.min(420 / safeW, 420 / safeH);
-  }, [previewCanvas]);
+  }, [canvasRect]);
 
   const previewImagePlacement = useMemo(() => {
     if (!previewAsset || !previewSource || !previewTarget) {
       return null;
     }
-    const layoutScale = previewState.result?.result?.scale ?? 1;
-    const scale = layoutScale * previewCanvasScale;
+    // Scale so that the selected source_rect maps exactly into the target_rect box.
+    const scale =
+      previewTarget.w > 0
+        ? (previewTarget.w * previewCanvasScale) / Math.max(previewSource.w, 1)
+        : previewCanvasScale;
     return {
       imgWidth: previewAsset.width * scale,
       imgHeight: previewAsset.height * scale,
@@ -169,25 +208,18 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
   }, [
     dispatch,
     editor.meta.mode,
-    editor.frame.paperWidth,
-    editor.frame.paperHeight,
-    editor.frame.dpi,
+    previewDepsKey,
     previewAsset,
     projectId,
-    currentLayout,
   ]);
 
   useEffect(() => {
-    dispatch(clearRender());
-  }, [dispatch, currentLayout, previewState.assetId]);
-
-  useEffect(() => {
     return () => {
-      if (previewState.renderUrl) {
-        URL.revokeObjectURL(previewState.renderUrl);
+      if (renderUrl) {
+        URL.revokeObjectURL(renderUrl);
       }
     };
-  }, [previewState.renderUrl]);
+  }, [renderUrl]);
 
   const handleToggleEditor = () => {
     if (editor.meta.mode !== "idle") {
@@ -246,8 +278,40 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
     }
   };
 
-  const handleRender = () => {
-    dispatch(renderLayoutThunk({ projectId }));
+  const handleRender = async () => {
+    if (!previewState.assetId) {
+      setRenderError("Select an asset to render");
+      return;
+    }
+    setRenderError(null);
+    setIsRenderLoading(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/image-layout/render`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            layout: currentLayout,
+            asset_id: previewState.assetId,
+          }),
+        },
+      );
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "Render failed");
+      }
+      const blob = await res.blob();
+      if (renderUrl) {
+        URL.revokeObjectURL(renderUrl);
+      }
+      const url = URL.createObjectURL(blob);
+      setRenderUrl(url);
+    } catch (err: any) {
+      setRenderError(err?.message ?? "Render failed");
+    } finally {
+      setIsRenderLoading(false);
+    }
   };
 
   const handleLoadTemplate = (template: ImageLayoutTemplate) => {
@@ -401,22 +465,20 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
 
                       <ImageLayoutCropControls
                         cropStrategy={editor.crop.strategy}
-                        setCropStrategy={(val) => dispatch(setCropStrategy(val))}
-                        anchorPreset={editor.crop.anchorPreset}
-                        setAnchorPreset={(val) => dispatch(setAnchorPreset(val))}
-                        panX={editor.crop.panX}
-                        setPanX={(val) => dispatch(setPanX(val))}
-                        panY={editor.crop.panY}
-                        setPanY={(val) => dispatch(setPanY(val))}
-                        zoom={editor.crop.zoom}
-                        setZoom={(val) => dispatch(setZoom(val))}
-                        userScale={editor.presentation.userScale}
-                        setUserScale={(val) => dispatch(setUserScale(val))}
-                        offsetX={editor.presentation.offsetX}
-                        setOffsetX={(val) => dispatch(setOffsetX(val))}
-                        offsetY={editor.presentation.offsetY}
-                        setOffsetY={(val) => dispatch(setOffsetY(val))}
-                        clampToCanvas={editor.presentation.clampToCanvas}
+                      setCropStrategy={(val) => dispatch(setCropStrategy(val))}
+                      anchorPreset={editor.crop.anchorPreset}
+                      setAnchorPreset={(val) => dispatch(setAnchorPreset(val))}
+                      panX={editor.crop.panX}
+                      setPanX={(val) => dispatch(setPanX(val))}
+                      panY={editor.crop.panY}
+                      setPanY={(val) => dispatch(setPanY(val))}
+                      zoom={editor.crop.zoom}
+                      setZoom={(val) => dispatch(setZoom(val))}
+                      offsetX={editor.presentation.offsetX}
+                      setOffsetX={(val) => dispatch(setOffsetX(val))}
+                      offsetY={editor.presentation.offsetY}
+                      setOffsetY={(val) => dispatch(setOffsetY(val))}
+                      clampToCanvas={editor.presentation.clampToCanvas}
                         setClampToCanvas={(val) => dispatch(setClampToCanvas(val))}
                       />
 
@@ -437,11 +499,19 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                       assets={assets}
                       previewAssetId={previewState.assetId}
                       onPreviewAssetChange={(id) => dispatch(setPreviewAssetId(id))}
+                      layout={currentLayout}
+                      previewPayload={previewPayload}
                       previewState={previewState}
                       previewResult={previewState.result ?? null}
                       previewCanvasScale={previewCanvasScale}
                       previewPlacement={previewImagePlacement}
+                      canvasRect={canvasRect}
+                      margins={currentLayout.frame.page?.margins_in}
+                      dpi={currentLayout.frame.page?.dpi}
                       onRender={handleRender}
+                      renderUrl={renderUrl}
+                      renderError={renderError}
+                      isRenderLoading={isRenderLoading}
                       onOpenCompare={() => dispatch(setCompareOpen(true))}
                     />
                   </div>
@@ -663,7 +733,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
         }
         previewCanvas={previewCanvas ? { w: previewCanvas.w, h: previewCanvas.h } : null}
         previewScale={previewCanvasScale}
-        renderUrl={previewState.renderUrl}
+        renderUrl={renderUrl}
       />
     </>
   );

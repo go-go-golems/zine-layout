@@ -53,14 +53,14 @@ func ComputeViewport(inp NormalizedInputs) (imagelayout.ViewportResult, *imagela
 		})
 	}
 
-	canvasRect, targetRatio := buildFrame(inp.Frame)
+	canvasRect, contentRect, targetRatio := buildFrame(inp.Frame)
 	sourceRatio := safeDiv(inp.Source.Width, inp.Source.Height)
 	requestedRatio := determineRequestedRatio(inp.Crop, targetRatio, sourceRatio)
 
 	sourceRect, cropStep := resolveCrop(inp.Source, inp.Crop, requestedRatio, sourceRatio)
 	addStep("crop", cropStep)
 
-	targetRect, mode, scale, scaleStep := composeTarget(inp.Crop, inp.Presentation, canvasRect, sourceRect)
+	targetRect, mode, scale, scaleStep := composeTarget(inp.Crop, inp.Presentation, contentRect, sourceRect)
 	addStep("scale", scaleStep)
 
 	result := imagelayout.ViewportResult{
@@ -72,17 +72,22 @@ func ComputeViewport(inp NormalizedInputs) (imagelayout.ViewportResult, *imagela
 	}
 
 	addStep("result", map[string]interface{}{
-		"source_rect": sourceRect,
-		"target_rect": targetRect,
-		"canvas_rect": canvasRect,
+		"source_rect":  sourceRect,
+		"target_rect":  targetRect,
+		"canvas_rect":  canvasRect,
+		"content_rect": contentRect,
 	})
 
 	return result, trace
 }
 
-func buildFrame(frame FrameInputs) (imagelayout.Rect, float64) {
-	rect := frame.CanvasRect
-	return rect, safeDiv(rect.W, rect.H)
+func buildFrame(frame FrameInputs) (imagelayout.Rect, imagelayout.Rect, float64) {
+	canvas := frame.CanvasRect
+	content := frame.ContentRect
+	if content.W == 0 || content.H == 0 {
+		content = canvas
+	}
+	return canvas, content, safeDiv(content.W, content.H)
 }
 
 func determineRequestedRatio(crop CropInputs, targetRatio, sourceRatio float64) float64 {
@@ -176,9 +181,9 @@ func computeCropScale(extent, zoom float64) float64 {
 	return scale
 }
 
-func composeTarget(crop CropInputs, presentation PresentationInputs, canvasRect, sourceRect imagelayout.Rect) (imagelayout.Rect, string, float64, map[string]interface{}) {
-	targetW := canvasRect.W
-	targetH := canvasRect.H
+func composeTarget(crop CropInputs, presentation PresentationInputs, contentRect, sourceRect imagelayout.Rect) (imagelayout.Rect, string, float64, map[string]interface{}) {
+	targetW := contentRect.W
+	targetH := contentRect.H
 
 	scaleX := safeDiv(targetW, sourceRect.W)
 	scaleY := safeDiv(targetH, sourceRect.H)
@@ -200,8 +205,8 @@ func composeTarget(crop CropInputs, presentation PresentationInputs, canvasRect,
 	tx, ty := positionOffsets(offsetUnits, presentation.OffsetX, presentation.OffsetY, targetW, targetH, dstW, dstH)
 
 	targetRect := imagelayout.Rect{
-		X: canvasRect.X + tx,
-		Y: canvasRect.Y + ty,
+		X: contentRect.X + tx,
+		Y: contentRect.Y + ty,
 		W: dstW,
 		H: dstH,
 	}

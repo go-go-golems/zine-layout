@@ -27,6 +27,9 @@ func TestInputsFromRequestRatioFrame(t *testing.T) {
 	if !almostEqual(inputs.Frame.CanvasRect.W, expectedCanvasW) {
 		t.Fatalf("unexpected canvas width: %f", inputs.Frame.CanvasRect.W)
 	}
+	if !almostEqual(inputs.Frame.ContentRect.W, expectedCanvasW) || !almostEqual(inputs.Frame.ContentRect.H, inputs.Frame.CanvasRect.H) {
+		t.Fatalf("content rect should match canvas in ratio mode")
+	}
 	if inputs.Crop.Ratio == nil || !almostEqual(*inputs.Crop.Ratio, ratio) {
 		t.Fatalf("expected crop ratio %.2f", ratio)
 	}
@@ -69,15 +72,21 @@ func TestInputsFromRequestPageFrame(t *testing.T) {
 
 	expectedCanvasW := float64(10 * 300)
 	expectedCanvasH := float64(8 * 300)
-	canvasW := inputs.Frame.CanvasRect.W + inputs.Frame.Margins.Left + inputs.Frame.Margins.Right
-	canvasH := inputs.Frame.CanvasRect.H + inputs.Frame.Margins.Top + inputs.Frame.Margins.Bottom
+	canvasW := inputs.Frame.CanvasRect.W
+	canvasH := inputs.Frame.CanvasRect.H
 	if !almostEqual(canvasW, expectedCanvasW) || !almostEqual(canvasH, expectedCanvasH) {
 		t.Fatalf("unexpected canvas size %fx%f", canvasW, canvasH)
+	}
+	if !almostEqual(inputs.Frame.ContentRect.W, expectedCanvasW-inputs.Frame.Margins.Left-inputs.Frame.Margins.Right) {
+		t.Fatalf("unexpected content width")
+	}
+	if !almostEqual(inputs.Frame.ContentRect.H, expectedCanvasH-inputs.Frame.Margins.Top-inputs.Frame.Margins.Bottom) {
+		t.Fatalf("unexpected content height")
 	}
 	if inputs.Frame.Margins.Top <= 0 || inputs.Frame.Margins.Left <= 0 {
 		t.Fatalf("expected positive margins for page mode")
 	}
-	if inputs.Frame.CanvasRect.W >= canvasW || inputs.Frame.CanvasRect.H >= canvasH {
+	if inputs.Frame.ContentRect.W >= canvasW || inputs.Frame.ContentRect.H >= canvasH {
 		t.Fatalf("content should be smaller than canvas once margins applied")
 	}
 }
@@ -108,6 +117,9 @@ func TestInputsFromRequestViewportFrame(t *testing.T) {
 	}
 	if !almostEqual(inputs.Frame.CanvasRect.H, 900) {
 		t.Fatalf("expected canvas height 900 got %.2f", inputs.Frame.CanvasRect.H)
+	}
+	if !almostEqual(inputs.Frame.ContentRect.W, inputs.Frame.CanvasRect.W) || !almostEqual(inputs.Frame.ContentRect.H, inputs.Frame.CanvasRect.H) {
+		t.Fatalf("content should match canvas in viewport mode")
 	}
 }
 
