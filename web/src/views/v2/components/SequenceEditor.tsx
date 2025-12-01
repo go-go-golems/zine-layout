@@ -45,6 +45,7 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
   const [deleteItem] = useDeleteImageSequenceItemMutation();
 
   const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
+  const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null);
   const [isAddingGap, setIsAddingGap] = useState(false);
   const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false);
   const [isAddingImages, setIsAddingImages] = useState(false);
@@ -75,16 +76,27 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
   const debouncedReorder = reorderRef.current;
 
   const handleDragStart = (index: number) => {
+    console.log('🟢 Drag start:', index);
     setDragSourceIndex(index);
+    setDragTargetIndex(null);
   };
 
   const handleDragEnd = () => {
+    console.log('🔴 Drag end');
     setDragSourceIndex(null);
+    setDragTargetIndex(null);
   };
 
   const handleDragOver = (event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragEnter = (index: number) => {
+    console.log('🎯 Drag enter:', index, 'source:', dragSourceIndex);
+    if (dragSourceIndex !== null && dragSourceIndex !== index) {
+      setDragTargetIndex(index);
+    }
   };
 
   const handleDrop = useCallback(
@@ -95,13 +107,21 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
       const sourceIndex = dragSourceIndex;
       if (targetIndex === null || sourceIndex === targetIndex) {
         setDragSourceIndex(null);
+        setDragTargetIndex(null);
         return;
       }
 
       // Calculate new order
       const newItems = [...sortedItems];
       const [removed] = newItems.splice(sourceIndex, 1);
-      const insertIndex = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex;
+      
+      // After removing source, indices shift. When we show the indicator on the RIGHT
+      // of an item (forward drag), we want to insert AFTER that item in the final array.
+      // Since we removed an item before it, the target index naturally points to the
+      // correct insertion position without adjustment.
+      const insertIndex = targetIndex;
+      
+      console.log('💧 Drop: source', sourceIndex, '→ target', targetIndex, '→ insert', insertIndex);
       newItems.splice(insertIndex, 0, removed);
 
       // Update positions
@@ -113,6 +133,7 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
       // Optimistic update happens via RTK Query, but we also call debounced reorder
       debouncedReorder(reorderedItems);
       setDragSourceIndex(null);
+      setDragTargetIndex(null);
     },
     [dragSourceIndex, sortedItems, debouncedReorder]
   );
@@ -186,6 +207,7 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
         {sequenceData.sequence.description && (
           <p className="text-gray-600 mt-1">{sequenceData.sequence.description}</p>
         )}
+        <p className="text-xs text-purple-600 mt-2">🔄 TEST: Frontend v2.1 - Drag feedback enabled</p>
       </div>
 
       <div className="mb-4 flex gap-2 items-center">
@@ -229,27 +251,63 @@ export const SequenceEditor: React.FC<SequenceEditorProps> = ({
           onDragOver={handleDragOver}
           onDrop={(e) => handleDrop(e, null)}
         >
-          {sortedItems.map((item, index) => (
-            <div
-              key={`${item.sequence_id}-${item.position}`}
-              draggable
-              onDragStart={() => handleDragStart(index)}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, index)}
-              className={`transition-opacity ${
-                dragSourceIndex === index ? 'opacity-50' : ''
-              }`}
-            >
-              <SequenceItem
-                item={item}
-                asset={item.asset_id ? assetLookup.get(item.asset_id) : undefined}
-                projectId={projectId}
-                index={index}
-                onDelete={() => handleDeleteItem(item.position)}
-              />
-            </div>
-          ))}
+          {sortedItems.map((item, index) => {
+            const isDragging = dragSourceIndex === index;
+            const isDropTarget = dragTargetIndex === index;
+            
+            // When dragging forward (source < target), we want to insert AFTER the target
+            // So show indicator on the right side of the target
+            // When dragging backward (source > target), insert BEFORE the target
+            // So show indicator on the left side of the target
+            const showDropIndicator = dragSourceIndex !== null && isDropTarget && dragSourceIndex !== index;
+            const dropIndicatorOnRight = dragSourceIndex !== null && dragSourceIndex < index;
+
+            if (showDropIndicator) {
+              console.log('📍 Drop indicator at index:', index, 'side:', dropIndicatorOnRight ? 'right' : 'left');
+            }
+
+            return (
+              <div
+                key={`${item.sequence_id}-${item.position}`}
+                className="relative"
+              >
+                {/* Drop indicator - shows where item will be inserted */}
+                {showDropIndicator && (
+                  <div
+                    className={`absolute top-0 bottom-0 w-1 bg-primary-500 rounded-full z-10 shadow-lg ${
+                      dropIndicatorOnRight ? '-right-2.5' : '-left-2.5'
+                    }`}
+                    style={{
+                      animation: 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }}
+                  />
+                )}
+                
+                <div
+                  draggable
+                  onDragStart={() => handleDragStart(index)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={handleDragOver}
+                  onDragEnter={() => handleDragEnter(index)}
+                  onDrop={(e) => handleDrop(e, index)}
+                  className={`transition-all duration-200 ${
+                    isDragging ? 'opacity-30 scale-95' : ''
+                  } ${
+                    isDropTarget && !isDragging ? 'ring-2 ring-primary-400 ring-offset-2 rounded-lg' : ''
+                  }`}
+                >
+                  <SequenceItem
+                    item={item}
+                    asset={item.asset_id ? assetLookup.get(item.asset_id) : undefined}
+                    projectId={projectId}
+                    index={index}
+                    onDelete={() => handleDeleteItem(item.position)}
+                    isDragging={isDragging}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
