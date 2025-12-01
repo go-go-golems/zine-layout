@@ -76,14 +76,12 @@ export const SequenceSlideshow: React.FC<SequenceSlideshowProps> = ({
   // Ensure current index stays within bounds and mirrors anchor position
   useEffect(() => {
     if (!isOpen) return;
-    const targetSlides = viewMode === 'spread' ? spreadSlides : singleSlides;
-    if (targetSlides.length === 0) {
-      setCurrentIndex(0);
-      return;
-    }
-
     if (viewMode === 'spread') {
-      const spreadIndex = targetSlides.findIndex((slide) => {
+      if (spreadSlides.length === 0) {
+        setCurrentIndex(0);
+        return;
+      }
+      const spreadIndex = spreadSlides.findIndex((slide) => {
         const leftPos = slide.left?.item.position;
         const rightPos = slide.right?.item.position;
         return leftPos === anchorPosition || rightPos === anchorPosition;
@@ -92,10 +90,14 @@ export const SequenceSlideshow: React.FC<SequenceSlideshowProps> = ({
         setCurrentIndex(spreadIndex);
       } else {
         const fallback = Math.floor(anchorPosition / 2);
-        setCurrentIndex(Math.min(Math.max(fallback, 0), targetSlides.length - 1));
+        setCurrentIndex(Math.min(Math.max(fallback, 0), spreadSlides.length - 1));
       }
     } else {
-      const slideIndex = targetSlides.findIndex(
+      if (singleSlides.length === 0) {
+        setCurrentIndex(0);
+        return;
+      }
+      const slideIndex = singleSlides.findIndex(
         (slide) => slide.item.position === anchorPosition
       );
       if (slideIndex >= 0) {
@@ -130,7 +132,39 @@ export const SequenceSlideshow: React.FC<SequenceSlideshowProps> = ({
     }
   }, [isOpen, viewMode, currentIndex, spreadSlides, singleSlides, anchorPosition]);
 
-  // Keyboard navigation
+  // Navigation callbacks (define before effects that use them)
+  const goToPrevious = useCallback(() => {
+    if (activeLength === 0) return;
+    setCurrentIndex((prev) => (prev > 0 ? prev - 1 : activeLength - 1));
+  }, [activeLength]);
+
+  const goToNext = useCallback(() => {
+    if (activeLength === 0) return;
+    setCurrentIndex((prev) => (prev < activeLength - 1 ? prev + 1 : 0));
+  }, [activeLength]);
+
+  const enterFullscreen = useCallback(async () => {
+    const element = document.documentElement;
+    try {
+      if (element.requestFullscreen) {
+        await element.requestFullscreen();
+      }
+    } catch (err) {
+      console.error('Failed to enter fullscreen:', err);
+    }
+  }, []);
+
+  const exitFullscreen = useCallback(async () => {
+    try {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    } catch (err) {
+      console.error('Failed to exit fullscreen:', err);
+    }
+  }, []);
+
+  // Keyboard navigation (after callbacks are defined)
   useEffect(() => {
     if (!isOpen) return;
 
@@ -166,36 +200,7 @@ export const SequenceSlideshow: React.FC<SequenceSlideshowProps> = ({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  const goToPrevious = useCallback(() => {
-    if (activeLength === 0) return;
-    setCurrentIndex((prev) => (prev > 0 ? prev - 1 : activeLength - 1));
-  }, [activeLength]);
-
-  const goToNext = useCallback(() => {
-    if (activeLength === 0) return;
-    setCurrentIndex((prev) => (prev < activeLength - 1 ? prev + 1 : 0));
-  }, [activeLength]);
-
-  const enterFullscreen = useCallback(async () => {
-    const element = document.documentElement;
-    try {
-      if (element.requestFullscreen) {
-        await element.requestFullscreen();
-      }
-    } catch (err) {
-      console.error('Failed to enter fullscreen:', err);
-    }
-  }, []);
-
-  const exitFullscreen = useCallback(async () => {
-    try {
-      if (document.exitFullscreen) {
-        await document.exitFullscreen();
-      }
-    } catch (err) {
-      console.error('Failed to exit fullscreen:', err);
-    }
-  }, []);
+  // (callbacks defined above)
 
   if (!isOpen) return null;
 
@@ -213,7 +218,7 @@ export const SequenceSlideshow: React.FC<SequenceSlideshowProps> = ({
 
     return (
       <div className="flex-1 flex flex-col items-center gap-2" key={side}>
-        <div className="relative w-full aspect-[3/4] bg-white rounded-2xl shadow-2xl overflow-hidden flex items-center justify-center border border-gray-200">
+        <div className="relative w-full h-full bg-white shadow-2xl overflow-hidden flex items-center justify-center">
           {isBlank ? (
             <div className="text-center text-gray-400">
               <div className="text-4xl mb-2">⏸</div>
@@ -335,7 +340,7 @@ export const SequenceSlideshow: React.FC<SequenceSlideshowProps> = ({
             )}
           </div>
         ) : viewMode === 'spread' && currentSpreadSlide ? (
-          <div className="w-full max-w-6xl flex gap-6 items-center">
+          <div className="w-full max-w-7xl mx-auto flex gap-6 items-center h-[calc(100vh-160px)]">
             {renderPage(currentSpreadSlide.left, 'left')}
             {renderPage(currentSpreadSlide.right, 'right')}
           </div>
