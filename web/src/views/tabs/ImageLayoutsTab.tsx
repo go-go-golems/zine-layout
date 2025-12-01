@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   useGetImageLayoutTemplatesQuery,
   useCreateImageLayoutTemplateMutation,
@@ -11,7 +11,7 @@ import {
   useUpdateLaidOutImageMutation,
   useDeleteLaidOutImageMutation,
   useGetImageSequencesQuery,
-  usePreviewLaidOutImageQuery,
+  usePreviewLayoutRequestMutation,
   type ImageLayoutTemplate,
   type LaidOutImage,
   type ImageLayoutRequest,
@@ -19,55 +19,56 @@ import {
   type ImageLayoutCropSpec,
   type ImageLayoutPresentationSpec,
   type Asset,
-} from '../../api';
-import { Button, Card, CardBody, CardHeader, Input } from '../../components/ui';
-import { SliderInput } from '../../components/SliderInput';
-import { AnchorGrid } from '../../components/AnchorGrid';
+  type ImageLayoutComputation,
+} from "../../api";
+import { Button, Card, CardBody, CardHeader, Input } from "../../components/ui";
+import { SliderInput } from "../../components/SliderInput";
+import { AnchorGrid } from "../../components/AnchorGrid";
 
 interface ImageLayoutsTabProps {
   projectId: string;
 }
 
 const PAPER_SIZES = {
-  'Letter': { width: 8.5, height: 11 },
-  '8x10': { width: 8, height: 10 },
-  '5x7': { width: 5, height: 7 },
-  '4x6': { width: 4, height: 6 },
-  'A4': { width: 8.27, height: 11.69 },
-  'Square 8x8': { width: 8, height: 8 },
-  'Custom': { width: 8, height: 10 },
+  Letter: { width: 8.5, height: 11 },
+  "8x10": { width: 8, height: 10 },
+  "5x7": { width: 5, height: 7 },
+  "4x6": { width: 4, height: 6 },
+  A4: { width: 8.27, height: 11.69 },
+  "Square 8x8": { width: 8, height: 8 },
+  Custom: { width: 8, height: 10 },
 };
 
 const ASPECT_RATIOS = {
-  'None': null,
-  '1:1 (Square)': 1,
-  '2:3 (Portrait)': 2 / 3,
-  '3:2 (Landscape)': 3 / 2,
-  '4:5 (Portrait)': 4 / 5,
-  '16:9 (Widescreen)': 16 / 9,
-  '9:16 (Story)': 9 / 16,
+  None: null,
+  "1:1 (Square)": 1,
+  "2:3 (Portrait)": 2 / 3,
+  "3:2 (Landscape)": 3 / 2,
+  "4:5 (Portrait)": 4 / 5,
+  "16:9 (Widescreen)": 16 / 9,
+  "9:16 (Story)": 9 / 16,
 };
 
 const defaultFrame = (): ImageLayoutFrameSpec => ({
-  mode: 'page',
-  fill: 'cover',
+  mode: "page",
+  fill: "cover",
   page: {
     width_in: 8,
     height_in: 10,
     dpi: 300,
-    orientation: 'portrait',
+    orientation: "portrait",
     margins_in: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },
   },
 });
 
 const defaultCrop = (): ImageLayoutCropSpec => ({
-  strategy: 'auto',
+  strategy: "auto",
   ratio: null,
   zoom: 1,
   extent: undefined,
-  anchor: 'center',
+  anchor: "center",
   pan: { x: 0, y: 0 },
-  units: 'normalized',
+  units: "normalized",
   focus: null,
 });
 
@@ -77,7 +78,9 @@ const defaultPresentation = (): ImageLayoutPresentationSpec => ({
   clamp_to_canvas: false,
 });
 
-export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) => {
+export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
+  projectId,
+}) => {
   const templatesQuery = useGetImageLayoutTemplatesQuery({ projectId });
   const assetsQuery = useGetAssetsQuery({ projectId });
   const laidOutImagesQuery = useGetLaidOutImagesQuery({ projectId });
@@ -94,179 +97,87 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
 
   // Template Editor State
   const [isCreating, setIsCreating] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<ImageLayoutTemplate | null>(null);
-  const [previewAssetId, setPreviewAssetId] = useState<string>('');
+  const [editingTemplate, setEditingTemplate] =
+    useState<ImageLayoutTemplate | null>(null);
+  const [previewAssetId, setPreviewAssetId] = useState<string>("");
 
   // Template Form State
-  const [templateName, setTemplateName] = useState('');
-  const [templateDescription, setTemplateDescription] = useState('');
+  const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
   const [isGlobal, setIsGlobal] = useState(false);
-  const [paperSize, setPaperSize] = useState<keyof typeof PAPER_SIZES>('8x10');
+  const [paperSize, setPaperSize] = useState<keyof typeof PAPER_SIZES>("8x10");
   const [paperWidth, setPaperWidth] = useState(8);
   const [paperHeight, setPaperHeight] = useState(10);
   const [dpi, setDpi] = useState(300);
-  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const [orientation, setOrientation] = useState<"portrait" | "landscape">(
+    "portrait",
+  );
   const [uniformMargins, setUniformMargins] = useState(true);
   const [marginAll, setMarginAll] = useState(0.5);
   const [marginTop, setMarginTop] = useState(0.5);
   const [marginRight, setMarginRight] = useState(0.5);
   const [marginBottom, setMarginBottom] = useState(0.5);
   const [marginLeft, setMarginLeft] = useState(0.5);
-  const [fillMode, setFillMode] = useState<'contain' | 'cover'>('cover');
-  const [aspectRatio, setAspectRatio] = useState<keyof typeof ASPECT_RATIOS>('None');
-  const [cropStrategy, setCropStrategy] = useState<'auto' | 'anchor' | 'focus' | 'manual'>('auto');
+  const [fillMode, setFillMode] = useState<"contain" | "cover">("cover");
+  const [aspectRatio, setAspectRatio] =
+    useState<keyof typeof ASPECT_RATIOS>("None");
+  const [cropStrategy, setCropStrategy] = useState<
+    "auto" | "anchor" | "focus" | "manual"
+  >("auto");
   const [cropRatio, setCropRatio] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
-  const [anchorPreset, setAnchorPreset] = useState('middle-center');
+  const [anchorPreset, setAnchorPreset] = useState("middle-center");
   const [userScale, setUserScale] = useState(1);
   const [offsetX, setOffsetX] = useState(0);
   const [offsetY, setOffsetY] = useState(0);
 
   // Laid-Out Images State
-  const [selectedLaidOutId, setSelectedLaidOutId] = useState<string | null>(null);
-  const [batchAssetSource, setBatchAssetSource] = useState<'assets' | 'sequence'>('assets');
-  const [batchSequenceId, setBatchSequenceId] = useState('');
-  const [batchTemplateId, setBatchTemplateId] = useState('');
+  const [selectedLaidOutId, setSelectedLaidOutId] = useState<string | null>(
+    null,
+  );
+  const [batchAssetSource, setBatchAssetSource] = useState<
+    "assets" | "sequence"
+  >("assets");
+  const [batchSequenceId, setBatchSequenceId] = useState("");
+  const [batchTemplateId, setBatchTemplateId] = useState("");
   const [isCreatingLaidOut, setIsCreatingLaidOut] = useState(false);
-  const [createAssetId, setCreateAssetId] = useState('');
-  const [createTemplateId, setCreateTemplateId] = useState('');
+  const [createAssetId, setCreateAssetId] = useState("");
+  const [createTemplateId, setCreateTemplateId] = useState("");
 
-  const templates = useMemo(() => templatesQuery.data ?? [], [templatesQuery.data]);
+  const templates = useMemo(
+    () => templatesQuery.data ?? [],
+    [templatesQuery.data],
+  );
   const assets = useMemo(() => assetsQuery.data ?? [], [assetsQuery.data]);
-  const laidOutImages = useMemo(() => laidOutImagesQuery.data ?? [], [laidOutImagesQuery.data]);
-  const sequences = useMemo(() => sequencesQuery.data ?? [], [sequencesQuery.data]);
+  const laidOutImages = useMemo(
+    () => laidOutImagesQuery.data ?? [],
+    [laidOutImagesQuery.data],
+  );
+  const sequences = useMemo(
+    () => sequencesQuery.data ?? [],
+    [sequencesQuery.data],
+  );
 
   const previewAsset = useMemo(
     () => assets.find((a) => a.id === previewAssetId),
-    [assets, previewAssetId]
+    [assets, previewAssetId],
   );
 
-  const resetForm = () => {
-    setTemplateName('');
-    setTemplateDescription('');
-    setIsGlobal(false);
-    setPaperSize('8x10');
-    setPaperWidth(8);
-    setPaperHeight(10);
-    setDpi(300);
-    setOrientation('portrait');
-    setUniformMargins(true);
-    setMarginAll(0.5);
-    setMarginTop(0.5);
-    setMarginRight(0.5);
-    setMarginBottom(0.5);
-    setMarginLeft(0.5);
-    setFillMode('cover');
-    setAspectRatio('None');
-    setCropStrategy('auto');
-    setCropRatio(null);
-    setZoom(1);
-    setPanX(0);
-    setPanY(0);
-    setAnchorPreset('middle-center');
-    setUserScale(1);
-    setOffsetX(0);
-    setOffsetY(0);
-  };
-
-  const loadTemplateIntoForm = (template: ImageLayoutTemplate) => {
-    setEditingTemplate(template);
-    setTemplateName(template.name);
-    setTemplateDescription(template.description ?? '');
-    setIsGlobal(template.scope === 'global');
-
-    // Handle both legacy and new shapes
-    const maybeLayout = template.settings as any;
-    const frame = (maybeLayout.frame as any) ?? null;
-    const crop = (maybeLayout.crop as any) ?? null;
-    const presentation = (maybeLayout.presentation as any) ?? null;
-
-    if (frame && crop && presentation) {
-      if (frame.mode === 'page' && frame.page) {
-        setPaperWidth(frame.page.width_in ?? 8);
-        setPaperHeight(frame.page.height_in ?? 10);
-        setDpi(frame.page.dpi ?? 300);
-        setOrientation(frame.page.orientation ?? 'portrait');
-        const m = frame.page.margins_in ?? { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 };
-        setMarginTop(m.top ?? 0.5);
-        setMarginRight(m.right ?? 0.5);
-        setMarginBottom(m.bottom ?? 0.5);
-        setMarginLeft(m.left ?? 0.5);
-        const allEqual = m.top === m.right && m.top === m.bottom && m.top === m.left;
-        setUniformMargins(allEqual);
-        if (allEqual) setMarginAll(m.top ?? 0.5);
-      }
-      setFillMode(frame.fill ?? 'cover');
-      if (frame.ratio) {
-        const ratioEntry = Object.entries(ASPECT_RATIOS).find(
-          ([_, val]) => val !== null && Math.abs(val - (frame.ratio ?? 0)) < 0.01
-        );
-        setAspectRatio(ratioEntry ? (ratioEntry[0] as keyof typeof ASPECT_RATIOS) : 'None');
-      } else {
-        setAspectRatio('None');
-      }
-
-      setCropStrategy(crop.strategy ?? 'auto');
-      setCropRatio(crop.ratio ?? null);
-      setZoom(crop.zoom ?? 1);
-      setPanX(crop.pan?.x ?? 0);
-      setPanY(crop.pan?.y ?? 0);
-      setAnchorPreset(crop.anchor ?? 'center');
-
-      setUserScale(presentation.user_scale ?? 1);
-      setOffsetX(presentation.offset_px?.x ?? 0);
-      setOffsetY(presentation.offset_px?.y ?? 0);
-      return;
-    }
-
-    // Legacy fallback: ImageLayoutViewportSettings
-    const settings = template.settings as any;
-    setPaperWidth(settings.paper_width_in ?? 8);
-    setPaperHeight(settings.paper_height_in ?? 10);
-    setDpi(settings.dpi ?? 300);
-    setOrientation(settings.orientation ?? 'portrait');
-    setMarginTop(settings.margin_top_in ?? 0.5);
-    setMarginRight(settings.margin_right_in ?? 0.5);
-    setMarginBottom(settings.margin_bottom_in ?? 0.5);
-    setMarginLeft(settings.margin_left_in ?? 0.5);
-    setFillMode(settings.crop_to_fill ? 'cover' : 'contain');
-    setUserScale(settings.user_scale ?? 1);
-    setPanX(settings.position_x ?? 0);
-    setPanY(settings.position_y ?? 0);
-    setAnchorPreset(settings.anchor_preset ?? 'center');
-
-    const allEqual =
-      settings.margin_top_in === settings.margin_right_in &&
-      settings.margin_top_in === settings.margin_bottom_in &&
-      settings.margin_top_in === settings.margin_left_in;
-    setUniformMargins(allEqual);
-    if (allEqual) setMarginAll(settings.margin_top_in ?? 0.5);
-
-    if (settings.crop_ratio) {
-      const ratioEntry = Object.entries(ASPECT_RATIOS).find(
-        ([_, val]) => val !== null && Math.abs(val - (settings.crop_ratio ?? 0)) < 0.01
-      );
-      setAspectRatio(ratioEntry ? (ratioEntry[0] as keyof typeof ASPECT_RATIOS) : 'None');
-    } else {
-      setAspectRatio('None');
-    }
-    setCropStrategy('auto');
-    setCropRatio(settings.crop_ratio ?? null);
-    setZoom(1);
-    setOffsetX(0);
-    setOffsetY(0);
-  };
-
-  const buildLayoutFromForm = (): ImageLayoutRequest => {
+  // Derived layout request from current form state (for preview + payload)
+  const currentLayout = useMemo(() => {
     const margins = uniformMargins
       ? { top: marginAll, right: marginAll, bottom: marginAll, left: marginAll }
-      : { top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft };
-
+      : {
+          top: marginTop,
+          right: marginRight,
+          bottom: marginBottom,
+          left: marginLeft,
+        };
     return {
       frame: {
-        mode: 'page',
+        mode: "page",
         fill: fillMode,
         ratio: ASPECT_RATIOS[aspectRatio] ?? undefined,
         page: {
@@ -283,7 +194,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
         zoom,
         anchor: anchorPreset,
         pan: { x: panX, y: panY },
-        units: 'normalized',
+        units: "normalized",
         focus: null,
       },
       presentation: {
@@ -292,14 +203,266 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
         clamp_to_canvas: false,
       },
       export: {
-        format: 'png',
+        format: "png",
         quality: 90,
-        background: 'white',
-        filename_template: '{name}-{panel}.{ext}',
-        out_dir: './out',
+        background: "white",
+        filename_template: "{name}-{panel}.{ext}",
+        out_dir: "./out",
       },
+    } satisfies ImageLayoutRequest;
+  }, [
+    uniformMargins,
+    marginAll,
+    marginTop,
+    marginRight,
+    marginBottom,
+    marginLeft,
+    fillMode,
+    aspectRatio,
+    paperWidth,
+    paperHeight,
+    dpi,
+    orientation,
+    cropStrategy,
+    cropRatio,
+    zoom,
+    anchorPreset,
+    panX,
+    panY,
+    userScale,
+    offsetX,
+    offsetY,
+  ]);
+
+  const [triggerPreviewLayout, { isLoading: isPreviewLoading }] =
+    usePreviewLayoutRequestMutation();
+  const [previewResult, setPreviewResult] =
+    useState<ImageLayoutComputation | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const previewDebounceRef = useRef<number | null>(null);
+
+  const previewCanvas = previewResult?.result?.canvas_rect;
+  const previewTarget = previewResult?.result?.target_rect;
+  const previewSource = previewResult?.result?.source_rect;
+  const previewCanvasScale = useMemo(() => {
+    if (!previewCanvas) return 1;
+    const safeW = Math.max(previewCanvas.w, 1);
+    const safeH = Math.max(previewCanvas.h, 1);
+    return Math.min(420 / safeW, 420 / safeH);
+  }, [previewCanvas]);
+
+  const previewImagePlacement = useMemo(() => {
+    if (!previewAsset || !previewSource || !previewTarget) {
+      return null;
+    }
+    const layoutScale = previewResult?.result?.scale ?? 1;
+    const scale = layoutScale * previewCanvasScale;
+    return {
+      imgWidth: previewAsset.width * scale,
+      imgHeight: previewAsset.height * scale,
+      offsetX: -previewSource.x * scale,
+      offsetY: -previewSource.y * scale,
+      targetWidth: previewTarget.w * previewCanvasScale,
+      targetHeight: previewTarget.h * previewCanvasScale,
+      targetLeft: previewTarget.x * previewCanvasScale,
+      targetTop: previewTarget.y * previewCanvasScale,
     };
+  }, [previewAsset, previewSource, previewTarget, previewResult, previewCanvasScale]);
+
+  useEffect(() => {
+    if (previewDebounceRef.current) {
+      window.clearTimeout(previewDebounceRef.current);
+    }
+
+    if (!isCreating && !editingTemplate) {
+      setPreviewResult(null);
+      setPreviewError(null);
+      return;
+    }
+
+    if (!previewAsset) {
+      setPreviewResult(null);
+      setPreviewError("Select an asset to preview");
+      return;
+    }
+    if (previewAsset.width <= 0 || previewAsset.height <= 0) {
+      setPreviewResult(null);
+      setPreviewError("Preview asset is missing dimensions");
+      return;
+    }
+    if (paperWidth <= 0 || paperHeight <= 0 || dpi <= 0) {
+      setPreviewResult(null);
+      setPreviewError("Page dimensions and DPI must be positive");
+      return;
+    }
+
+    previewDebounceRef.current = window.setTimeout(() => {
+      triggerPreviewLayout({
+        projectId,
+        layout: currentLayout,
+        assetId: previewAsset.id,
+      })
+        .unwrap()
+        .then((res) => {
+          setPreviewResult(res);
+          setPreviewError(null);
+        })
+        .catch((err) => {
+          const msg =
+            (err as any)?.data?.error ??
+            (err as any)?.error ??
+            "Preview failed";
+          setPreviewResult(null);
+          setPreviewError(typeof msg === "string" ? msg : "Preview failed");
+        });
+    }, 250);
+
+    return () => {
+      if (previewDebounceRef.current) {
+        window.clearTimeout(previewDebounceRef.current);
+      }
+    };
+  }, [
+    currentLayout,
+    dpi,
+    editingTemplate,
+    isCreating,
+    paperHeight,
+    paperWidth,
+    previewAsset,
+    projectId,
+    triggerPreviewLayout,
+  ]);
+
+  const resetForm = () => {
+    setTemplateName("");
+    setTemplateDescription("");
+    setIsGlobal(false);
+    setPaperSize("8x10");
+    setPaperWidth(8);
+    setPaperHeight(10);
+    setDpi(300);
+    setOrientation("portrait");
+    setUniformMargins(true);
+    setMarginAll(0.5);
+    setMarginTop(0.5);
+    setMarginRight(0.5);
+    setMarginBottom(0.5);
+    setMarginLeft(0.5);
+    setFillMode("cover");
+    setAspectRatio("None");
+    setCropStrategy("auto");
+    setCropRatio(null);
+    setZoom(1);
+    setPanX(0);
+    setPanY(0);
+    setAnchorPreset("middle-center");
+    setUserScale(1);
+    setOffsetX(0);
+    setOffsetY(0);
   };
+
+  const loadTemplateIntoForm = (template: ImageLayoutTemplate) => {
+    setEditingTemplate(template);
+    setTemplateName(template.name);
+    setTemplateDescription(template.description ?? "");
+    setIsGlobal(template.scope === "global");
+
+    // Handle both legacy and new shapes
+    const maybeLayout = template.settings as any;
+    const frame = (maybeLayout.frame as any) ?? null;
+    const crop = (maybeLayout.crop as any) ?? null;
+    const presentation = (maybeLayout.presentation as any) ?? null;
+
+    if (frame && crop && presentation) {
+      if (frame.mode === "page" && frame.page) {
+        setPaperWidth(frame.page.width_in ?? 8);
+        setPaperHeight(frame.page.height_in ?? 10);
+        setDpi(frame.page.dpi ?? 300);
+        setOrientation(frame.page.orientation ?? "portrait");
+        const m = frame.page.margins_in ?? {
+          top: 0.5,
+          right: 0.5,
+          bottom: 0.5,
+          left: 0.5,
+        };
+        setMarginTop(m.top ?? 0.5);
+        setMarginRight(m.right ?? 0.5);
+        setMarginBottom(m.bottom ?? 0.5);
+        setMarginLeft(m.left ?? 0.5);
+        const allEqual =
+          m.top === m.right && m.top === m.bottom && m.top === m.left;
+        setUniformMargins(allEqual);
+        if (allEqual) setMarginAll(m.top ?? 0.5);
+      }
+      setFillMode(frame.fill ?? "cover");
+      if (frame.ratio) {
+        const ratioEntry = Object.entries(ASPECT_RATIOS).find(
+          ([_, val]) =>
+            val !== null && Math.abs(val - (frame.ratio ?? 0)) < 0.01,
+        );
+        setAspectRatio(
+          ratioEntry ? (ratioEntry[0] as keyof typeof ASPECT_RATIOS) : "None",
+        );
+      } else {
+        setAspectRatio("None");
+      }
+
+      setCropStrategy(crop.strategy ?? "auto");
+      setCropRatio(crop.ratio ?? null);
+      setZoom(crop.zoom ?? 1);
+      setPanX(crop.pan?.x ?? 0);
+      setPanY(crop.pan?.y ?? 0);
+      setAnchorPreset(crop.anchor ?? "center");
+
+      setUserScale(presentation.user_scale ?? 1);
+      setOffsetX(presentation.offset_px?.x ?? 0);
+      setOffsetY(presentation.offset_px?.y ?? 0);
+      return;
+    }
+
+    // Legacy fallback: ImageLayoutViewportSettings
+    const settings = template.settings as any;
+    setPaperWidth(settings.paper_width_in ?? 8);
+    setPaperHeight(settings.paper_height_in ?? 10);
+    setDpi(settings.dpi ?? 300);
+    setOrientation(settings.orientation ?? "portrait");
+    setMarginTop(settings.margin_top_in ?? 0.5);
+    setMarginRight(settings.margin_right_in ?? 0.5);
+    setMarginBottom(settings.margin_bottom_in ?? 0.5);
+    setMarginLeft(settings.margin_left_in ?? 0.5);
+    setFillMode(settings.crop_to_fill ? "cover" : "contain");
+    setUserScale(settings.user_scale ?? 1);
+    setPanX(settings.position_x ?? 0);
+    setPanY(settings.position_y ?? 0);
+    setAnchorPreset(settings.anchor_preset ?? "center");
+
+    const allEqual =
+      settings.margin_top_in === settings.margin_right_in &&
+      settings.margin_top_in === settings.margin_bottom_in &&
+      settings.margin_top_in === settings.margin_left_in;
+    setUniformMargins(allEqual);
+    if (allEqual) setMarginAll(settings.margin_top_in ?? 0.5);
+
+    if (settings.crop_ratio) {
+      const ratioEntry = Object.entries(ASPECT_RATIOS).find(
+        ([_, val]) =>
+          val !== null && Math.abs(val - (settings.crop_ratio ?? 0)) < 0.01,
+      );
+      setAspectRatio(
+        ratioEntry ? (ratioEntry[0] as keyof typeof ASPECT_RATIOS) : "None",
+      );
+    } else {
+      setAspectRatio("None");
+    }
+    setCropStrategy("auto");
+    setCropRatio(settings.crop_ratio ?? null);
+    setZoom(1);
+    setOffsetX(0);
+    setOffsetY(0);
+  };
+
+  const buildLayoutFromForm = (): ImageLayoutRequest => currentLayout;
 
   const handleCreateTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -307,19 +470,19 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
 
     if (isGlobal) {
       await createGlobalTemplate({
-        name: templateName || 'Untitled Template',
+        name: templateName || "Untitled Template",
         description: templateDescription || undefined,
         settings: layout,
       }).unwrap();
     } else {
       await createTemplate({
         projectId,
-        name: templateName || 'Untitled Template',
+        name: templateName || "Untitled Template",
         description: templateDescription || undefined,
         settings: layout,
       }).unwrap();
     }
-    
+
     setIsCreating(false);
     resetForm();
   };
@@ -342,7 +505,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
     if (!window.confirm(`Delete template "${template.name}"?`)) return;
     await deleteTemplate({
       templateId: template.id,
-      scopeKey: template.project_id ?? 'global',
+      scopeKey: template.project_id ?? "global",
     }).unwrap();
     if (editingTemplate?.id === template.id) {
       setEditingTemplate(null);
@@ -352,7 +515,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
 
   const handlePaperSizeChange = (size: keyof typeof PAPER_SIZES) => {
     setPaperSize(size);
-    if (size !== 'Custom') {
+    if (size !== "Custom") {
       setPaperWidth(PAPER_SIZES[size].width);
       setPaperHeight(PAPER_SIZES[size].height);
     }
@@ -371,7 +534,9 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
       <div>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Layout Templates</h2>
+            <h2 className="text-2xl font-bold text-gray-900">
+              Layout Templates
+            </h2>
             <p className="text-sm text-gray-500 mt-1">
               Create reusable layout presets with visual controls
             </p>
@@ -391,9 +556,9 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                 }
               }
             }}
-            variant={isCreating || editingTemplate ? 'secondary' : 'primary'}
+            variant={isCreating || editingTemplate ? "secondary" : "primary"}
           >
-            {isCreating || editingTemplate ? 'Cancel' : '+ Create Template'}
+            {isCreating || editingTemplate ? "Cancel" : "+ Create Template"}
           </Button>
         </div>
 
@@ -406,20 +571,27 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
-                        {template.scope === 'global' ? '🌐 Global' : '📁 Project'}
+                        {template.scope === "global"
+                          ? "🌐 Global"
+                          : "📁 Project"}
                       </p>
-                      <h3 className="text-lg font-semibold text-gray-900">{template.name}</h3>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {template.name}
+                      </h3>
                     </div>
                   </div>
                   {template.description && (
-                    <p className="text-sm text-gray-600">{template.description}</p>
+                    <p className="text-sm text-gray-600">
+                      {template.description}
+                    </p>
                   )}
                   <div className="text-xs text-gray-500">
                     {(() => {
                       const settings = template.settings as any;
                       const page = settings.frame?.page;
                       const w = page?.width_in ?? settings.paper_width_in ?? 8;
-                      const h = page?.height_in ?? settings.paper_height_in ?? 10;
+                      const h =
+                        page?.height_in ?? settings.paper_height_in ?? 10;
                       const dpi = page?.dpi ?? settings.dpi ?? 300;
                       return `${w} × ${h}\" • ${dpi} DPI`;
                     })()}
@@ -445,7 +617,9 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
             ))}
             {templates.length === 0 && (
               <div className="col-span-full text-center py-12 text-gray-500">
-                <p className="text-sm">No templates yet. Create one to get started.</p>
+                <p className="text-sm">
+                  No templates yet. Create one to get started.
+                </p>
               </div>
             )}
           </div>
@@ -456,11 +630,15 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
           <Card>
             <CardHeader>
               <h3 className="text-xl font-semibold text-gray-900">
-                {editingTemplate ? 'Edit Template' : 'Create Template'}
+                {editingTemplate ? "Edit Template" : "Create Template"}
               </h3>
             </CardHeader>
             <CardBody>
-              <form onSubmit={editingTemplate ? handleUpdateTemplate : handleCreateTemplate}>
+              <form
+                onSubmit={
+                  editingTemplate ? handleUpdateTemplate : handleCreateTemplate
+                }
+              >
                 <div className="grid lg:grid-cols-2 gap-8">
                   {/* Left: Form Controls */}
                   <div className="space-y-6">
@@ -488,7 +666,10 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                             onChange={(e) => setIsGlobal(e.target.checked)}
                             className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                           />
-                          <span>Make this a global template (available to all projects)</span>
+                          <span>
+                            Make this a global template (available to all
+                            projects)
+                          </span>
                         </label>
                       </div>
                     </div>
@@ -508,7 +689,9 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                         <select
                           value={paperSize}
                           onChange={(e) =>
-                            handlePaperSizeChange(e.target.value as keyof typeof PAPER_SIZES)
+                            handlePaperSizeChange(
+                              e.target.value as keyof typeof PAPER_SIZES,
+                            )
                           }
                           className="w-full border border-gray-300 rounded-md px-3 py-2 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                         >
@@ -520,13 +703,15 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                         </select>
                       </div>
 
-                      {paperSize === 'Custom' && (
+                      {paperSize === "Custom" && (
                         <div className="grid grid-cols-2 gap-3">
                           <Input
                             label="Width (inches)"
                             type="number"
                             value={paperWidth}
-                            onChange={(e) => setPaperWidth(parseFloat(e.target.value) || 8)}
+                            onChange={(e) =>
+                              setPaperWidth(parseFloat(e.target.value) || 8)
+                            }
                             step="0.1"
                             min="1"
                           />
@@ -534,7 +719,9 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                             label="Height (inches)"
                             type="number"
                             value={paperHeight}
-                            onChange={(e) => setPaperHeight(parseFloat(e.target.value) || 10)}
+                            onChange={(e) =>
+                              setPaperHeight(parseFloat(e.target.value) || 10)
+                            }
                             step="0.1"
                             min="1"
                           />
@@ -557,22 +744,22 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                         <div className="flex space-x-3">
                           <button
                             type="button"
-                            onClick={() => setOrientation('portrait')}
+                            onClick={() => setOrientation("portrait")}
                             className={`flex-1 py-2 px-4 rounded-md border-2 transition-all ${
-                              orientation === 'portrait'
-                                ? 'border-primary-600 bg-primary-50 text-primary-900'
-                                : 'border-gray-300 bg-white text-gray-700 hover:border-primary-400'
+                              orientation === "portrait"
+                                ? "border-primary-600 bg-primary-50 text-primary-900"
+                                : "border-gray-300 bg-white text-gray-700 hover:border-primary-400"
                             }`}
                           >
                             Portrait ⬜
                           </button>
                           <button
                             type="button"
-                            onClick={() => setOrientation('landscape')}
+                            onClick={() => setOrientation("landscape")}
                             className={`flex-1 py-2 px-4 rounded-md border-2 transition-all ${
-                              orientation === 'landscape'
-                                ? 'border-primary-600 bg-primary-50 text-primary-900'
-                                : 'border-gray-300 bg-white text-gray-700 hover:border-primary-400'
+                              orientation === "landscape"
+                                ? "border-primary-600 bg-primary-50 text-primary-900"
+                                : "border-gray-300 bg-white text-gray-700 hover:border-primary-400"
                             }`}
                           >
                             Landscape ▭
@@ -594,7 +781,9 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                           <input
                             type="checkbox"
                             checked={uniformMargins}
-                            onChange={(e) => handleUniformMarginsToggle(e.target.checked)}
+                            onChange={(e) =>
+                              handleUniformMarginsToggle(e.target.checked)
+                            }
                             className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                           />
                           <span>Uniform margins</span>
@@ -675,8 +864,8 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                           <label className="flex items-center space-x-2">
                             <input
                               type="radio"
-                              checked={fillMode === 'cover'}
-                              onChange={() => setFillMode('cover')}
+                              checked={fillMode === "cover"}
+                              onChange={() => setFillMode("cover")}
                               className="text-primary-600 focus:ring-primary-500"
                             />
                             <span className="text-sm text-gray-700">
@@ -686,12 +875,13 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                           <label className="flex items-center space-x-2">
                             <input
                               type="radio"
-                              checked={fillMode === 'contain'}
-                              onChange={() => setFillMode('contain')}
+                              checked={fillMode === "contain"}
+                              onChange={() => setFillMode("contain")}
                               className="text-primary-600 focus:ring-primary-500"
                             />
                             <span className="text-sm text-gray-700">
-                              Fit (contain) - Show entire image with letterboxing
+                              Fit (contain) - Show entire image with
+                              letterboxing
                             </span>
                           </label>
                         </div>
@@ -704,7 +894,9 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                         <select
                           value={aspectRatio}
                           onChange={(e) =>
-                            setAspectRatio(e.target.value as keyof typeof ASPECT_RATIOS)
+                            setAspectRatio(
+                              e.target.value as keyof typeof ASPECT_RATIOS,
+                            )
                           }
                           className="w-full border border-gray-300 rounded-md px-3 py-2 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                         >
@@ -724,7 +916,11 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                           value={cropStrategy}
                           onChange={(e) =>
                             setCropStrategy(
-                              e.target.value as 'auto' | 'anchor' | 'focus' | 'manual'
+                              e.target.value as
+                                | "auto"
+                                | "anchor"
+                                | "focus"
+                                | "manual",
                             )
                           }
                           className="w-full border border-gray-300 rounded-md px-3 py-2 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
@@ -744,11 +940,14 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                         Position & Presentation
                       </h4>
 
-                      {cropStrategy === 'anchor' && (
-                        <AnchorGrid value={anchorPreset} onChange={setAnchorPreset} />
+                      {cropStrategy === "anchor" && (
+                        <AnchorGrid
+                          value={anchorPreset}
+                          onChange={setAnchorPreset}
+                        />
                       )}
 
-                      {cropStrategy === 'manual' && (
+                      {cropStrategy === "manual" && (
                         <div className="grid grid-cols-2 gap-3">
                           <SliderInput
                             label="Pan X"
@@ -786,13 +985,17 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                           label="Offset X (px)"
                           type="number"
                           value={offsetX}
-                          onChange={(e) => setOffsetX(parseFloat(e.target.value) || 0)}
+                          onChange={(e) =>
+                            setOffsetX(parseFloat(e.target.value) || 0)
+                          }
                         />
                         <Input
                           label="Offset Y (px)"
                           type="number"
                           value={offsetY}
-                          onChange={(e) => setOffsetY(parseFloat(e.target.value) || 0)}
+                          onChange={(e) =>
+                            setOffsetY(parseFloat(e.target.value) || 0)
+                          }
                         />
                       </div>
                     </div>
@@ -811,7 +1014,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                         Cancel
                       </Button>
                       <Button type="submit">
-                        {editingTemplate ? 'Save Changes' : 'Create Template'}
+                        {editingTemplate ? "Save Changes" : "Create Template"}
                       </Button>
                     </div>
                   </div>
@@ -837,42 +1040,107 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                     </div>
 
                     {/* Preview Panel */}
-                    <div className="border-2 border-gray-300 rounded-lg p-6 bg-gray-50 min-h-[500px] flex flex-col items-center justify-center">
+                    <div className="border-2 border-gray-300 rounded-lg p-6 bg-gray-50 min-h-[500px] flex flex-col">
                       {previewAsset ? (
-                        <>
-                          <div className="bg-white border-2 border-gray-400 shadow-lg" style={{ 
-                            width: `${Math.min(400, (paperWidth / Math.max(paperWidth, paperHeight)) * 400)}px`,
-                            height: `${Math.min(400, (paperHeight / Math.max(paperWidth, paperHeight)) * 400)}px`,
-                            padding: uniformMargins
-                              ? `${(marginAll / paperHeight) * 100}%`
-                              : `${(marginTop / paperHeight) * 100}% ${(marginRight / paperWidth) * 100}% ${(marginBottom / paperHeight) * 100}% ${(marginLeft / paperWidth) * 100}%`,
-                          }}>
-                            <div className="w-full h-full bg-gray-100 flex items-center justify-center overflow-hidden">
-                              <img
-                                src={previewAsset.url ?? `/projects/${projectId}/images/${previewAsset.filename}`}
-                                alt={previewAsset.filename}
-                                className="max-w-full max-h-full object-contain"
-                                style={{
-                                  transform: `scale(${userScale})`,
-                                }}
-                              />
+                        <div className="w-full space-y-3">
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>Backend preview updates as you edit.</span>
+                            {isPreviewLoading && (
+                            <span className="text-primary-600 animate-pulse">
+                                Computing...
+                              </span>
+                            )}
+                          </div>
+
+                          {previewError && (
+                            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                              {previewError}
                             </div>
+                          )}
+
+                          <div className="flex flex-1 items-center justify-center">
+                            {previewResult &&
+                            previewCanvas &&
+                            previewTarget &&
+                            previewImagePlacement ? (
+                              <div
+                                className="relative bg-white border-2 border-gray-400 shadow-lg"
+                                style={{
+                                  width: `${previewCanvas.w * previewCanvasScale}px`,
+                                  height: `${previewCanvas.h * previewCanvasScale}px`,
+                                }}
+                              >
+                                <div className="absolute inset-0 bg-gray-50" />
+                                <div
+                                  className="absolute border-2 border-primary-500/80 bg-primary-100/60 overflow-hidden shadow-inner"
+                                  style={{
+                                    left: `${previewImagePlacement.targetLeft}px`,
+                                    top: `${previewImagePlacement.targetTop}px`,
+                                    width: `${previewImagePlacement.targetWidth}px`,
+                                    height: `${previewImagePlacement.targetHeight}px`,
+                                  }}
+                                >
+                                  <img
+                                    src={
+                                      previewAsset.url ??
+                                      `/projects/${projectId}/images/${previewAsset.filename}`
+                                    }
+                                    alt={previewAsset.filename}
+                                    className="pointer-events-none select-none"
+                                    style={{
+                                      position: "absolute",
+                                      width: `${previewImagePlacement.imgWidth}px`,
+                                      height: `${previewImagePlacement.imgHeight}px`,
+                                      left: `${previewImagePlacement.offsetX}px`,
+                                      top: `${previewImagePlacement.offsetY}px`,
+                                    }}
+                                  />
+                                  <div className="absolute inset-0 border border-white/70 pointer-events-none" />
+                                </div>
+                                <div className="absolute inset-0 border border-dashed border-gray-300 pointer-events-none" />
+                              </div>
+                            ) : (
+                              <div className="text-center text-gray-500 text-sm">
+                                {isPreviewLoading
+                                  ? "Computing preview..."
+                                  : "Adjust settings to compute preview geometry."}
+                              </div>
+                            )}
                           </div>
-                          <div className="mt-4 text-sm text-gray-600 text-center">
+
+                          <div className="space-y-1 text-sm text-gray-600 text-center">
                             <p className="font-medium">{previewAsset.filename}</p>
-                            <p className="text-xs mt-1">
-                              Canvas: {Math.round((orientation === 'portrait' ? paperWidth : paperHeight) * dpi)} ×{' '}
-                              {Math.round((orientation === 'portrait' ? paperHeight : paperWidth) * dpi)} px
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Content area after margins with {userScale}× scale
-                            </p>
+                            {previewResult && previewResult.result && (
+                              <div className="grid grid-cols-2 gap-1 text-xs text-gray-600">
+                                <span>
+                                  Canvas:{" "}
+                                  {Math.round(previewResult.result.canvas_rect.w)} ×{" "}
+                                  {Math.round(previewResult.result.canvas_rect.h)} px
+                                </span>
+                                <span>
+                                  Target:{" "}
+                                  {Math.round(previewResult.result.target_rect.w)} ×{" "}
+                                  {Math.round(previewResult.result.target_rect.h)} px
+                                </span>
+                                <span>
+                                  Source:{" "}
+                                  {Math.round(previewResult.result.source_rect.w)} ×{" "}
+                                  {Math.round(previewResult.result.source_rect.h)} px
+                                </span>
+                                <span>
+                                  Scale: {previewResult.result.scale.toFixed(3)}× (
+                                  {previewResult.result.mode})
+                                </span>
+                              </div>
+                            )}
                           </div>
-                        </>
+                        </div>
                       ) : (
-                        <div className="text-center text-gray-400">
+                        <div className="flex flex-1 flex-col items-center justify-center text-center text-gray-400">
                           <div className="text-6xl mb-4">📐</div>
-                          <p className="text-sm">Select an asset to preview the template</p>
+                          <p className="text-sm">
+                            Select an asset to preview the template
+                          </p>
                         </div>
                       )}
                     </div>
@@ -898,12 +1166,12 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
           <Button
             onClick={() => {
               setIsCreatingLaidOut(!isCreatingLaidOut);
-              setCreateAssetId('');
-              setCreateTemplateId('');
+              setCreateAssetId("");
+              setCreateTemplateId("");
             }}
-            variant={isCreatingLaidOut ? 'secondary' : 'primary'}
+            variant={isCreatingLaidOut ? "secondary" : "primary"}
           >
-            {isCreatingLaidOut ? 'Cancel' : '+ Create Laid-Out Image'}
+            {isCreatingLaidOut ? "Cancel" : "+ Create Laid-Out Image"}
           </Button>
         </div>
 
@@ -911,14 +1179,16 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
         {isCreatingLaidOut && (
           <Card className="mb-6">
             <CardHeader>
-              <h3 className="text-lg font-semibold text-gray-900">Create New Laid-Out Image</h3>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Create New Laid-Out Image
+              </h3>
             </CardHeader>
             <CardBody>
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
                   if (!createAssetId || !createTemplateId) {
-                    alert('Select both asset and template');
+                    alert("Select both asset and template");
                     return;
                   }
                   await createLaidOutImage({
@@ -927,13 +1197,15 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                     templateId: createTemplateId,
                   }).unwrap();
                   setIsCreatingLaidOut(false);
-                  setCreateAssetId('');
-                  setCreateTemplateId('');
+                  setCreateAssetId("");
+                  setCreateTemplateId("");
                 }}
                 className="grid md:grid-cols-3 gap-4"
               >
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Asset</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Asset
+                  </label>
                   <select
                     value={createAssetId}
                     onChange={(e) => setCreateAssetId(e.target.value)}
@@ -950,7 +1222,9 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Template</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Template
+                  </label>
                   <select
                     value={createTemplateId}
                     onChange={(e) => setCreateTemplateId(e.target.value)}
@@ -979,7 +1253,9 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
         {/* Batch Apply Section */}
         <Card className="mb-6">
           <CardHeader>
-            <h3 className="text-lg font-semibold text-gray-900">Batch Apply Template</h3>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Batch Apply Template
+            </h3>
             <p className="text-sm text-gray-500 mt-1">
               Apply a template to multiple assets at once
             </p>
@@ -989,19 +1265,23 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (!batchTemplateId) {
-                  alert('Select a template');
+                  alert("Select a template");
                   return;
                 }
                 // TODO: Implement batch apply with progress indicator
-                alert('Batch apply not yet implemented - coming soon!');
+                alert("Batch apply not yet implemented - coming soon!");
               }}
               className="grid md:grid-cols-4 gap-4 items-end"
             >
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Source</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Source
+                </label>
                 <select
                   value={batchAssetSource}
-                  onChange={(e) => setBatchAssetSource(e.target.value as 'assets' | 'sequence')}
+                  onChange={(e) =>
+                    setBatchAssetSource(e.target.value as "assets" | "sequence")
+                  }
                   className="w-full border border-gray-300 rounded-md px-3 py-2 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                 >
                   <option value="assets">All Assets</option>
@@ -1009,7 +1289,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                 </select>
               </div>
 
-              {batchAssetSource === 'sequence' && (
+              {batchAssetSource === "sequence" && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Sequence
@@ -1030,7 +1310,9 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Template</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Template
+                </label>
                 <select
                   value={batchTemplateId}
                   onChange={(e) => setBatchTemplateId(e.target.value)}
@@ -1058,12 +1340,15 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
             const asset = assets.find((a) => a.id === image.asset_id);
             const template = templates.find((t) => t.id === image.template_id);
             return (
-              <div key={image.id} onClick={() => setSelectedLaidOutId(image.id)}>
+              <div
+                key={image.id}
+                onClick={() => setSelectedLaidOutId(image.id)}
+              >
                 <Card
                   className={`cursor-pointer border-2 transition-all ${
                     selectedLaidOutId === image.id
-                      ? 'border-primary-500 shadow-md'
-                      : 'border-gray-200 hover:border-primary-300'
+                      ? "border-primary-500 shadow-md"
+                      : "border-gray-200 hover:border-primary-300"
                   }`}
                 >
                   <CardBody className="space-y-3">
@@ -1071,7 +1356,10 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                     <div className="aspect-[4/3] bg-gray-100 rounded overflow-hidden flex items-center justify-center">
                       {asset && (
                         <img
-                          src={asset.url ?? `/projects/${projectId}/images/${asset.filename}`}
+                          src={
+                            asset.url ??
+                            `/projects/${projectId}/images/${asset.filename}`
+                          }
                           alt={asset.filename}
                           className="max-w-full max-h-full object-contain"
                         />
@@ -1094,7 +1382,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                         onClick={(e) => {
                           e.stopPropagation();
                           // TODO: Open edit drawer
-                          alert('Edit drawer not yet implemented');
+                          alert("Edit drawer not yet implemented");
                         }}
                       >
                         Edit
@@ -1104,8 +1392,11 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                         variant="danger"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (window.confirm('Delete this laid-out image?')) {
-                            deleteLaidOutImage({ id: image.id, projectId }).unwrap();
+                          if (window.confirm("Delete this laid-out image?")) {
+                            deleteLaidOutImage({
+                              id: image.id,
+                              projectId,
+                            }).unwrap();
                           }
                         }}
                       >

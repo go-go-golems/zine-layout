@@ -177,6 +177,23 @@ func (s *LayoutService) ApplyTemplateToSequence(projectID, sequenceID, templateI
 	return results, nil
 }
 
+// PreviewLayout computes layout geometry without persisting anything.
+func (s *LayoutService) PreviewLayout(layout imagelayout.LayoutRequest, meta imagelayout.ImageMeta) (*LayoutComputation, error) {
+	if s == nil || s.repos == nil {
+		return nil, fmt.Errorf("layout service not initialized")
+	}
+	inputs, err := engine.InputsFromRequest(layout, meta)
+	if err != nil {
+		return nil, fmt.Errorf("build inputs: %w", err)
+	}
+	result, trace := engine.ComputeViewport(inputs)
+	return &LayoutComputation{
+		Layout: layout,
+		Result: result,
+		Trace:  trace,
+	}, nil
+}
+
 // mergeTemplateLayout applies override JSON onto base template layout and returns canonical override JSON.
 func mergeTemplateLayout(baseJSON string, overridesJSON *string) (imagelayout.LayoutRequest, *string, error) {
 	var baseMap map[string]any

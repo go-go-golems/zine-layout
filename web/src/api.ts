@@ -161,6 +161,15 @@ export interface ImageLayoutComputation {
 
 export type LayoutComputation = ImageLayoutComputation;
 
+export interface ImageLayoutPreviewPayload {
+  layout: ImageLayoutRequest;
+  assetId?: string;
+  image?: {
+    width: number;
+    height: number;
+  };
+}
+
 export interface LaidOutImage {
   id: string;
   project_id: string;
@@ -720,6 +729,22 @@ export const api = createApi({
       ],
     }),
 
+    previewLayoutRequest: builder.mutation<
+      ImageLayoutComputation,
+      { projectId: string; layout: ImageLayoutRequest; assetId?: string; image?: { width: number; height: number } }
+    >({
+      query: ({ projectId, layout, assetId, image }) => ({
+        url: `/projects/${encodeURIComponent(projectId)}/image-layout/preview`,
+        method: 'POST',
+        body: {
+          layout,
+          asset_id: assetId,
+          image,
+        },
+      }),
+      transformResponse: (response: { result: ImageLayoutComputation }) => response.result,
+    }),
+
     getLaidOutImages: builder.query<LaidOutImage[], { projectId: string }>({
       query: ({ projectId }) =>
         `/projects/${encodeURIComponent(projectId)}/laid-out-images`,
@@ -1124,6 +1149,7 @@ export const {
   useCreatePageTemplateMutation,
   useUpdatePageTemplateMutation,
   useDeletePageTemplateMutation,
+  usePreviewLayoutRequestMutation,
   useGetLaidOutImagesQuery,
   useGetLaidOutImageQuery,
   useCreateLaidOutImageMutation,
