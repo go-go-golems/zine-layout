@@ -4,6 +4,7 @@ import { Health } from '../views/Health';
 import { Home } from '../views/Home';
 import { ProjectDetail } from '../views/ProjectDetail';
 import { Projects } from '../views/Projects';
+import { SequencingPage } from '../views/v2/SequencingPage';
 
 const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -72,7 +73,7 @@ export const App: React.FC = () => {
           <Route path="/" element={<Home />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
-          <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/v2/projects/:projectId/sequencing" element={<SequencingPage />} />
         </Routes>
       </AppShell>
     </BrowserRouter>

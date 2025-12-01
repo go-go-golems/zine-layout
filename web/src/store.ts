@@ -22,5 +22,7 @@ export const store = configureStore({
   middleware: (gDM) => gDM().concat(api.middleware),
 });
 
+export const { addToast, removeToast } = uiSlice.actions;
+
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

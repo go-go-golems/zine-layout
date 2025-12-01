@@ -360,6 +360,30 @@ export const api = createApi({
         body: { asset_id: assetId, is_gap: !assetId },
       }),
       transformResponse: (response: { items: ImageSequenceItem[] }) => response.items ?? [],
+      async onQueryStarted({ sequenceId, assetId }, { dispatch, queryFulfilled, getState }) {
+        // Optimistic update: add item to the end of the sequence
+        const patchResult = dispatch(
+          api.util.updateQueryData('getImageSequenceDetail', { sequenceId }, (draft) => {
+            const currentItems = draft.items ?? [];
+            const maxPosition = currentItems.length > 0 
+              ? Math.max(...currentItems.map(item => item.position))
+              : -1;
+            const newItem: ImageSequenceItem = {
+              sequence_id: sequenceId,
+              position: maxPosition + 1,
+              asset_id: assetId,
+              is_gap: !assetId,
+            };
+            draft.items = [...currentItems, newItem];
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch (error) {
+          patchResult.undo();
+          // Error toast will be handled by component
+        }
+      },
       invalidatesTags: (_result, _error, { sequenceId }) => [
         { type: 'ImageSequenceItems', id: sequenceId },
       ],
@@ -379,6 +403,25 @@ export const api = createApi({
         },
       }),
       transformResponse: (response: { items: ImageSequenceItem[] }) => response.items ?? [],
+      async onQueryStarted({ sequenceId, items }, { dispatch, queryFulfilled }) {
+        // Optimistic update: reorder items immediately
+        const patchResult = dispatch(
+          api.util.updateQueryData('getImageSequenceDetail', { sequenceId }, (draft) => {
+            draft.items = items.map((item, idx) => ({
+              sequence_id: sequenceId,
+              position: idx,
+              asset_id: item.assetId,
+              is_gap: item.isGap ?? !item.assetId,
+            }));
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch (error) {
+          patchResult.undo();
+          // Error toast will be handled by component
+        }
+      },
       invalidatesTags: (_result, _error, { sequenceId }) => [
         { type: 'ImageSequenceItems', id: sequenceId },
       ],
@@ -391,6 +434,25 @@ export const api = createApi({
         url: `/image-sequences/${encodeURIComponent(sequenceId)}/items/${position}`,
         method: 'DELETE',
       }),
+      async onQueryStarted({ sequenceId, position }, { dispatch, queryFulfilled }) {
+        // Optimistic update: remove item immediately
+        const patchResult = dispatch(
+          api.util.updateQueryData('getImageSequenceDetail', { sequenceId }, (draft) => {
+            draft.items = (draft.items ?? []).filter(item => item.position !== position);
+            // Reindex remaining items
+            draft.items = draft.items.map((item, idx) => ({
+              ...item,
+              position: idx,
+            }));
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch (error) {
+          patchResult.undo();
+          // Error toast will be handled by component
+        }
+      },
       invalidatesTags: (_result, _error, { sequenceId }) => [
         { type: 'ImageSequenceItems', id: sequenceId },
       ],

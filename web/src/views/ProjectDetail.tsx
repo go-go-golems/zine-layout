@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useGetProjectsQuery } from '../api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui';
 import { AssetsTab } from './tabs/AssetsTab';
-import { SequencesTab } from './tabs/SequencesTab';
+import { SequencesTabWrapper } from './tabs/SequencesTabWrapper';
 import { ImageLayoutsTab } from './tabs/ImageLayoutsTab';
 import { PageLayoutsTab } from './tabs/PageLayoutsTab';
 import { ZineTab } from './tabs/ZineTab';
@@ -83,7 +83,7 @@ export const ProjectDetail: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="sequences">
-          {id && <SequencesTab projectId={id} />}
+          {id && <SequencesTabWrapper projectId={id} />}
         </TabsContent>
 
         <TabsContent value="image-layouts">
