@@ -1,9 +1,10 @@
-import { configureStore, createSlice } from '@reduxjs/toolkit';
-import { api } from './api';
+import { configureStore, createSlice } from "@reduxjs/toolkit";
+import { api } from "./api";
+import { imageLayoutsEditorReducer } from "./state/imageLayoutsEditorSlice";
 
 const uiSlice = createSlice({
-  name: 'ui',
-  initialState: { toasts: [] as { id: string; text: string; type?: 'info' | 'error' }[] },
+  name: "ui",
+  initialState: { toasts: [] as { id: string; text: string; type?: "info" | "error" }[] },
   reducers: {
     addToast: (s, a) => {
       s.toasts.push(a.payload);
@@ -17,6 +18,7 @@ const uiSlice = createSlice({
 export const store = configureStore({
   reducer: {
     ui: uiSlice.reducer,
+    imageLayoutsEditor: imageLayoutsEditorReducer,
     [api.reducerPath]: api.reducer,
   },
   middleware: (gDM) => gDM().concat(api.middleware),

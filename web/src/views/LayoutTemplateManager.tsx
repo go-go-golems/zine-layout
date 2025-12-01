@@ -4,6 +4,7 @@ import {
   useDeleteImageLayoutTemplateMutation,
   useGetImageLayoutTemplatesQuery,
   useUpdateImageLayoutTemplateMutation,
+  type ImageLayoutRequest,
   type ImageLayoutTemplate,
 } from '../api';
 import { Button, Card, CardBody, CardHeader, Input } from '../components/ui';
@@ -22,19 +23,38 @@ const prettyJSON = (value: unknown) => {
 };
 
 const DEFAULT_TEMPLATE_JSON = `{
-  "paper_width_in": 8.5,
-  "paper_height_in": 11,
-  "dpi": 300,
-  "orientation": "portrait",
-  "margin_top_in": 0.5,
-  "margin_right_in": 0.5,
-  "margin_bottom_in": 0.5,
-  "margin_left_in": 0.5,
-  "crop_to_fill": true,
-  "user_scale": 1,
-  "position_x": 0,
-  "position_y": 0,
-  "units": "normalized"
+  "frame": {
+    "mode": "page",
+    "fill": "cover",
+    "page": {
+      "width_in": 8,
+      "height_in": 10,
+      "dpi": 300,
+      "orientation": "portrait",
+      "margins_in": { "top": 0.5, "right": 0.5, "bottom": 0.5, "left": 0.5 }
+    }
+  },
+  "crop": {
+    "strategy": "auto",
+    "ratio": null,
+    "zoom": 1,
+    "anchor": "center",
+    "pan": { "x": 0, "y": 0 },
+    "units": "normalized",
+    "focus": null
+  },
+  "presentation": {
+    "user_scale": 1,
+    "offset_px": { "x": 0, "y": 0 },
+    "clamp_to_canvas": false
+  },
+  "export": {
+    "format": "png",
+    "quality": 90,
+    "background": "white",
+    "filename_template": "{name}-{panel}.{ext}",
+    "out_dir": "./out"
+  }
 }`;
 
 export const LayoutTemplateManager: React.FC<LayoutTemplateManagerProps> = ({ projectId }) => {
@@ -72,13 +92,13 @@ export const LayoutTemplateManager: React.FC<LayoutTemplateManagerProps> = ({ pr
     setEditSettings(prettyJSON(tpl.settings));
   };
 
-  const parseSettings = (value: string) => {
+  const parseSettings = (value: string): ImageLayoutRequest => {
     try {
       const parsed = JSON.parse(value || '{}');
       if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) {
         throw new Error('Settings JSON must be an object');
       }
-      return parsed as Record<string, unknown>;
+      return parsed as ImageLayoutRequest;
     } catch (err) {
       throw new Error(`Invalid settings JSON: ${(err as Error).message}`);
     }
@@ -113,7 +133,7 @@ export const LayoutTemplateManager: React.FC<LayoutTemplateManagerProps> = ({ pr
         templateId: string;
         name?: string;
         description?: string;
-        settings?: Record<string, unknown>;
+        settings?: ImageLayoutRequest;
       } = {
         templateId: editingTemplate.id,
       };

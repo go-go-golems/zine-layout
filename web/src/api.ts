@@ -551,7 +551,7 @@ export const api = createApi({
       {
         name: string;
         description?: string;
-        settings: ImageLayoutTemplateSettingsPayload;
+        settings: ImageLayoutRequest;
       }
     >({
       query: (body) => ({
@@ -568,7 +568,7 @@ export const api = createApi({
         projectId: string;
         name: string;
         description?: string;
-        settings: ImageLayoutTemplateSettingsPayload;
+        settings: ImageLayoutRequest;
       }
     >({
       query: ({ projectId, ...body }) => ({
@@ -587,7 +587,7 @@ export const api = createApi({
         templateId: string;
         name?: string;
         description?: string;
-        settings?: ImageLayoutTemplateSettingsPayload;
+        settings?: ImageLayoutRequest;
       }
     >({
       query: ({ templateId, ...body }) => ({
@@ -754,12 +754,19 @@ export const api = createApi({
       Blob,
       { projectId: string; layout: ImageLayoutRequest; assetId: string }
     >({
-      query: ({ projectId, layout, assetId }) => ({
-        url: `/projects/${encodeURIComponent(projectId)}/image-layout/render`,
-        method: 'POST',
-        body: { layout, asset_id: assetId },
-      }),
-      responseHandler: async (response) => response.blob(),
+      async queryFn({ projectId, layout, assetId }, _api, _extraOptions, fetchWithBQ) {
+        const response = await fetchWithBQ({
+          url: `/projects/${encodeURIComponent(projectId)}/image-layout/render`,
+          method: 'POST',
+          body: { layout, asset_id: assetId },
+          responseHandler: async (res) => res.blob(),
+        });
+
+        if (response.error) {
+          return { error: response.error };
+        }
+        return { data: response.data as Blob };
+      },
     }),
 
     getLaidOutImages: builder.query<LaidOutImage[], { projectId: string }>({
