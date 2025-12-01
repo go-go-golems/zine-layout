@@ -14,7 +14,10 @@ import {
   usePreviewLaidOutImageQuery,
   type ImageLayoutTemplate,
   type LaidOutImage,
-  type ImageLayoutViewportSettings,
+  type ImageLayoutRequest,
+  type ImageLayoutFrameSpec,
+  type ImageLayoutCropSpec,
+  type ImageLayoutPresentationSpec,
   type Asset,
 } from '../../api';
 import { Button, Card, CardBody, CardHeader, Input } from '../../components/ui';
@@ -45,29 +48,33 @@ const ASPECT_RATIOS = {
   '9:16 (Story)': 9 / 16,
 };
 
-const defaultSettings = (): Partial<ImageLayoutViewportSettings> => ({
-  paper_width_in: 8,
-  paper_height_in: 10,
-  dpi: 300,
-  orientation: 'portrait' as const,
-  margin_top_in: 0.5,
-  margin_right_in: 0.5,
-  margin_bottom_in: 0.5,
-  margin_left_in: 0.5,
-  crop_to_fill: true,
-  crop_ratio: null,
-  user_scale: 1,
-  position_x: 0,
-  position_y: 0,
-  units: 'normalized' as const,
-  anchor_preset: 'middle-center',
-  export: {
-    format: 'png',
-    quality: 90,
-    background: 'white',
-    filename_template: '{name}-{panel}.{ext}',
-    out_dir: './out',
+const defaultFrame = (): ImageLayoutFrameSpec => ({
+  mode: 'page',
+  fill: 'cover',
+  page: {
+    width_in: 8,
+    height_in: 10,
+    dpi: 300,
+    orientation: 'portrait',
+    margins_in: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },
   },
+});
+
+const defaultCrop = (): ImageLayoutCropSpec => ({
+  strategy: 'auto',
+  ratio: null,
+  zoom: 1,
+  extent: undefined,
+  anchor: 'center',
+  pan: { x: 0, y: 0 },
+  units: 'normalized',
+  focus: null,
+});
+
+const defaultPresentation = (): ImageLayoutPresentationSpec => ({
+  user_scale: 1,
+  offset_px: { x: 0, y: 0 },
+  clamp_to_canvas: false,
 });
 
 export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) => {
@@ -105,12 +112,17 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
   const [marginRight, setMarginRight] = useState(0.5);
   const [marginBottom, setMarginBottom] = useState(0.5);
   const [marginLeft, setMarginLeft] = useState(0.5);
-  const [cropMode, setCropMode] = useState<'fill' | 'fit' | 'custom'>('fill');
+  const [fillMode, setFillMode] = useState<'contain' | 'cover'>('cover');
   const [aspectRatio, setAspectRatio] = useState<keyof typeof ASPECT_RATIOS>('None');
-  const [userScale, setUserScale] = useState(1);
-  const [positionX, setPositionX] = useState(0);
-  const [positionY, setPositionY] = useState(0);
+  const [cropStrategy, setCropStrategy] = useState<'auto' | 'anchor' | 'focus' | 'manual'>('auto');
+  const [cropRatio, setCropRatio] = useState<number | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
   const [anchorPreset, setAnchorPreset] = useState('middle-center');
+  const [userScale, setUserScale] = useState(1);
+  const [offsetX, setOffsetX] = useState(0);
+  const [offsetY, setOffsetY] = useState(0);
 
   // Laid-Out Images State
   const [selectedLaidOutId, setSelectedLaidOutId] = useState<string | null>(null);
@@ -146,12 +158,17 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
     setMarginRight(0.5);
     setMarginBottom(0.5);
     setMarginLeft(0.5);
-    setCropMode('fill');
+    setFillMode('cover');
     setAspectRatio('None');
-    setUserScale(1);
-    setPositionX(0);
-    setPositionY(0);
+    setCropStrategy('auto');
+    setCropRatio(null);
+    setZoom(1);
+    setPanX(0);
+    setPanY(0);
     setAnchorPreset('middle-center');
+    setUserScale(1);
+    setOffsetX(0);
+    setOffsetY(0);
   };
 
   const loadTemplateIntoForm = (template: ImageLayoutTemplate) => {
@@ -160,7 +177,52 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
     setTemplateDescription(template.description ?? '');
     setIsGlobal(template.scope === 'global');
 
-    const settings = template.settings as Partial<ImageLayoutViewportSettings>;
+    // Handle both legacy and new shapes
+    const maybeLayout = template.settings as any;
+    const frame = (maybeLayout.frame as any) ?? null;
+    const crop = (maybeLayout.crop as any) ?? null;
+    const presentation = (maybeLayout.presentation as any) ?? null;
+
+    if (frame && crop && presentation) {
+      if (frame.mode === 'page' && frame.page) {
+        setPaperWidth(frame.page.width_in ?? 8);
+        setPaperHeight(frame.page.height_in ?? 10);
+        setDpi(frame.page.dpi ?? 300);
+        setOrientation(frame.page.orientation ?? 'portrait');
+        const m = frame.page.margins_in ?? { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 };
+        setMarginTop(m.top ?? 0.5);
+        setMarginRight(m.right ?? 0.5);
+        setMarginBottom(m.bottom ?? 0.5);
+        setMarginLeft(m.left ?? 0.5);
+        const allEqual = m.top === m.right && m.top === m.bottom && m.top === m.left;
+        setUniformMargins(allEqual);
+        if (allEqual) setMarginAll(m.top ?? 0.5);
+      }
+      setFillMode(frame.fill ?? 'cover');
+      if (frame.ratio) {
+        const ratioEntry = Object.entries(ASPECT_RATIOS).find(
+          ([_, val]) => val !== null && Math.abs(val - (frame.ratio ?? 0)) < 0.01
+        );
+        setAspectRatio(ratioEntry ? (ratioEntry[0] as keyof typeof ASPECT_RATIOS) : 'None');
+      } else {
+        setAspectRatio('None');
+      }
+
+      setCropStrategy(crop.strategy ?? 'auto');
+      setCropRatio(crop.ratio ?? null);
+      setZoom(crop.zoom ?? 1);
+      setPanX(crop.pan?.x ?? 0);
+      setPanY(crop.pan?.y ?? 0);
+      setAnchorPreset(crop.anchor ?? 'center');
+
+      setUserScale(presentation.user_scale ?? 1);
+      setOffsetX(presentation.offset_px?.x ?? 0);
+      setOffsetY(presentation.offset_px?.y ?? 0);
+      return;
+    }
+
+    // Legacy fallback: ImageLayoutViewportSettings
+    const settings = template.settings as any;
     setPaperWidth(settings.paper_width_in ?? 8);
     setPaperHeight(settings.paper_height_in ?? 10);
     setDpi(settings.dpi ?? 300);
@@ -169,13 +231,12 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
     setMarginRight(settings.margin_right_in ?? 0.5);
     setMarginBottom(settings.margin_bottom_in ?? 0.5);
     setMarginLeft(settings.margin_left_in ?? 0.5);
-    setCropMode(settings.crop_to_fill ? 'fill' : 'fit');
+    setFillMode(settings.crop_to_fill ? 'cover' : 'contain');
     setUserScale(settings.user_scale ?? 1);
-    setPositionX(settings.position_x ?? 0);
-    setPositionY(settings.position_y ?? 0);
-    setAnchorPreset(settings.anchor_preset ?? 'middle-center');
+    setPanX(settings.position_x ?? 0);
+    setPanY(settings.position_y ?? 0);
+    setAnchorPreset(settings.anchor_preset ?? 'center');
 
-    // Check if margins are uniform
     const allEqual =
       settings.margin_top_in === settings.margin_right_in &&
       settings.margin_top_in === settings.margin_bottom_in &&
@@ -183,38 +244,53 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
     setUniformMargins(allEqual);
     if (allEqual) setMarginAll(settings.margin_top_in ?? 0.5);
 
-    // Detect aspect ratio
     if (settings.crop_ratio) {
       const ratioEntry = Object.entries(ASPECT_RATIOS).find(
         ([_, val]) => val !== null && Math.abs(val - (settings.crop_ratio ?? 0)) < 0.01
       );
-      if (ratioEntry) {
-        setAspectRatio(ratioEntry[0] as keyof typeof ASPECT_RATIOS);
-      } else {
-        setAspectRatio('None');
-      }
+      setAspectRatio(ratioEntry ? (ratioEntry[0] as keyof typeof ASPECT_RATIOS) : 'None');
     } else {
       setAspectRatio('None');
     }
+    setCropStrategy('auto');
+    setCropRatio(settings.crop_ratio ?? null);
+    setZoom(1);
+    setOffsetX(0);
+    setOffsetY(0);
   };
 
-  const buildSettingsFromForm = (): Record<string, unknown> => {
-    const settings: Record<string, unknown> = {
-      paper_width_in: paperWidth,
-      paper_height_in: paperHeight,
-      dpi,
-      orientation,
-      margin_top_in: uniformMargins ? marginAll : marginTop,
-      margin_right_in: uniformMargins ? marginAll : marginRight,
-      margin_bottom_in: uniformMargins ? marginAll : marginBottom,
-      margin_left_in: uniformMargins ? marginAll : marginLeft,
-      crop_to_fill: cropMode === 'fill',
-      crop_ratio: ASPECT_RATIOS[aspectRatio],
-      user_scale: userScale,
-      position_x: positionX,
-      position_y: positionY,
-      units: 'normalized',
-      anchor_preset: anchorPreset,
+  const buildLayoutFromForm = (): ImageLayoutRequest => {
+    const margins = uniformMargins
+      ? { top: marginAll, right: marginAll, bottom: marginAll, left: marginAll }
+      : { top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft };
+
+    return {
+      frame: {
+        mode: 'page',
+        fill: fillMode,
+        ratio: ASPECT_RATIOS[aspectRatio] ?? undefined,
+        page: {
+          width_in: paperWidth,
+          height_in: paperHeight,
+          dpi,
+          orientation,
+          margins_in: margins,
+        },
+      },
+      crop: {
+        strategy: cropStrategy,
+        ratio: cropRatio ?? undefined,
+        zoom,
+        anchor: anchorPreset,
+        pan: { x: panX, y: panY },
+        units: 'normalized',
+        focus: null,
+      },
+      presentation: {
+        user_scale: userScale,
+        offset_px: { x: offsetX, y: offsetY },
+        clamp_to_canvas: false,
+      },
       export: {
         format: 'png',
         quality: 90,
@@ -223,25 +299,24 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
         out_dir: './out',
       },
     };
-    return settings;
   };
 
   const handleCreateTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const settings = buildSettingsFromForm();
-    
+    const layout = buildLayoutFromForm();
+
     if (isGlobal) {
       await createGlobalTemplate({
         name: templateName || 'Untitled Template',
         description: templateDescription || undefined,
-        settings,
+        settings: layout,
       }).unwrap();
     } else {
       await createTemplate({
         projectId,
         name: templateName || 'Untitled Template',
         description: templateDescription || undefined,
-        settings,
+        settings: layout,
       }).unwrap();
     }
     
@@ -252,12 +327,12 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
   const handleUpdateTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTemplate) return;
-    const settings = buildSettingsFromForm();
+    const layout = buildLayoutFromForm();
     await updateTemplate({
       templateId: editingTemplate.id,
       name: templateName || undefined,
       description: templateDescription || undefined,
-      settings,
+      settings: layout,
     }).unwrap();
     setEditingTemplate(null);
     resetForm();
@@ -340,9 +415,14 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                     <p className="text-sm text-gray-600">{template.description}</p>
                   )}
                   <div className="text-xs text-gray-500">
-                    {(template.settings as any).paper_width_in ?? 8} ×{' '}
-                    {(template.settings as any).paper_height_in ?? 10}" •{' '}
-                    {(template.settings as any).dpi ?? 300} DPI
+                    {(() => {
+                      const settings = template.settings as any;
+                      const page = settings.frame?.page;
+                      const w = page?.width_in ?? settings.paper_width_in ?? 8;
+                      const h = page?.height_in ?? settings.paper_height_in ?? 10;
+                      const dpi = page?.dpi ?? settings.dpi ?? 300;
+                      return `${w} × ${h}\" • ${dpi} DPI`;
+                    })()}
                   </div>
                   <div className="flex space-x-2 pt-2">
                     <Button
@@ -584,19 +664,19 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                     {/* Crop Settings */}
                     <div className="space-y-4">
                       <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                        Crop & Fit
+                        Frame & Crop
                       </h4>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Crop Mode
+                          Fill Mode
                         </label>
                         <div className="space-y-2">
                           <label className="flex items-center space-x-2">
                             <input
                               type="radio"
-                              checked={cropMode === 'fill'}
-                              onChange={() => setCropMode('fill')}
+                              checked={fillMode === 'cover'}
+                              onChange={() => setFillMode('cover')}
                               className="text-primary-600 focus:ring-primary-500"
                             />
                             <span className="text-sm text-gray-700">
@@ -606,8 +686,8 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                           <label className="flex items-center space-x-2">
                             <input
                               type="radio"
-                              checked={cropMode === 'fit'}
-                              onChange={() => setCropMode('fit')}
+                              checked={fillMode === 'contain'}
+                              onChange={() => setFillMode('contain')}
                               className="text-primary-600 focus:ring-primary-500"
                             />
                             <span className="text-sm text-gray-700">
@@ -635,17 +715,61 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                           ))}
                         </select>
                       </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Crop Strategy
+                        </label>
+                        <select
+                          value={cropStrategy}
+                          onChange={(e) =>
+                            setCropStrategy(
+                              e.target.value as 'auto' | 'anchor' | 'focus' | 'manual'
+                            )
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                        >
+                          <option value="auto">Auto center</option>
+                          <option value="anchor">Anchor preset</option>
+                          <option value="manual">Manual pan</option>
+                        </select>
+                      </div>
                     </div>
 
                     <hr className="border-gray-200" />
 
-                    {/* Position & Scale */}
+                    {/* Crop Position & Presentation */}
                     <div className="space-y-4">
                       <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                        Position & Scale
+                        Position & Presentation
                       </h4>
 
-                      <AnchorGrid value={anchorPreset} onChange={setAnchorPreset} />
+                      {cropStrategy === 'anchor' && (
+                        <AnchorGrid value={anchorPreset} onChange={setAnchorPreset} />
+                      )}
+
+                      {cropStrategy === 'manual' && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <SliderInput
+                            label="Pan X"
+                            value={panX}
+                            onChange={setPanX}
+                            min={-1}
+                            max={1}
+                            step={0.01}
+                            unit="norm"
+                          />
+                          <SliderInput
+                            label="Pan Y"
+                            value={panY}
+                            onChange={setPanY}
+                            min={-1}
+                            max={1}
+                            step={0.01}
+                            unit="norm"
+                          />
+                        </div>
+                      )}
 
                       <SliderInput
                         label="User Scale"
@@ -658,23 +782,17 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                       />
 
                       <div className="grid grid-cols-2 gap-3">
-                        <SliderInput
-                          label="Position X"
-                          value={positionX}
-                          onChange={setPositionX}
-                          min={-1}
-                          max={1}
-                          step={0.01}
-                          unit="norm"
+                        <Input
+                          label="Offset X (px)"
+                          type="number"
+                          value={offsetX}
+                          onChange={(e) => setOffsetX(parseFloat(e.target.value) || 0)}
                         />
-                        <SliderInput
-                          label="Position Y"
-                          value={positionY}
-                          onChange={setPositionY}
-                          min={-1}
-                          max={1}
-                          step={0.01}
-                          unit="norm"
+                        <Input
+                          label="Offset Y (px)"
+                          type="number"
+                          value={offsetY}
+                          onChange={(e) => setOffsetY(parseFloat(e.target.value) || 0)}
                         />
                       </div>
                     </div>
@@ -1012,4 +1130,3 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
     </div>
   );
 };
-

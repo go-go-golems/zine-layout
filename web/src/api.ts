@@ -60,6 +60,70 @@ export interface ImageLayoutExportOptions {
   out_dir: string;
 }
 
+// Modern LayoutRequest-based API (Frame/Crop/Presentation split)
+export interface ImageLayoutBoxSpacing {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export interface ImageLayoutPageFrame {
+  width_in: number;
+  height_in: number;
+  dpi: number;
+  orientation?: 'portrait' | 'landscape';
+  margins_in: ImageLayoutBoxSpacing;
+}
+
+export interface ImageLayoutViewportFrame {
+  width: number;
+  height: number;
+}
+
+export interface ImageLayoutVec2 {
+  x: number;
+  y: number;
+}
+
+export interface ImageLayoutVec2Px {
+  x: number;
+  y: number;
+}
+
+export interface ImageLayoutFrameSpec {
+  mode: 'ratio' | 'page' | 'viewport';
+  ratio?: number | null;
+  fill?: 'contain' | 'cover';
+  page?: ImageLayoutPageFrame;
+  viewport?: ImageLayoutViewportFrame;
+  fit_axis?: 'width' | 'height' | 'auto';
+}
+
+export interface ImageLayoutCropSpec {
+  strategy: 'auto' | 'focus' | 'anchor' | 'manual';
+  ratio?: number | null;
+  zoom?: number;
+  extent?: number;
+  anchor?: string;
+  pan?: ImageLayoutVec2;
+  focus?: ImageLayoutFocusPoint | null;
+  units?: 'normalized' | 'px';
+}
+
+export interface ImageLayoutPresentationSpec {
+  user_scale?: number;
+  offset_px?: ImageLayoutVec2Px;
+  clamp_to_canvas?: boolean;
+}
+
+export interface ImageLayoutRequest {
+  frame: ImageLayoutFrameSpec;
+  crop: ImageLayoutCropSpec;
+  presentation: ImageLayoutPresentationSpec;
+  export: ImageLayoutExportOptions;
+}
+
 export interface ImageLayoutViewportSettings {
   mode?: 'page' | 'crop' | 'fit';
   paper_width_in: number;
@@ -98,7 +162,9 @@ export interface ImageLayoutTemplate {
   scope: 'global' | 'project';
   name: string;
   description?: string;
-  settings: ImageLayoutViewportSettings;
+  // During migration we accept either legacy viewport settings or the new layout request.
+  // New clients should send ImageLayoutRequest.
+  settings: ImageLayoutViewportSettings | ImageLayoutRequest;
   created_at: string;
   updated_at: string;
 }
@@ -122,7 +188,8 @@ export interface ImageLayoutTrace {
 }
 
 export interface ImageLayoutComputation {
-  settings: ImageLayoutViewportSettings;
+  layout?: ImageLayoutRequest;
+  settings?: ImageLayoutViewportSettings;
   result: ImageLayoutViewportResult;
   trace?: ImageLayoutTrace;
 }
@@ -134,7 +201,7 @@ export interface LaidOutImage {
   project_id: string;
   asset_id: string;
   template_id: string;
-  overrides?: Partial<ImageLayoutViewportSettings> | null;
+  overrides?: Partial<ImageLayoutRequest> | Partial<ImageLayoutViewportSettings> | null;
   result?: ImageLayoutComputation;
   created_at: string;
   updated_at: string;
@@ -714,7 +781,7 @@ export const api = createApi({
         projectId: string;
         assetId: string;
         templateId: string;
-        overrides?: Partial<ImageLayoutViewportSettings>;
+        overrides?: Partial<ImageLayoutRequest> | Partial<ImageLayoutViewportSettings>;
       }
     >({
       query: ({ projectId, assetId, templateId, overrides }) => ({
@@ -736,7 +803,7 @@ export const api = createApi({
       {
         id: string;
         templateId?: string;
-        overrides?: Partial<ImageLayoutViewportSettings>;
+        overrides?: Partial<ImageLayoutRequest> | Partial<ImageLayoutViewportSettings>;
       }
     >({
       query: ({ id, templateId, overrides }) => ({
