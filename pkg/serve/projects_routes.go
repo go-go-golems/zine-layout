@@ -107,11 +107,18 @@ func (s *Server) handleProjectRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		s.handleProjectLayoutTemplates(w, r, projectID)
 	case "image-layout":
-		if len(parts) != 3 || parts[2] != "preview" {
+		if len(parts) != 3 {
 			http.NotFound(w, r)
 			return
 		}
-		s.handleProjectLayoutPreview(w, r, projectID)
+		switch parts[2] {
+		case "preview":
+			s.handleProjectLayoutPreview(w, r, projectID)
+		case "render":
+			s.handleProjectLayoutRender(w, r, projectID)
+		default:
+			http.NotFound(w, r)
+		}
 	case "laid-out-images":
 		if len(parts) != 2 {
 			http.NotFound(w, r)

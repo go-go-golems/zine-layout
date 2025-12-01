@@ -12,18 +12,19 @@ import {
   useDeleteLaidOutImageMutation,
   useGetImageSequencesQuery,
   usePreviewLayoutRequestMutation,
+  useRenderLayoutRequestMutation,
+  type ImageLayoutComputation,
+  type ImageLayoutCropSpec,
+  type ImageLayoutFrameSpec,
+  type ImageLayoutPresentationSpec,
+  type ImageLayoutRequest,
   type ImageLayoutTemplate,
   type LaidOutImage,
-  type ImageLayoutRequest,
-  type ImageLayoutFrameSpec,
-  type ImageLayoutCropSpec,
-  type ImageLayoutPresentationSpec,
   type Asset,
-  type ImageLayoutComputation,
 } from "../../api";
 import { Button, Card, CardBody, CardHeader, Input } from "../../components/ui";
 import { SliderInput } from "../../components/SliderInput";
-import { AnchorGrid } from "../../components/AnchorGrid";
+import { ImageLayoutCropControls } from "../../components/ImageLayoutCropControls";
 
 interface ImageLayoutsTabProps {
   projectId: string;
@@ -132,6 +133,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
   const [userScale, setUserScale] = useState(1);
   const [offsetX, setOffsetX] = useState(0);
   const [offsetY, setOffsetY] = useState(0);
+  const [clampToCanvas, setClampToCanvas] = useState(false);
 
   // Laid-Out Images State
   const [selectedLaidOutId, setSelectedLaidOutId] = useState<string | null>(
@@ -200,7 +202,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
       presentation: {
         user_scale: userScale,
         offset_px: { x: offsetX, y: offsetY },
-        clamp_to_canvas: false,
+        clamp_to_canvas: clampToCanvas,
       },
       export: {
         format: "png",
@@ -232,14 +234,20 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
     userScale,
     offsetX,
     offsetY,
+    clampToCanvas,
   ]);
 
   const [triggerPreviewLayout, { isLoading: isPreviewLoading }] =
     usePreviewLayoutRequestMutation();
+  const [triggerRenderLayout, { isLoading: isRenderLoading }] =
+    useRenderLayoutRequestMutation();
   const [previewResult, setPreviewResult] =
     useState<ImageLayoutComputation | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const previewDebounceRef = useRef<number | null>(null);
+  const [renderUrl, setRenderUrl] = useState<string | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [showCompare, setShowCompare] = useState(false);
 
   const previewCanvas = previewResult?.result?.canvas_rect;
   const previewTarget = previewResult?.result?.target_rect;
@@ -334,6 +342,14 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
     triggerPreviewLayout,
   ]);
 
+  useEffect(() => {
+    return () => {
+      if (renderUrl) {
+        URL.revokeObjectURL(renderUrl);
+      }
+    };
+  }, [renderUrl]);
+
   const resetForm = () => {
     setTemplateName("");
     setTemplateDescription("");
@@ -360,6 +376,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
     setUserScale(1);
     setOffsetX(0);
     setOffsetY(0);
+    setClampToCanvas(false);
   };
 
   const loadTemplateIntoForm = (template: ImageLayoutTemplate) => {
@@ -418,6 +435,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
       setUserScale(presentation.user_scale ?? 1);
       setOffsetX(presentation.offset_px?.x ?? 0);
       setOffsetY(presentation.offset_px?.y ?? 0);
+      setClampToCanvas(presentation.clamp_to_canvas ?? false);
       return;
     }
 
@@ -436,6 +454,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
     setPanX(settings.position_x ?? 0);
     setPanY(settings.position_y ?? 0);
     setAnchorPreset(settings.anchor_preset ?? "center");
+    setClampToCanvas(false);
 
     const allEqual =
       settings.margin_top_in === settings.margin_right_in &&
@@ -460,6 +479,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
     setZoom(1);
     setOffsetX(0);
     setOffsetY(0);
+    setClampToCanvas(false);
   };
 
   const buildLayoutFromForm = (): ImageLayoutRequest => currentLayout;
@@ -528,8 +548,33 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
     }
   };
 
+  const handleRender = async () => {
+    if (!previewAsset) {
+      setRenderError("Select an asset to render");
+      return;
+    }
+    setRenderError(null);
+    try {
+      const blob = await triggerRenderLayout({
+        projectId,
+        layout: currentLayout,
+        assetId: previewAsset.id,
+      }).unwrap();
+      if (renderUrl) {
+        URL.revokeObjectURL(renderUrl);
+      }
+      const url = URL.createObjectURL(blob);
+      setRenderUrl(url);
+    } catch (err) {
+      const msg =
+        (err as any)?.data?.error ?? (err as any)?.error ?? "Render failed";
+      setRenderError(typeof msg === "string" ? msg : "Render failed");
+    }
+  };
+
   return (
-    <div className="space-y-8">
+    <>
+      <div className="space-y-8">
       {/* ═══ SECTION 1: Template Library ═══ */}
       <div>
         <div className="flex items-center justify-between mb-6">
@@ -907,98 +952,30 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
                           ))}
                         </select>
                       </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Crop Strategy
-                        </label>
-                        <select
-                          value={cropStrategy}
-                          onChange={(e) =>
-                            setCropStrategy(
-                              e.target.value as
-                                | "auto"
-                                | "anchor"
-                                | "focus"
-                                | "manual",
-                            )
-                          }
-                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                        >
-                          <option value="auto">Auto center</option>
-                          <option value="anchor">Anchor preset</option>
-                          <option value="manual">Manual pan</option>
-                        </select>
-                      </div>
                     </div>
 
                     <hr className="border-gray-200" />
 
-                    {/* Crop Position & Presentation */}
-                    <div className="space-y-4">
-                      <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                        Position & Presentation
-                      </h4>
-
-                      {cropStrategy === "anchor" && (
-                        <AnchorGrid
-                          value={anchorPreset}
-                          onChange={setAnchorPreset}
-                        />
-                      )}
-
-                      {cropStrategy === "manual" && (
-                        <div className="grid grid-cols-2 gap-3">
-                          <SliderInput
-                            label="Pan X"
-                            value={panX}
-                            onChange={setPanX}
-                            min={-1}
-                            max={1}
-                            step={0.01}
-                            unit="norm"
-                          />
-                          <SliderInput
-                            label="Pan Y"
-                            value={panY}
-                            onChange={setPanY}
-                            min={-1}
-                            max={1}
-                            step={0.01}
-                            unit="norm"
-                          />
-                        </div>
-                      )}
-
-                      <SliderInput
-                        label="User Scale"
-                        value={userScale}
-                        onChange={setUserScale}
-                        min={0.5}
-                        max={2}
-                        step={0.05}
-                        unit="×"
-                      />
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <Input
-                          label="Offset X (px)"
-                          type="number"
-                          value={offsetX}
-                          onChange={(e) =>
-                            setOffsetX(parseFloat(e.target.value) || 0)
-                          }
-                        />
-                        <Input
-                          label="Offset Y (px)"
-                          type="number"
-                          value={offsetY}
-                          onChange={(e) =>
-                            setOffsetY(parseFloat(e.target.value) || 0)
-                          }
-                        />
-                      </div>
-                    </div>
+                    <ImageLayoutCropControls
+                      cropStrategy={cropStrategy}
+                      setCropStrategy={setCropStrategy}
+                      anchorPreset={anchorPreset}
+                      setAnchorPreset={setAnchorPreset}
+                      panX={panX}
+                      setPanX={setPanX}
+                      panY={panY}
+                      setPanY={setPanY}
+                      zoom={zoom}
+                      setZoom={setZoom}
+                      userScale={userScale}
+                      setUserScale={setUserScale}
+                      offsetX={offsetX}
+                      setOffsetX={setOffsetX}
+                      offsetY={offsetY}
+                      setOffsetY={setOffsetY}
+                      clampToCanvas={clampToCanvas}
+                      setClampToCanvas={setClampToCanvas}
+                    />
 
                     {/* Submit Buttons */}
                     <div className="flex justify-end space-x-3 pt-4">
@@ -1046,7 +1023,7 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
                           <div className="flex items-center justify-between text-xs text-gray-500">
                             <span>Backend preview updates as you edit.</span>
                             {isPreviewLoading && (
-                            <span className="text-primary-600 animate-pulse">
+                              <span className="text-primary-600 animate-pulse">
                                 Computing...
                               </span>
                             )}
@@ -1055,6 +1032,11 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
                           {previewError && (
                             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                               {previewError}
+                            </div>
+                          )}
+                          {renderError && (
+                            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                              {renderError}
                             </div>
                           )}
 
@@ -1131,6 +1113,36 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
                                   Scale: {previewResult.result.scale.toFixed(3)}× (
                                   {previewResult.result.mode})
                                 </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between pt-2">
+                            <div className="space-x-2">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={handleRender}
+                                disabled={isRenderLoading}
+                              >
+                                {isRenderLoading ? "Rendering..." : "Render backend image"}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setShowCompare(true)}
+                                disabled={!renderUrl || !previewResult}
+                              >
+                                Open Compare
+                              </Button>
+                            </div>
+                            {renderUrl && (
+                              <div className="flex items-center space-x-2 text-xs text-gray-600">
+                                <span>Rendered:</span>
+                                <img
+                                  src={renderUrl}
+                                  alt="Rendered thumbnail"
+                                  className="h-12 w-12 object-contain border border-gray-200 rounded"
+                                />
                               </div>
                             )}
                           </div>
@@ -1418,6 +1430,78 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({
           )}
         </div>
       </div>
-    </div>
+      {showCompare && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-6xl w-full p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Compare Preview vs Render</h3>
+              <Button variant="secondary" onClick={() => setShowCompare(false)}>
+                Close
+              </Button>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="border rounded-lg p-3 bg-gray-50">
+                <p className="text-sm font-medium mb-2">Preview (geometry)</p>
+                {previewResult && previewCanvas && previewTarget && previewImagePlacement ? (
+                  <div
+                    className="relative bg-white border border-gray-300"
+                    style={{
+                      width: `${previewCanvas.w * previewCanvasScale}px`,
+                      height: `${previewCanvas.h * previewCanvasScale}px`,
+                    }}
+                  >
+                    <div
+                      className="absolute border-2 border-primary-500/80 bg-primary-100/60 overflow-hidden shadow-inner"
+                      style={{
+                        left: `${previewImagePlacement.targetLeft}px`,
+                        top: `${previewImagePlacement.targetTop}px`,
+                        width: `${previewImagePlacement.targetWidth}px`,
+                        height: `${previewImagePlacement.targetHeight}px`,
+                      }}
+                    >
+                      {previewAsset && (
+                        <img
+                          src={
+                            previewAsset.url ??
+                            `/projects/${projectId}/images/${previewAsset.filename}`
+                          }
+                          alt={previewAsset?.filename}
+                          className="pointer-events-none select-none"
+                          style={{
+                            position: "absolute",
+                            width: `${previewImagePlacement.imgWidth}px`,
+                            height: `${previewImagePlacement.imgHeight}px`,
+                            left: `${previewImagePlacement.offsetX}px`,
+                            top: `${previewImagePlacement.offsetY}px`,
+                          }}
+                        />
+                      )}
+                    </div>
+                    <div className="absolute inset-0 border border-dashed border-gray-300 pointer-events-none" />
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500">Preview not available.</div>
+                )}
+              </div>
+              <div className="border rounded-lg p-3 bg-gray-50">
+                <p className="text-sm font-medium mb-2">Render (backend)</p>
+                {renderUrl ? (
+                  <img
+                    src={renderUrl}
+                    alt="Rendered"
+                    className="w-full h-auto border border-gray-300 rounded"
+                  />
+                ) : (
+                  <div className="text-sm text-gray-500">Render not available.</div>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">
+              Compare alignment, scale, and clipping. If mismatched, check DPI, margins, and crop.
+            </p>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
