@@ -14,12 +14,11 @@ func almostEqual(a, b float64) bool {
 	return math.Abs(a-b) <= eps
 }
 
-func TestComputeViewportContain(t *testing.T) {
+func TestComputeViewportCover(t *testing.T) {
 	req := imagelayout.DefaultLayoutRequest()
 	r := 4.0 / 3.0
 	req.Frame.Mode = "ratio"
 	req.Frame.Ratio = &r
-	req.Frame.Fill = "contain"
 
 	meta := imagelayout.ImageMeta{Width: 4000, Height: 3000}
 	inputs, err := InputsFromRequest(req, meta)
@@ -28,9 +27,6 @@ func TestComputeViewportContain(t *testing.T) {
 	}
 
 	result, trace := ComputeViewport(inputs)
-	if result.Mode != "contain" {
-		t.Fatalf("expected mode contain, got %s", result.Mode)
-	}
 	if !almostEqual(result.CanvasRect.W, 4000) || !almostEqual(result.CanvasRect.H, 3000) {
 		t.Fatalf("unexpected canvas size %fx%f", result.CanvasRect.W, result.CanvasRect.H)
 	}
@@ -68,7 +64,6 @@ func TestComputeViewportWithCropRatio(t *testing.T) {
 func TestComputeViewportCoverMode(t *testing.T) {
 	req := imagelayout.DefaultLayoutRequest()
 	req.Frame.Mode = "ratio"
-	req.Frame.Fill = "cover"
 	val := 16.0 / 9.0
 	req.Frame.Ratio = &val
 
@@ -79,9 +74,6 @@ func TestComputeViewportCoverMode(t *testing.T) {
 	}
 
 	result, _ := ComputeViewport(inputs)
-	if result.Mode != "cover" {
-		t.Fatalf("expected cover mode, got %s", result.Mode)
-	}
 	if result.Scale <= 0 {
 		t.Fatalf("expected positive scale, got %f", result.Scale)
 	}

@@ -89,10 +89,8 @@ export interface ImageLayoutVec2 {
 export interface ImageLayoutFrameSpec {
   mode: 'ratio' | 'page' | 'viewport';
   ratio?: number | null;
-  fill?: 'contain' | 'cover';
   page?: ImageLayoutPageFrame;
   viewport?: ImageLayoutViewportFrame;
-  fit_axis?: 'width' | 'height' | 'auto';
 }
 
 export interface ImageLayoutCropSpec {
@@ -128,7 +126,6 @@ export interface ImageLayoutViewportResult {
   target_rect: ImageLayoutRect;
   canvas_rect: ImageLayoutRect;
   scale: number;
-  mode: 'cover' | 'contain' | string;
 }
 
 export interface ImageLayoutTraceStep {

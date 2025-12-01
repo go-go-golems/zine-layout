@@ -31,7 +31,6 @@ export type PaperSizeKey = keyof typeof PAPER_SIZES;
 export type AspectRatioKey = keyof typeof ASPECT_RATIOS;
 
 type Orientation = "portrait" | "landscape";
-type FillMode = "contain" | "cover";
 
 export interface FrameState {
   paperSize: PaperSizeKey;
@@ -42,7 +41,6 @@ export interface FrameState {
   uniformMargins: boolean;
   marginAll: number;
   margins: { top: number; right: number; bottom: number; left: number };
-  fillMode: FillMode;
   aspectRatio: AspectRatioKey;
 }
 
@@ -89,7 +87,6 @@ const initialFrameState = (): FrameState => ({
   uniformMargins: true,
   marginAll: 0.5,
   margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },
-  fillMode: "cover",
   aspectRatio: "None",
 });
 
@@ -122,7 +119,7 @@ const initialState = (): ImageLayoutsEditorState => ({
   meta: initialMetaState(),
   frame: initialFrameState(),
   crop: initialCropState(),
-    preview: initialPreviewState(),
+  preview: initialPreviewState(),
 });
 
 const aspectRatioFromValue = (value: number | null): AspectRatioKey => {
@@ -138,7 +135,6 @@ const buildLayoutFromState = (state: ImageLayoutsEditorState): ImageLayoutReques
   return {
     frame: {
       mode: "page",
-      fill: state.frame.fillMode,
       ratio: ratio ?? undefined,
       page: {
         width_in: state.frame.paperWidth,
@@ -281,7 +277,6 @@ const imageLayoutsEditorSlice = createSlice({
             next.frame.marginAll = next.frame.margins.top;
           }
         }
-        next.frame.fillMode = frame.fill ?? next.frame.fillMode;
         next.frame.aspectRatio = aspectRatioFromValue(frame.ratio ?? null);
 
         next.crop.strategy = crop.strategy ?? next.crop.strategy;
@@ -313,7 +308,6 @@ const imageLayoutsEditorSlice = createSlice({
       if (allEqual) {
         next.frame.marginAll = next.frame.margins.top;
       }
-      next.frame.fillMode = legacy.crop_to_fill ? "cover" : "contain";
       next.frame.aspectRatio = aspectRatioFromValue(legacy.crop_ratio ?? null);
 
       next.crop.strategy = "auto";
@@ -379,9 +373,6 @@ const imageLayoutsEditorSlice = createSlice({
     },
     setMarginLeft(state, action: PayloadAction<number>) {
       state.frame.margins.left = action.payload;
-    },
-    setFillMode(state, action: PayloadAction<FillMode>) {
-      state.frame.fillMode = action.payload;
     },
     setAspectRatio(state, action: PayloadAction<AspectRatioKey>) {
       state.frame.aspectRatio = action.payload;
@@ -458,7 +449,6 @@ export const {
   setMarginRight,
   setMarginBottom,
   setMarginLeft,
-  setFillMode,
   setAspectRatio,
   setCropStrategy,
   setCropRatio,

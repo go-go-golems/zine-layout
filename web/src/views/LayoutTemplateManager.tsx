@@ -25,7 +25,6 @@ const prettyJSON = (value: unknown) => {
 const DEFAULT_TEMPLATE_JSON = `{
   "frame": {
     "mode": "page",
-    "fill": "cover",
     "page": {
       "width_in": 8,
       "height_in": 10,

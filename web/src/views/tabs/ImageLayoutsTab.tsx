@@ -32,7 +32,6 @@ import {
   setCompareOpen,
   setCropStrategy,
   setDpi,
-  setFillMode,
   setIsGlobal,
   setMarginAll,
   setMarginBottom,
@@ -454,7 +453,6 @@ export const ImageLayoutsTab: React.FC<ImageLayoutsTabProps> = ({ projectId }) =
                         onMarginRightChange={(val) => dispatch(setMarginRight(val))}
                         onMarginBottomChange={(val) => dispatch(setMarginBottom(val))}
                         onMarginLeftChange={(val) => dispatch(setMarginLeft(val))}
-                        onFillModeChange={(val) => dispatch(setFillMode(val))}
                         onAspectRatioChange={(val) => dispatch(setAspectRatio(val))}
                       />
 

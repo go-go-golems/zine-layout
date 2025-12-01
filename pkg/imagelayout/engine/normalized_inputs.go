@@ -34,14 +34,13 @@ type FrameInputs struct {
 
 // CropInputs captures the normalized crop configuration.
 type CropInputs struct {
-	Ratio      *float64
-	CropToFill bool
-	Zoom       float64
-	Extent     float64
-	Units      string
-	PanX       float64
-	PanY       float64
-	Focus      *imagelayout.FocusPoint
+	Ratio  *float64
+	Zoom   float64
+	Extent float64
+	Units  string
+	PanX   float64
+	PanY   float64
+	Focus  *imagelayout.FocusPoint
 }
 
 // MarginPixels describes resolved margin sizes (in pixels).

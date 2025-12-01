@@ -124,8 +124,6 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 		cropRatio = &value
 	}
 
-	cropToFill := strings.ToLower(normalized.Frame.Fill) == "cover"
-
 	posX, posY := resolveCropPosition(normalized.Crop)
 
 	cropZoom := normalized.Crop.Zoom
@@ -180,14 +178,13 @@ func InputsFromRequest(req imagelayout.LayoutRequest, meta imagelayout.ImageMeta
 			Margins:     margins,
 		},
 		Crop: CropInputs{
-			Ratio:      cropRatio,
-			CropToFill: cropToFill,
-			Zoom:       cropZoom,
-			Extent:     cropExtent,
-			Units:      cropUnits,
-			PanX:       posX,
-			PanY:       posY,
-			Focus:      normalized.Crop.Focus,
+			Ratio:  cropRatio,
+			Zoom:   cropZoom,
+			Extent: cropExtent,
+			Units:  cropUnits,
+			PanX:   posX,
+			PanY:   posY,
+			Focus:  normalized.Crop.Focus,
 		},
 	}
 
@@ -240,18 +237,12 @@ func normalizeLayoutRequest(req imagelayout.LayoutRequest) imagelayout.LayoutReq
 	if req.Frame.Ratio != nil {
 		out.Frame.Ratio = req.Frame.Ratio
 	}
-	if req.Frame.Fill != "" {
-		out.Frame.Fill = req.Frame.Fill
-	}
 	if req.Frame.Page != nil {
 		out.Frame.Page = clonePageFrame(*req.Frame.Page)
 	}
 	if req.Frame.Viewport != nil {
 		vp := *req.Frame.Viewport
 		out.Frame.Viewport = &vp
-	}
-	if req.Frame.FitAxis != "" {
-		out.Frame.FitAxis = req.Frame.FitAxis
 	}
 
 	// Crop overrides

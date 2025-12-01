@@ -32,7 +32,6 @@ describe("imageLayoutsEditorSlice", () => {
       settings: {
         frame: {
           mode: "page",
-          fill: "contain",
           ratio: 1,
           page: {
             width_in: 5,

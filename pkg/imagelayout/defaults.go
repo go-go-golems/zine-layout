@@ -6,7 +6,6 @@ func DefaultLayoutRequest() LayoutRequest {
 		Frame: FrameSpec{
 			Mode:  "ratio",
 			Ratio: func() *float64 { v := 4.0 / 3.0; return &v }(),
-			Fill:  "contain",
 		},
 		Crop: CropSpec{
 			Strategy: "auto",

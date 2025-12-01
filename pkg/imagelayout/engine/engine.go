@@ -27,14 +27,13 @@ func ComputeViewport(inp NormalizedInputs) (imagelayout.ViewportResult, *imagela
 				"margins_px":  inp.Frame.Margins,
 			},
 			"crop": map[string]interface{}{
-				"ratio":        pointerValue(inp.Crop.Ratio),
-				"crop_to_fill": inp.Crop.CropToFill,
-				"zoom":         inp.Crop.Zoom,
-				"extent":       inp.Crop.Extent,
-				"units":        inp.Crop.Units,
-				"pan_x":        inp.Crop.PanX,
-				"pan_y":        inp.Crop.PanY,
-				"focus":        inp.Crop.Focus,
+				"ratio":  pointerValue(inp.Crop.Ratio),
+				"zoom":   inp.Crop.Zoom,
+				"extent": inp.Crop.Extent,
+				"units":  inp.Crop.Units,
+				"pan_x":  inp.Crop.PanX,
+				"pan_y":  inp.Crop.PanY,
+				"focus":  inp.Crop.Focus,
 			},
 		},
 	}
@@ -53,7 +52,7 @@ func ComputeViewport(inp NormalizedInputs) (imagelayout.ViewportResult, *imagela
 	sourceRect, cropStep := resolveCrop(inp.Source, inp.Crop, requestedRatio, sourceRatio)
 	addStep("crop", cropStep)
 
-	targetRect, mode, scale, scaleStep := composeTarget(inp.Crop, contentRect, sourceRect)
+	targetRect, scale, scaleStep := composeTarget(contentRect, sourceRect)
 	addStep("scale", scaleStep)
 
 	result := imagelayout.ViewportResult{
@@ -61,7 +60,6 @@ func ComputeViewport(inp NormalizedInputs) (imagelayout.ViewportResult, *imagela
 		TargetRect: targetRect,
 		CanvasRect: canvasRect,
 		Scale:      scale,
-		Mode:       mode,
 	}
 
 	addStep("result", map[string]interface{}{
@@ -87,7 +85,7 @@ func determineRequestedRatio(crop CropInputs, targetRatio, sourceRatio float64) 
 	if crop.Ratio != nil && *crop.Ratio > 0 {
 		return *crop.Ratio
 	}
-	if crop.CropToFill && targetRatio > 0 {
+	if targetRatio > 0 {
 		return targetRatio
 	}
 	return sourceRatio
@@ -174,19 +172,14 @@ func computeCropScale(extent, zoom float64) float64 {
 	return scale
 }
 
-func composeTarget(crop CropInputs, contentRect, sourceRect imagelayout.Rect) (imagelayout.Rect, string, float64, map[string]interface{}) {
+func composeTarget(contentRect, sourceRect imagelayout.Rect) (imagelayout.Rect, float64, map[string]interface{}) {
 	targetW := contentRect.W
 	targetH := contentRect.H
 
 	scaleX := safeDiv(targetW, sourceRect.W)
 	scaleY := safeDiv(targetH, sourceRect.H)
 
-	mode := "contain"
-	scale := math.Min(scaleX, scaleY)
-	if crop.CropToFill {
-		mode = "cover"
-		scale = math.Max(scaleX, scaleY)
-	}
+	scale := math.Max(scaleX, scaleY)
 
 	dstW := sourceRect.W * scale
 	dstH := sourceRect.H * scale
@@ -202,12 +195,11 @@ func composeTarget(crop CropInputs, contentRect, sourceRect imagelayout.Rect) (i
 		"scale_x": scaleX,
 		"scale_y": scaleY,
 		"final":   scale,
-		"mode":    mode,
 		"dst_w":   dstW,
 		"dst_h":   dstH,
 	}
 
-	return targetRect, mode, scale, data
+	return targetRect, scale, data
 }
 
 func safeDiv(a, b float64) float64 {

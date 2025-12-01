@@ -235,10 +235,7 @@ export const ImageLayoutPreviewPanel: React.FC<ImageLayoutPreviewPanelProps> = (
                       Source: {Math.round(previewResult.result.source_rect.w)} ×{" "}
                       {Math.round(previewResult.result.source_rect.h)} px
                     </span>
-                    <span>
-                      Scale: {previewResult.result.scale.toFixed(3)}× (
-                      {previewResult.result.mode})
-                    </span>
+                    <span>Scale: {previewResult.result.scale.toFixed(3)}×</span>
                   </div>
                 )}
               </div>

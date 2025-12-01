@@ -71,38 +71,23 @@ type specDocument struct {
 func main() {
 	scenarios := []scenario{
 		{
-			ID:          "page-contain",
-			Name:        "Page / Contain",
-			Description: "Default page mode with contain behaviour inside the printable area.",
+			ID:          "page-default",
+			Name:        "Page / Default Cover",
+			Description: "Page mode with cover cropping inside the printable area.",
 			BuildLayout: func(_ sizeSpec) imagelayout.LayoutRequest {
 				layout := imagelayout.DefaultLayoutRequest()
 				layout.Frame.Mode = "page"
-				layout.Frame.Fill = "contain"
 				layout.Frame.Page = &imagelayout.PageFrame{
 					WidthIn:     8.5,
 					HeightIn:    11,
 					DPI:         300,
 					Orientation: "portrait",
-					MarginsIn:   layout.Frame.Page.MarginsIn,
-				}
-				layout.Crop.Strategy = "auto"
-				return layout
-			},
-		},
-		{
-			ID:          "page-cover",
-			Name:        "Page / Cover",
-			Description: "Page mode forcing cover scaling inside the printable area.",
-			BuildLayout: func(_ sizeSpec) imagelayout.LayoutRequest {
-				layout := imagelayout.DefaultLayoutRequest()
-				layout.Frame.Mode = "page"
-				layout.Frame.Fill = "cover"
-				layout.Frame.Page = &imagelayout.PageFrame{
-					WidthIn:     8.5,
-					HeightIn:    11,
-					DPI:         300,
-					Orientation: "portrait",
-					MarginsIn:   layout.Frame.Page.MarginsIn,
+					MarginsIn: imagelayout.BoxSpacing{
+						Top:    0.25,
+						Right:  0.25,
+						Bottom: 0.25,
+						Left:   0.25,
+					},
 				}
 				layout.Crop.Strategy = "auto"
 				return layout
@@ -115,13 +100,17 @@ func main() {
 			BuildLayout: func(_ sizeSpec) imagelayout.LayoutRequest {
 				layout := imagelayout.DefaultLayoutRequest()
 				layout.Frame.Mode = "page"
-				layout.Frame.Fill = "contain"
 				layout.Frame.Page = &imagelayout.PageFrame{
 					WidthIn:     8.5,
 					HeightIn:    11,
 					DPI:         200,
 					Orientation: "landscape",
-					MarginsIn:   layout.Frame.Page.MarginsIn,
+					MarginsIn: imagelayout.BoxSpacing{
+						Top:    0.25,
+						Right:  0.25,
+						Bottom: 0.25,
+						Left:   0.25,
+					},
 				}
 				layout.Crop.Strategy = "anchor"
 				layout.Crop.Anchor = "top-left"
@@ -137,7 +126,6 @@ func main() {
 				ratio := 1.5
 				layout.Frame.Mode = "ratio"
 				layout.Frame.Ratio = &ratio
-				layout.Frame.Fill = "cover"
 				layout.Crop.Strategy = "auto"
 				return layout
 			},
@@ -151,7 +139,6 @@ func main() {
 				layout.Frame.Mode = "ratio"
 				ratio := 1600.0 / 900.0
 				layout.Frame.Ratio = &ratio
-				layout.Frame.Fill = "contain"
 				layout.Crop.Strategy = "auto"
 				return layout
 			},
@@ -167,7 +154,6 @@ func main() {
 					Width:  1200,
 					Height: 0,
 				}
-				layout.Frame.FitAxis = "width"
 				return layout
 			},
 		},
@@ -182,7 +168,6 @@ func main() {
 					Width:  0,
 					Height: 900,
 				}
-				layout.Frame.FitAxis = "height"
 				return layout
 			},
 		},
@@ -197,7 +182,6 @@ func main() {
 					Width:  1400,
 					Height: 700,
 				}
-				layout.Frame.FitAxis = "auto"
 				return layout
 			},
 		},

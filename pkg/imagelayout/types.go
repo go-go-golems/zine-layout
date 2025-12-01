@@ -26,19 +26,17 @@ type ExportOptions struct {
 // LayoutRequest separates frame, crop, and presentation concerns for the
 // refactored imagelayout pipeline.
 type LayoutRequest struct {
-	Frame        FrameSpec        `json:"frame"`
-	Crop         CropSpec         `json:"crop"`
-	Export       ExportOptions    `json:"export"`
+	Frame  FrameSpec     `json:"frame"`
+	Crop   CropSpec      `json:"crop"`
+	Export ExportOptions `json:"export"`
 }
 
 // FrameSpec defines the destination box or aspect ratio before cropping.
 type FrameSpec struct {
 	Mode     string         `json:"mode"` // ratio | page | viewport
 	Ratio    *float64       `json:"ratio,omitempty"`
-	Fill     string         `json:"fill,omitempty"` // contain | cover
 	Page     *PageFrame     `json:"page,omitempty"`
 	Viewport *ViewportFrame `json:"viewport,omitempty"`
-	FitAxis  string         `json:"fit_axis,omitempty"` // width | height | auto
 }
 
 // PageFrame captures physical media dimensions and margins (in inches).
@@ -96,7 +94,6 @@ type ViewportResult struct {
 	TargetRect Rect    `json:"target_rect"`
 	CanvasRect Rect    `json:"canvas_rect"`
 	Scale      float64 `json:"scale"`
-	Mode       string  `json:"mode"` // cover|contain
 }
 
 // TraceStep captures intermediate calculations for debugging.

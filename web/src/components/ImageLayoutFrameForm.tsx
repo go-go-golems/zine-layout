@@ -22,7 +22,6 @@ interface ImageLayoutFrameFormProps {
   onMarginRightChange: (value: number) => void;
   onMarginBottomChange: (value: number) => void;
   onMarginLeftChange: (value: number) => void;
-  onFillModeChange: (value: FrameState["fillMode"]) => void;
   onAspectRatioChange: (value: AspectRatioKey) => void;
 }
 
@@ -39,7 +38,6 @@ export const ImageLayoutFrameForm: React.FC<ImageLayoutFrameFormProps> = ({
   onMarginRightChange,
   onMarginBottomChange,
   onMarginLeftChange,
-  onFillModeChange,
   onAspectRatioChange,
 }) => {
   return (
@@ -214,35 +212,9 @@ export const ImageLayoutFrameForm: React.FC<ImageLayoutFrameFormProps> = ({
           Frame & Crop
         </h4>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Fill Mode
-          </label>
-          <div className="space-y-2">
-            <label className="flex items-center space-x-2">
-              <input
-                type="radio"
-                checked={frame.fillMode === "cover"}
-                onChange={() => onFillModeChange("cover")}
-                className="text-primary-600 focus:ring-primary-500"
-              />
-              <span className="text-sm text-gray-700">
-                Fill (cover) - Crop to fill entire canvas
-              </span>
-            </label>
-            <label className="flex items-center space-x-2">
-              <input
-                type="radio"
-                checked={frame.fillMode === "contain"}
-                onChange={() => onFillModeChange("contain")}
-                className="text-primary-600 focus:ring-primary-500"
-              />
-              <span className="text-sm text-gray-700">
-                Fit (contain) - Show entire image with letterboxing
-              </span>
-            </label>
-          </div>
-        </div>
+        <p className="text-sm text-gray-600">
+          Cropping is always cover-first: the image is cropped to the target aspect ratio so it fills the frame.
+        </p>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
