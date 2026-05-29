@@ -38,7 +38,7 @@ func drawBorder(img *image.RGBA, rect image.Rectangle, c color.Color, borderType
 // the given rectangle, color and type. This allows other packages to reuse
 // the border rendering primitives without duplicating logic.
 func DrawBorder(img *image.RGBA, rect image.Rectangle, c color.Color, borderType BorderType) {
-    drawBorder(img, rect, c, borderType)
+	drawBorder(img, rect, c, borderType)
 }
 
 func drawPlainBorder(img *image.RGBA, rect image.Rectangle, c color.Color) {

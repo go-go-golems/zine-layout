@@ -44,7 +44,7 @@ func (c *imageSequencesUpdateCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	sequence, err := repos.ImageSequences.Get(settings.SequenceID)
 	if err != nil {

@@ -57,7 +57,7 @@ func (c *pageTemplatesCreateCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tpl := &repo.PageTemplate{
 		Name:         strings.TrimSpace(settings.Name),

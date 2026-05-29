@@ -42,7 +42,7 @@ func (c *laidOutPagesGetCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	service := services.NewPagesService(repos)
 	page, err := service.GetPage(settings.PageID)

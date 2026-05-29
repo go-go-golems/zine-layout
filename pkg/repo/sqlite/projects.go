@@ -81,7 +81,7 @@ func (r *projectRepo) List() ([]*repo.Project, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list projects: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var projects []*repo.Project
 	for rows.Next() {

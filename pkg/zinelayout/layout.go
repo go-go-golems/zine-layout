@@ -58,41 +58,49 @@ type Position struct {
 }
 
 func (zl *ZineLayout) CreateOutputImage(outputPage *OutputPage, inputImages []image.Image) (image.Image, error) {
-    if zl == nil || outputPage == nil {
-        return nil, fmt.Errorf("invalid layout or page")
-    }
-    if len(inputImages) == 0 {
-        return nil, fmt.Errorf("no input images provided")
-    }
-    // Ensure required structs and sane defaults
-    if zl.Global == nil {
-        zl.Global = &Global{PPI: 300}
-    }
-    if zl.Global.PPI == 0 {
-        zl.Global.PPI = 300
-    }
-    if zl.PageSetup == nil {
-        zl.PageSetup = &PageSetup{}
-    }
+	if zl == nil || outputPage == nil {
+		return nil, fmt.Errorf("invalid layout or page")
+	}
+	if len(inputImages) == 0 {
+		return nil, fmt.Errorf("no input images provided")
+	}
+	// Ensure required structs and sane defaults
+	if zl.Global == nil {
+		zl.Global = &Global{PPI: 300}
+	}
+	if zl.Global.PPI == 0 {
+		zl.Global.PPI = 300
+	}
+	if zl.PageSetup == nil {
+		zl.PageSetup = &PageSetup{}
+	}
 
-    // Determine grid size; if not set, derive from layout positions
-    rows := zl.PageSetup.GridSize.Rows
-    cols := zl.PageSetup.GridSize.Columns
-    maxRow, maxCol := 0, 0
-    for _, l := range outputPage.Layout {
-        if l.Position.Row > maxRow { maxRow = l.Position.Row }
-        if l.Position.Column > maxCol { maxCol = l.Position.Column }
-    }
-    if rows <= 0 || rows <= maxRow { rows = maxRow + 1 }
-    if cols <= 0 || cols <= maxCol { cols = maxCol + 1 }
-    zl.PageSetup.GridSize.Rows = rows
-    zl.PageSetup.GridSize.Columns = cols
+	// Determine grid size; if not set, derive from layout positions
+	rows := zl.PageSetup.GridSize.Rows
+	cols := zl.PageSetup.GridSize.Columns
+	maxRow, maxCol := 0, 0
+	for _, l := range outputPage.Layout {
+		if l.Position.Row > maxRow {
+			maxRow = l.Position.Row
+		}
+		if l.Position.Column > maxCol {
+			maxCol = l.Position.Column
+		}
+	}
+	if rows <= 0 || rows <= maxRow {
+		rows = maxRow + 1
+	}
+	if cols <= 0 || cols <= maxCol {
+		cols = maxCol + 1
+	}
+	zl.PageSetup.GridSize.Rows = rows
+	zl.PageSetup.GridSize.Columns = cols
 
-    // Compute margins (creates defaults when nil)
-    err := zl.ComputeAllMargins()
-    if err != nil {
-        return nil, fmt.Errorf("error computing all margins: %w", err)
-    }
+	// Compute margins (creates defaults when nil)
+	err := zl.ComputeAllMargins()
+	if err != nil {
+		return nil, fmt.Errorf("error computing all margins: %w", err)
+	}
 
 	fmt.Println("Creating output image")
 	for _, inputImage := range inputImages {
@@ -109,25 +117,27 @@ func (zl *ZineLayout) CreateOutputImage(outputPage *OutputPage, inputImages []im
 	}
 
 	// Create a 2D array to store CellSize for each cell
-    cells := make([][]CellSize, zl.PageSetup.GridSize.Rows)
-    for row := range cells {
-        cells[row] = make([]CellSize, zl.PageSetup.GridSize.Columns)
-        for column := range cells[row] {
-            cells[row][column] = CellSize{Margin: &Margin{}}
-        }
-    }
+	cells := make([][]CellSize, zl.PageSetup.GridSize.Rows)
+	for row := range cells {
+		cells[row] = make([]CellSize, zl.PageSetup.GridSize.Columns)
+		for column := range cells[row] {
+			cells[row][column] = CellSize{Margin: &Margin{}}
+		}
+	}
 
 	// Calculate cell sizes and update cells
-    for _, layout := range outputPage.Layout {
-        row, col := int(layout.Position.Row), int(layout.Position.Column)
-        if row < 0 || col < 0 || row >= len(cells) || col >= len(cells[row]) {
-            return nil, fmt.Errorf("layout position out of bounds row=%d col=%d", row, col)
-        }
-        if layout.Margin == nil { layout.Margin = &Margin{} }
-        cells[row][col].Margin = layout.Margin
-        cells[row][col].Width = inputSize.X + layout.Margin.Left.Pixels + layout.Margin.Right.Pixels
-        cells[row][col].Height = inputSize.Y + layout.Margin.Top.Pixels + layout.Margin.Bottom.Pixels
-    }
+	for _, layout := range outputPage.Layout {
+		row, col := int(layout.Position.Row), int(layout.Position.Column)
+		if row < 0 || col < 0 || row >= len(cells) || col >= len(cells[row]) {
+			return nil, fmt.Errorf("layout position out of bounds row=%d col=%d", row, col)
+		}
+		if layout.Margin == nil {
+			layout.Margin = &Margin{}
+		}
+		cells[row][col].Margin = layout.Margin
+		cells[row][col].Width = inputSize.X + layout.Margin.Left.Pixels + layout.Margin.Right.Pixels
+		cells[row][col].Height = inputSize.Y + layout.Margin.Top.Pixels + layout.Margin.Bottom.Pixels
+	}
 
 	totalHeight := 0
 	totalWidth := 0
@@ -170,15 +180,17 @@ func (zl *ZineLayout) CreateOutputImage(outputPage *OutputPage, inputImages []im
 			return nil, fmt.Errorf("invalid rotation %d for input index %d", layout.Rotation, layout.InputIndex)
 		}
 
-        if layout.InputIndex <= 0 || layout.InputIndex-1 >= len(inputImages) {
-            return nil, fmt.Errorf("invalid input_index %d", layout.InputIndex)
-        }
-        if layout.Margin == nil { layout.Margin = &Margin{} }
-        inputImage := inputImages[layout.InputIndex-1]
-        destPoint := image.Point{
-            X: cells[layout.Position.Row][layout.Position.Column].X + layout.Margin.Left.Pixels,
-            Y: cells[layout.Position.Row][layout.Position.Column].Y + layout.Margin.Top.Pixels,
-        }
+		if layout.InputIndex <= 0 || layout.InputIndex-1 >= len(inputImages) {
+			return nil, fmt.Errorf("invalid input_index %d", layout.InputIndex)
+		}
+		if layout.Margin == nil {
+			layout.Margin = &Margin{}
+		}
+		inputImage := inputImages[layout.InputIndex-1]
+		destPoint := image.Point{
+			X: cells[layout.Position.Row][layout.Position.Column].X + layout.Margin.Left.Pixels,
+			Y: cells[layout.Position.Row][layout.Position.Column].Y + layout.Margin.Top.Pixels,
+		}
 
 		// Handle rotation
 		rotatedImage := rotateImage(inputImage, layout.Rotation)
@@ -206,11 +218,15 @@ func (zl *ZineLayout) CreateOutputImage(outputPage *OutputPage, inputImages []im
 	}
 
 	// Add global margins to the final image
-    // Guard nil margins
-    if zl.PageSetup.Margin == nil { zl.PageSetup.Margin = &Margin{} }
-    if outputPage.Margin == nil { outputPage.Margin = &Margin{} }
-    finalWidth := width + zl.PageSetup.Margin.Left.Pixels + zl.PageSetup.Margin.Right.Pixels + outputPage.Margin.Left.Pixels + outputPage.Margin.Right.Pixels
-    finalHeight := height + zl.PageSetup.Margin.Top.Pixels + zl.PageSetup.Margin.Bottom.Pixels + outputPage.Margin.Top.Pixels + outputPage.Margin.Bottom.Pixels
+	// Guard nil margins
+	if zl.PageSetup.Margin == nil {
+		zl.PageSetup.Margin = &Margin{}
+	}
+	if outputPage.Margin == nil {
+		outputPage.Margin = &Margin{}
+	}
+	finalWidth := width + zl.PageSetup.Margin.Left.Pixels + zl.PageSetup.Margin.Right.Pixels + outputPage.Margin.Left.Pixels + outputPage.Margin.Right.Pixels
+	finalHeight := height + zl.PageSetup.Margin.Top.Pixels + zl.PageSetup.Margin.Bottom.Pixels + outputPage.Margin.Top.Pixels + outputPage.Margin.Bottom.Pixels
 	finalImage := image.NewRGBA(image.Rect(0, 0, finalWidth, finalHeight))
 
 	// Fill the final image with white color
@@ -226,22 +242,22 @@ func (zl *ZineLayout) CreateOutputImage(outputPage *OutputPage, inputImages []im
 	draw.Draw(finalImage, outputRect, outputImage, image.Point{0, 0}, draw.Over)
 
 	// Draw page border
-    if zl.PageSetup.PageBorder != nil && zl.PageSetup.PageBorder.Enabled {
-        borderRect := image.Rect(
-            zl.PageSetup.Margin.Left.Pixels,
-            zl.PageSetup.Margin.Top.Pixels,
-            finalWidth-zl.PageSetup.Margin.Right.Pixels,
-            finalHeight-zl.PageSetup.Margin.Bottom.Pixels,
-        )
+	if zl.PageSetup.PageBorder != nil && zl.PageSetup.PageBorder.Enabled {
+		borderRect := image.Rect(
+			zl.PageSetup.Margin.Left.Pixels,
+			zl.PageSetup.Margin.Top.Pixels,
+			finalWidth-zl.PageSetup.Margin.Right.Pixels,
+			finalHeight-zl.PageSetup.Margin.Bottom.Pixels,
+		)
 		fmt.Printf("Output page border: Top: %d, Bottom: %d, Left: %d, Right: %d, Color: %v, Type: %v\n",
 			borderRect.Min.Y, borderRect.Max.Y, borderRect.Min.X, borderRect.Max.X, zl.PageSetup.PageBorder.Color.RGBA, zl.PageSetup.PageBorder.Type)
 		drawBorder(finalImage, borderRect, zl.PageSetup.PageBorder.Color.RGBA, zl.PageSetup.PageBorder.Type)
 	}
 
 	// Draw global border
-    if zl.Global != nil && zl.Global.Border != nil && zl.Global.Border.Enabled {
-        drawBorder(finalImage, finalImage.Bounds(), globalBorderColor, zl.Global.Border.Type)
-    }
+	if zl.Global != nil && zl.Global.Border != nil && zl.Global.Border.Enabled {
+		drawBorder(finalImage, finalImage.Bounds(), globalBorderColor, zl.Global.Border.Type)
+	}
 
 	fmt.Printf("Global Margins - Top: %s, Bottom: %s, Left: %s, Right: %s\n",
 		zl.PageSetup.Margin.Top.String(),

@@ -97,7 +97,7 @@ func (r *laidOutImageRepo) ListByProject(projectID string) ([]*repo.LaidOutImage
 	if err != nil {
 		return nil, fmt.Errorf("list laid-out images by project: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var images []*repo.LaidOutImage
 	for rows.Next() {
@@ -128,7 +128,7 @@ func (r *laidOutImageRepo) ListByAsset(assetID string) ([]*repo.LaidOutImage, er
 	if err != nil {
 		return nil, fmt.Errorf("list laid-out images by asset: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var images []*repo.LaidOutImage
 	for rows.Next() {

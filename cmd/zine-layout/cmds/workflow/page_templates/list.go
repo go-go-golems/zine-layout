@@ -39,7 +39,7 @@ func (c *pageTemplatesListCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var templates []*repo.PageTemplate
 	if settings.ProjectID == "" {

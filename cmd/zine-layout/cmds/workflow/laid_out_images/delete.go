@@ -41,7 +41,7 @@ func (c *laidOutImagesDeleteCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := repos.LaidOutImages.Delete(settings.ID); err != nil {
 		return err

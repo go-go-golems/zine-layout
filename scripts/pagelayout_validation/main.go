@@ -515,7 +515,7 @@ func savePNG(path string, img image.Image) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return png.Encode(f, img)
 }
 
@@ -538,7 +538,7 @@ func validateOutputs(specPath string, inputs []imageInfo, renderDir string) ([]p
 			return nil, fmt.Errorf("open input %s: %w", info.Path, err)
 		}
 		img, _, err := image.Decode(f)
-		f.Close()
+		_ = f.Close()
 		if err != nil {
 			return nil, fmt.Errorf("decode input %s: %w", info.Path, err)
 		}
@@ -625,7 +625,7 @@ func imageDimensions(path string) (int, int, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	img, _, err := image.DecodeConfig(f)
 	if err != nil {
 		return 0, 0, err
@@ -939,7 +939,7 @@ code { background: rgba(15, 23, 42, 0.08); padding: 0.1rem 0.35rem; border-radiu
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return t.Execute(f, data)
 }

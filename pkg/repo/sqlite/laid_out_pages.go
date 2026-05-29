@@ -96,7 +96,7 @@ func (r *laidOutPageRepo) ListByProject(projectID string) ([]*repo.LaidOutPage, 
 	if err != nil {
 		return nil, fmt.Errorf("list laid-out pages: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var pages []*repo.LaidOutPage
 	for rows.Next() {

@@ -91,7 +91,7 @@ func imageDimensions(path string) (int, int, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	cfg, _, err := image.DecodeConfig(f)
 	if err != nil {
 		return 0, 0, err
@@ -99,7 +99,7 @@ func imageDimensions(path string) (int, int, error) {
 	return cfg.Width, cfg.Height, nil
 }
 
-func readSpecGridAndPages(dir string) (rows, cols, pages int) {
+func readSpecGridAndPages(dir string) (int, int, int) {
 	fn := filepath.Join(dir, "spec.yaml")
 	b, err := os.ReadFile(fn)
 	if err != nil {
@@ -117,6 +117,6 @@ func readSpecGridAndPages(dir string) (rows, cols, pages int) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		return 0, 0, 0
 	}
-	pages = len(doc.OutputPages)
-	return doc.PageSetup.GridSize.Rows, doc.PageSetup.GridSize.Columns, pages
+	pageCount := len(doc.OutputPages)
+	return doc.PageSetup.GridSize.Rows, doc.PageSetup.GridSize.Columns, pageCount
 }

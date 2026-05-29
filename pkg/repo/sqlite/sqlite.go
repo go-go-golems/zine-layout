@@ -13,10 +13,7 @@ import (
 	"github.com/go-go-golems/zine-layout/pkg/repo"
 )
 
-var _ = func() bool {
-	rand.Seed(time.Now().UnixNano())
-	return true
-}()
+var randomSuffixRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // RunMigrations ensures the SQLite schema is created.
 func RunMigrations(db *sql.DB) error {
@@ -124,7 +121,7 @@ func generateID(prefix string) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, 6)
 	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+		b[i] = letters[randomSuffixRand.Intn(len(letters))]
 	}
 	return fmt.Sprintf("%s-%s-%s", prefix, ts, string(b))
 }
@@ -174,7 +171,7 @@ func tableHasColumn(db *sql.DB, table, column string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("pragma table_info(%s): %w", table, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var (
 			cid        int

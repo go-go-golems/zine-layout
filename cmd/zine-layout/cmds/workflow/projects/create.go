@@ -47,7 +47,7 @@ func (c *projectsCreateCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	project := &repo.Project{
 		Name:        name,

@@ -42,7 +42,7 @@ func (c *laidOutPagesListCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	pages, err := repos.LaidOutPages.ListByProject(settings.ProjectID)
 	if err != nil {

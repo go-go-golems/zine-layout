@@ -41,7 +41,7 @@ func (c *pageTemplatesDeleteCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := repos.PageTemplates.Delete(settings.TemplateID); err != nil {
 		return err

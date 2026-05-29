@@ -272,7 +272,7 @@ func savePNG(path string, img image.Image) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return png.Encode(f, img)
 }
 
@@ -632,7 +632,7 @@ ul { padding-left: 1.2rem; }
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return t.Execute(f, data)
 }

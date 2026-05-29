@@ -45,7 +45,7 @@ func (c *imageSequencesDeleteItemCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := repos.ImageSequences.DeleteItem(settings.SequenceID, settings.Position); err != nil {
 		return err

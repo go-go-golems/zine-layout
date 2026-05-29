@@ -41,7 +41,7 @@ func (c *laidOutPagesRenderCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ps := services.NewPagesService(repos)
 	ps.SetDataRoot(s.DataRoot)
 	page, err := ps.RenderPage(s.PageID)

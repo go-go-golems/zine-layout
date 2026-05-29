@@ -85,7 +85,7 @@ func (r *imageSequenceRepo) ListByProject(projectID string) ([]*repo.ImageSequen
 	if err != nil {
 		return nil, fmt.Errorf("list image sequences: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var sequences []*repo.ImageSequence
 	for rows.Next() {
@@ -167,7 +167,7 @@ func (r *imageSequenceRepo) ListItems(sequenceID string) ([]*repo.ImageSequenceI
 	if err != nil {
 		return nil, fmt.Errorf("list image sequence items: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*repo.ImageSequenceItem
 	for rows.Next() {
@@ -252,7 +252,7 @@ func (r *imageSequenceRepo) DeleteItem(sequenceID string, position int) error {
 	if queryErr != nil {
 		return fmt.Errorf("query sequence items for reindex: %w", queryErr)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	newPos := 0
 	for rows.Next() {

@@ -50,7 +50,7 @@ func (c *assetsCreateCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := repos.Projects.Get(settings.ProjectID); err != nil {
 		return fmt.Errorf("lookup project: %w", err)

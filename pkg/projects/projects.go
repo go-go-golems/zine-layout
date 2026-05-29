@@ -64,7 +64,7 @@ func SavePNGImage(projectsRoot, projectID string, fh *multipart.FileHeader) (*Sa
 	if err != nil {
 		return nil, err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	dst, err := os.Create(dstPath)
 	if err != nil {
@@ -124,7 +124,7 @@ func SavePNGImageFromPath(projectsRoot, projectID, path string) (*SavedImage, er
 	if err != nil {
 		return nil, fmt.Errorf("open source image: %w", err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	dst, err := os.Create(dstPath)
 	if err != nil {
@@ -155,7 +155,7 @@ func SavePNGImageFromPath(projectsRoot, projectID, path string) (*SavedImage, er
 }
 
 func nextImageNumber(dir string) int {
-	max := 0
+	maxImageNumber := 0
 	entries, _ := os.ReadDir(dir)
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -165,12 +165,12 @@ func nextImageNumber(dir string) int {
 		if strings.HasSuffix(name, ".png") {
 			base := strings.TrimSuffix(name, ".png")
 			var num int
-			if _, err := fmt.Sscanf(base, "%d", &num); err == nil && num > max {
-				max = num
+			if _, err := fmt.Sscanf(base, "%d", &num); err == nil && num > maxImageNumber {
+				maxImageNumber = num
 			}
 		}
 	}
-	return max + 1
+	return maxImageNumber + 1
 }
 
 func readImageSize(path string) (int, int, error) {
@@ -178,7 +178,7 @@ func readImageSize(path string) (int, int, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	cfg, _, err := image.DecodeConfig(f)
 	if err != nil {
 		return 0, 0, err

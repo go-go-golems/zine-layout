@@ -48,7 +48,7 @@ func (c *laidOutImagesUpdateCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	record, err := repos.LaidOutImages.Get(settings.ID)
 	if err != nil {

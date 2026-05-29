@@ -41,7 +41,7 @@ func (c *laidOutPagesDeleteCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	service := services.NewPagesService(repos)
 	if err := service.DeletePage(settings.PageID); err != nil {
