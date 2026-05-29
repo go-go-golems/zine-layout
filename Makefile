@@ -131,3 +131,11 @@ web-typecheck:
 
 # Run TS typecheck and Biome check together
 web-verify: web-typecheck web-check
+
+.PHONY: logcopter-generate
+logcopter-generate:
+	GOWORK=off go tool logcopter-gen -include-main -var zlog -area-prefix go-go-golems.zine-layout -strip-prefix github.com/go-go-golems/zine-layout ./cmd/... ./pkg/...
+
+.PHONY: logcopter-check
+logcopter-check:
+	GOWORK=off go tool logcopter-gen -include-main -var zlog -area-prefix go-go-golems.zine-layout -strip-prefix github.com/go-go-golems/zine-layout -check ./cmd/... ./pkg/...
