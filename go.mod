@@ -6,7 +6,7 @@ require (
 	dagger.io/dagger v0.18.17
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/go-go-golems/glazed v0.6.14
-	github.com/go-go-golems/go-emrichen v0.0.10
+	github.com/go-go-golems/go-emrichen v0.0.11
 	github.com/go-go-golems/logcopter v0.1.0
 	github.com/phpdave11/gofpdf v1.4.3
 	github.com/pkg/errors v0.9.1
