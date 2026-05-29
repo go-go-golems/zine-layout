@@ -39,7 +39,7 @@ func (c *templatesListCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var templates []*repo.ImageLayoutTemplate
 	if settings.ProjectID != "" {

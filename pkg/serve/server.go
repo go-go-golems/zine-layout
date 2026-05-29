@@ -13,10 +13,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/go-go-golems/zine-layout/pkg/presets"
 	"github.com/go-go-golems/zine-layout/pkg/repo"
 	sqliterepo "github.com/go-go-golems/zine-layout/pkg/repo/sqlite"
 	"github.com/go-go-golems/zine-layout/pkg/services"
-	"github.com/go-go-golems/zine-layout/pkg/presets"
 )
 
 // Settings controls how the HTTP server is configured.
@@ -37,7 +37,7 @@ type Server struct {
 	layout       *services.LayoutService
 	pages        *services.PagesService
 	zines        *services.ZinesService
-    impose       *services.ImpositionService
+	impose       *services.ImpositionService
 }
 
 // New constructs a Server with the provided settings.
@@ -81,7 +81,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 func (s *Server) prepare() error {
 	s.projectsRoot = filepath.Join(s.settings.DataRoot, "projects")
 	s.uploadsRoot = filepath.Join(s.settings.DataRoot, "uploads")
-    presetsRoot := filepath.Join(s.settings.DataRoot, "presets")
+	presetsRoot := filepath.Join(s.settings.DataRoot, "presets")
 
 	if err := os.MkdirAll(s.projectsRoot, 0o755); err != nil {
 		return fmt.Errorf("create projects root: %w", err)
@@ -89,10 +89,10 @@ func (s *Server) prepare() error {
 	if err := os.MkdirAll(s.uploadsRoot, 0o755); err != nil {
 		return fmt.Errorf("create uploads root: %w", err)
 	}
-    if err := os.MkdirAll(presetsRoot, 0o755); err != nil {
-        return fmt.Errorf("create presets root: %w", err)
-    }
-    _ = presets.SeedPresetsIfEmpty(presetsRoot)
+	if err := os.MkdirAll(presetsRoot, 0o755); err != nil {
+		return fmt.Errorf("create presets root: %w", err)
+	}
+	_ = presets.SeedPresetsIfEmpty(presetsRoot)
 	return s.initDatabase()
 }
 
@@ -119,15 +119,17 @@ func (s *Server) initDatabase() error {
 	}
 	s.db = db
 	s.repos = repos
-    s.layout = services.NewLayoutService(repos)
-    s.pages = services.NewPagesService(repos)
-    // Provide data root to services that need filesystem access
-    if s.pages != nil {
-        s.pages.SetDataRoot(s.settings.DataRoot)
-    }
+	s.layout = services.NewLayoutService(repos)
+	s.pages = services.NewPagesService(repos)
+	// Provide data root to services that need filesystem access
+	if s.pages != nil {
+		s.pages.SetDataRoot(s.settings.DataRoot)
+	}
 	s.zines = services.NewZinesService(repos)
-    s.impose = services.NewImpositionService(repos)
-    if s.impose != nil { s.impose.SetDataRoot(s.settings.DataRoot) }
+	s.impose = services.NewImpositionService(repos)
+	if s.impose != nil {
+		s.impose.SetDataRoot(s.settings.DataRoot)
+	}
 	return nil
 }
 

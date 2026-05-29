@@ -91,7 +91,7 @@ func (r *layoutSequenceRepo) ListByProject(projectID string) ([]*repo.LayoutSequ
 	if err != nil {
 		return nil, fmt.Errorf("list layout sequences: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var sequences []*repo.LayoutSequence
 	for rows.Next() {
@@ -172,7 +172,7 @@ func (r *layoutSequenceRepo) ListItems(sequenceID string) ([]*repo.LayoutSequenc
 	if err != nil {
 		return nil, fmt.Errorf("list layout sequence items: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*repo.LayoutSequenceItem
 	for rows.Next() {

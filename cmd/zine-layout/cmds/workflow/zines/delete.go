@@ -41,7 +41,7 @@ func (c *zinesDeleteCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	service := services.NewZinesService(repos)
 	if err := service.DeleteZine(settings.ZineID); err != nil {

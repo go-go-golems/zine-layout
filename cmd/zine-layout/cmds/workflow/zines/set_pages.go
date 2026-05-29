@@ -42,7 +42,7 @@ func (c *zinesSetPagesCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	service := services.NewZinesService(repos)
 	if err := service.UpdateZinePages(settings.ZineID, settings.Pages); err != nil {

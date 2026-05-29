@@ -41,7 +41,7 @@ func (c *projectsGetCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	project, err := repos.Projects.Get(settings.ProjectID)
 	if err != nil {

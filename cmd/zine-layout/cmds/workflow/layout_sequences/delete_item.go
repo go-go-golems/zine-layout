@@ -45,7 +45,7 @@ func (c *layoutSequencesDeleteItemCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := repos.LayoutSequences.DeleteItem(settings.SequenceID, settings.Position); err != nil {
 		return err

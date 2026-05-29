@@ -1,20 +1,20 @@
 package services
 
 import (
-    "encoding/json"
-    "errors"
-    "fmt"
-    "image"
-    _ "image/gif"
-    _ "image/jpeg"
-    "image/png"
-    "os"
-    "path/filepath"
-    "time"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	"image/png"
+	"os"
+	"path/filepath"
+	"time"
 
-    "github.com/go-go-golems/zine-layout/pkg/pagelayout"
-    "github.com/go-go-golems/zine-layout/pkg/pagelayout/renderer"
-    "github.com/go-go-golems/zine-layout/pkg/repo"
+	"github.com/go-go-golems/zine-layout/pkg/pagelayout"
+	"github.com/go-go-golems/zine-layout/pkg/pagelayout/renderer"
+	"github.com/go-go-golems/zine-layout/pkg/repo"
 )
 
 // ErrPageRendererNotImplemented signals that actual rendering is pending implementation.
@@ -22,8 +22,8 @@ var ErrPageRendererNotImplemented = errors.New("page rendering not implemented")
 
 // PagesService orchestrates creation and management of laid-out pages.
 type PagesService struct {
-	repos *repo.Repositories
-    dataRoot string
+	repos    *repo.Repositories
+	dataRoot string
 }
 
 // NewPagesService constructs a new pages service.
@@ -33,7 +33,7 @@ func NewPagesService(repos *repo.Repositories) *PagesService {
 
 // SetDataRoot configures where project files are stored on disk.
 func (s *PagesService) SetDataRoot(root string) {
-    s.dataRoot = root
+	s.dataRoot = root
 }
 
 // CreatePage creates a print-ready page by placing one laid-out image on a physical page.
@@ -148,118 +148,134 @@ func (s *PagesService) DeletePage(pageID string) error {
 
 // PageRenderMetadata summarizes generated variant files for a laid-out page.
 type PageRenderMetadata struct {
-    Width    int               `json:"width"`
-    Height   int               `json:"height"`
-    Variants map[string]string `json:"variants"` // variant name -> rel path (projects/...)
+	Width    int               `json:"width"`
+	Height   int               `json:"height"`
+	Variants map[string]string `json:"variants"` // variant name -> rel path (projects/...)
 }
 
 // RenderPage renders the laid-out page to files and persists metadata on the record.
 func (s *PagesService) RenderPage(pageID string) (*repo.LaidOutPage, error) {
-    if s == nil || s.repos == nil {
-        return nil, fmt.Errorf("pages service not initialized")
-    }
-    page, err := s.repos.LaidOutPages.Get(pageID)
-    if err != nil {
-        return nil, fmt.Errorf("fetch laid-out page: %w", err)
-    }
-    // Load dependencies
-    tpl, err := s.repos.PageTemplates.Get(page.PageTemplateID)
-    if err != nil {
-        return nil, fmt.Errorf("fetch page template: %w", err)
-    }
-    laid, err := s.repos.LaidOutImages.Get(page.LaidOutImageID)
-    if err != nil {
-        return nil, fmt.Errorf("fetch laid-out image: %w", err)
-    }
-    asset, err := s.repos.Assets.Get(laid.AssetID)
-    if err != nil {
-        return nil, fmt.Errorf("fetch asset: %w", err)
-    }
+	if s == nil || s.repos == nil {
+		return nil, fmt.Errorf("pages service not initialized")
+	}
+	page, err := s.repos.LaidOutPages.Get(pageID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch laid-out page: %w", err)
+	}
+	// Load dependencies
+	tpl, err := s.repos.PageTemplates.Get(page.PageTemplateID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch page template: %w", err)
+	}
+	laid, err := s.repos.LaidOutImages.Get(page.LaidOutImageID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch laid-out image: %w", err)
+	}
+	asset, err := s.repos.Assets.Get(laid.AssetID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch asset: %w", err)
+	}
 
-    // Decode page settings
-    var settings pagelayout.PageLayoutSettings
-    if err := json.Unmarshal([]byte(tpl.TemplateJSON), &settings); err != nil {
-        return nil, fmt.Errorf("decode page template settings: %w", err)
-    }
-    if err := settings.Canonicalize(); err != nil {
-        return nil, fmt.Errorf("invalid page layout settings: %w", err)
-    }
+	// Decode page settings
+	var settings pagelayout.PageLayoutSettings
+	if err := json.Unmarshal([]byte(tpl.TemplateJSON), &settings); err != nil {
+		return nil, fmt.Errorf("decode page template settings: %w", err)
+	}
+	if err := settings.Canonicalize(); err != nil {
+		return nil, fmt.Errorf("invalid page layout settings: %w", err)
+	}
 
-    // Decode layout computation (for crop geometry)
-    var comp LayoutComputation
-    if err := json.Unmarshal([]byte(laid.ResultJSON), &comp); err != nil {
-        return nil, fmt.Errorf("decode laid-out image result: %w", err)
-    }
+	// Decode layout computation (for crop geometry)
+	var comp LayoutComputation
+	if err := json.Unmarshal([]byte(laid.ResultJSON), &comp); err != nil {
+		return nil, fmt.Errorf("decode laid-out image result: %w", err)
+	}
 
-    // Load source image from disk
-    if s.dataRoot == "" {
-        return nil, fmt.Errorf("pages service dataRoot not configured")
-    }
-    absPath := filepath.Join(s.dataRoot, filepath.FromSlash(asset.RelPath))
-    f, err := os.Open(absPath)
-    if err != nil {
-        return nil, fmt.Errorf("open asset image: %w", err)
-    }
-    defer f.Close()
-    srcImg, _, err := image.Decode(f)
-    if err != nil {
-        return nil, fmt.Errorf("decode image: %w", err)
-    }
+	// Load source image from disk
+	if s.dataRoot == "" {
+		return nil, fmt.Errorf("pages service dataRoot not configured")
+	}
+	absPath := filepath.Join(s.dataRoot, filepath.FromSlash(asset.RelPath))
+	f, err := os.Open(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("open asset image: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	srcImg, _, err := image.Decode(f)
+	if err != nil {
+		return nil, fmt.Errorf("decode image: %w", err)
+	}
 
-    // Render
-    ctx := renderer.RenderContext{
-        Settings:     settings,
-        Source:       srcImg,
-        LayoutResult: &comp.Result,
-    }
-    result, err := renderer.RenderPage(ctx)
-    if err != nil {
-        return nil, fmt.Errorf("render page: %w", err)
-    }
+	// Render
+	ctx := renderer.RenderContext{
+		Settings:     settings,
+		Source:       srcImg,
+		LayoutResult: &comp.Result,
+	}
+	result, err := renderer.RenderPage(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("render page: %w", err)
+	}
 
-    // Write files under dataRoot/projects/{projectID}/pages/{pageID}/
-    outDir := filepath.Join(s.dataRoot, "projects", page.ProjectID, "pages", page.ID)
-    if err := os.MkdirAll(outDir, 0o755); err != nil {
-        return nil, fmt.Errorf("prepare output dir: %w", err)
-    }
-    // always write thumbnail and full/combined; left/right only if present
-    relBase := filepath.ToSlash(filepath.Join("projects", page.ProjectID, "pages", page.ID))
-    variants := map[string]string{}
+	// Write files under dataRoot/projects/{projectID}/pages/{pageID}/
+	outDir := filepath.Join(s.dataRoot, "projects", page.ProjectID, "pages", page.ID)
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return nil, fmt.Errorf("prepare output dir: %w", err)
+	}
+	// always write thumbnail and full/combined; left/right only if present
+	relBase := filepath.ToSlash(filepath.Join("projects", page.ProjectID, "pages", page.ID))
+	variants := map[string]string{}
 
-    // Helper to write a PNG
-    writePNG := func(name string, img image.Image) error {
-        if img == nil { return nil }
-        outPath := filepath.Join(outDir, name+".png")
-        fp, err := os.Create(outPath)
-        if err != nil { return err }
-        defer fp.Close()
-        // Always encode as PNG for previews
-        if err := png.Encode(fp, img); err != nil { return err }
-        variants[name] = filepath.ToSlash(filepath.Join(relBase, name+".png"))
-        return nil
-    }
+	// Helper to write a PNG
+	writePNG := func(name string, img image.Image) error {
+		if img == nil {
+			return nil
+		}
+		outPath := filepath.Join(outDir, name+".png")
+		fp, err := os.Create(outPath)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = fp.Close() }()
+		// Always encode as PNG for previews
+		if err := png.Encode(fp, img); err != nil {
+			return err
+		}
+		variants[name] = filepath.ToSlash(filepath.Join(relBase, name+".png"))
+		return nil
+	}
 
-    // Collect and write
-    if thumb, ok := result.Variants["thumbnail"]; ok { _ = writePNG("thumbnail", thumb) }
-    if full, ok := result.Variants["full"]; ok { _ = writePNG("full", full) }
-    if combined, ok := result.Variants["combined"]; ok { _ = writePNG("combined", combined) }
-    if left, ok := result.Variants["left"]; ok { _ = writePNG("left", left) }
-    if right, ok := result.Variants["right"]; ok { _ = writePNG("right", right) }
+	// Collect and write
+	if thumb, ok := result.Variants["thumbnail"]; ok {
+		_ = writePNG("thumbnail", thumb)
+	}
+	if full, ok := result.Variants["full"]; ok {
+		_ = writePNG("full", full)
+	}
+	if combined, ok := result.Variants["combined"]; ok {
+		_ = writePNG("combined", combined)
+	}
+	if left, ok := result.Variants["left"]; ok {
+		_ = writePNG("left", left)
+	}
+	if right, ok := result.Variants["right"]; ok {
+		_ = writePNG("right", right)
+	}
 
-    meta := PageRenderMetadata{
-        Width:    result.Full.Bounds().Dx(),
-        Height:   result.Full.Bounds().Dy(),
-        Variants: variants,
-    }
-    metaBytes, err := json.Marshal(meta)
-    if err != nil {
-        return nil, fmt.Errorf("encode render metadata: %w", err)
-    }
-    metaStr := string(metaBytes)
-    page.ResultJSON = &metaStr
-    page.UpdatedAt = time.Now().UTC()
-    if err := s.repos.LaidOutPages.Update(page); err != nil {
-        return nil, fmt.Errorf("persist laid-out page: %w", err)
-    }
-    return page, nil
+	meta := PageRenderMetadata{
+		Width:    result.Full.Bounds().Dx(),
+		Height:   result.Full.Bounds().Dy(),
+		Variants: variants,
+	}
+	metaBytes, err := json.Marshal(meta)
+	if err != nil {
+		return nil, fmt.Errorf("encode render metadata: %w", err)
+	}
+	metaStr := string(metaBytes)
+	page.ResultJSON = &metaStr
+	page.UpdatedAt = time.Now().UTC()
+	if err := s.repos.LaidOutPages.Update(page); err != nil {
+		return nil, fmt.Errorf("persist laid-out page: %w", err)
+	}
+	return page, nil
 }

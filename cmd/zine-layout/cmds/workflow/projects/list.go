@@ -36,7 +36,7 @@ func (c *projectsListCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	projects, err := repos.Projects.List()
 	if err != nil {

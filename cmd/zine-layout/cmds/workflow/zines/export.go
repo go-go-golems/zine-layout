@@ -43,7 +43,7 @@ func (c *zinesExportCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	impose := services.NewImpositionService(repos)
 	impose.SetDataRoot(settings.DataRoot)
@@ -60,7 +60,7 @@ func (c *zinesExportCommand) RunIntoGlazeProcessor(
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 	}
 	return export.SheetsToPDF(ctx, sheets, settings.DPI, f)
 }

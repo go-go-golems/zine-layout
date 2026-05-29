@@ -72,7 +72,7 @@ func (c *templatesCreateCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	template := &repo.ImageLayoutTemplate{
 		Name:         name,

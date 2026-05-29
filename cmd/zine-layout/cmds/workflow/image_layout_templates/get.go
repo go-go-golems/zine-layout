@@ -42,7 +42,7 @@ func (c *templatesGetCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tpl, err := repos.ImageLayoutTemplates.Get(settings.TemplateID)
 	if err != nil {

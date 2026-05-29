@@ -46,7 +46,7 @@ func (c *layoutSequencesAddItemCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	sequence, err := repos.LayoutSequences.Get(settings.SequenceID)
 	if err != nil {

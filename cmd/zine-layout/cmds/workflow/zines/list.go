@@ -42,7 +42,7 @@ func (c *zinesListCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	zines, err := repos.Zines.ListByProject(settings.ProjectID)
 	if err != nil {

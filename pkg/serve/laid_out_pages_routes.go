@@ -1,15 +1,15 @@
 package serve
 
 import (
-    "encoding/json"
 	"database/sql"
+	"encoding/json"
 	"errors"
-    "fmt"
-    "os"
+	"fmt"
 	"net/http"
-    "path/filepath"
-    "time"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-go-golems/zine-layout/pkg/services"
 )
@@ -191,7 +191,7 @@ func (s *Server) handleLaidOutPagePreview(w http.ResponseWriter, r *http.Request
 		respondError(w, http.StatusInternalServerError, "pages service not initialized")
 		return
 	}
-    page, err := s.pages.RenderPage(pageID)
+	page, err := s.pages.RenderPage(pageID)
 	if err != nil {
 		if errors.Is(err, services.ErrPageRendererNotImplemented) {
 			respondError(w, http.StatusNotImplemented, err.Error())
@@ -204,46 +204,48 @@ func (s *Server) handleLaidOutPagePreview(w http.ResponseWriter, r *http.Request
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-    // Stream requested variant (default: thumbnail)
-    variant := r.URL.Query().Get("variant")
-    if variant == "" { variant = "thumbnail" }
-    // Parse metadata
-    var meta struct{
-        Variants map[string]string `json:"variants"`
-    }
-    if page.ResultJSON == nil {
-        respondError(w, http.StatusInternalServerError, "render metadata missing")
-        return
-    }
-    if err := json.Unmarshal([]byte(*page.ResultJSON), &meta); err != nil {
-        respondError(w, http.StatusInternalServerError, err.Error())
-        return
-    }
-    rel, ok := meta.Variants[variant]
-    if !ok || rel == "" {
-        http.NotFound(w, r)
-        return
-    }
-    // Map to absolute path under data root
-    abs := filepath.Join(s.settings.DataRoot, filepath.FromSlash(rel))
-    // Add simple caching headers
-    if info, err := os.Stat(abs); err == nil {
-        mod := info.ModTime().UTC().Format(http.TimeFormat)
-        w.Header().Set("Last-Modified", mod)
-        // naive ETag: size-modtime
-        w.Header().Set("ETag", fmt.Sprintf("W/\"%d-%x\"", info.Size(), info.ModTime().UnixNano()))
-        if match := r.Header.Get("If-None-Match"); match != "" && match == w.Header().Get("ETag") {
-            w.WriteHeader(http.StatusNotModified)
-            return
-        }
-        if since := r.Header.Get("If-Modified-Since"); since != "" {
-            if t, err := time.Parse(http.TimeFormat, since); err == nil && !info.ModTime().After(t) {
-                w.WriteHeader(http.StatusNotModified)
-                return
-            }
-        }
-    }
-    http.ServeFile(w, r, abs)
+	// Stream requested variant (default: thumbnail)
+	variant := r.URL.Query().Get("variant")
+	if variant == "" {
+		variant = "thumbnail"
+	}
+	// Parse metadata
+	var meta struct {
+		Variants map[string]string `json:"variants"`
+	}
+	if page.ResultJSON == nil {
+		respondError(w, http.StatusInternalServerError, "render metadata missing")
+		return
+	}
+	if err := json.Unmarshal([]byte(*page.ResultJSON), &meta); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	rel, ok := meta.Variants[variant]
+	if !ok || rel == "" {
+		http.NotFound(w, r)
+		return
+	}
+	// Map to absolute path under data root
+	abs := filepath.Join(s.settings.DataRoot, filepath.FromSlash(rel))
+	// Add simple caching headers
+	if info, err := os.Stat(abs); err == nil {
+		mod := info.ModTime().UTC().Format(http.TimeFormat)
+		w.Header().Set("Last-Modified", mod)
+		// naive ETag: size-modtime
+		w.Header().Set("ETag", fmt.Sprintf("W/\"%d-%x\"", info.Size(), info.ModTime().UnixNano()))
+		if match := r.Header.Get("If-None-Match"); match != "" && match == w.Header().Get("ETag") {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		if since := r.Header.Get("If-Modified-Since"); since != "" {
+			if t, err := time.Parse(http.TimeFormat, since); err == nil && !info.ModTime().After(t) {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		}
+	}
+	http.ServeFile(w, r, abs)
 }
 
 func (s *Server) handleLaidOutPageExport(w http.ResponseWriter, r *http.Request, pageID string) {
@@ -265,7 +267,9 @@ func (s *Server) handleLaidOutPageExport(w http.ResponseWriter, r *http.Request,
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	var meta struct{ Variants map[string]string `json:"variants"` }
+	var meta struct {
+		Variants map[string]string `json:"variants"`
+	}
 	if page.ResultJSON == nil {
 		respondError(w, http.StatusInternalServerError, "render metadata missing")
 		return
@@ -275,7 +279,9 @@ func (s *Server) handleLaidOutPageExport(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	variant := r.URL.Query().Get("variant")
-	if variant == "" { variant = "combined" }
+	if variant == "" {
+		variant = "combined"
+	}
 	rel, ok := meta.Variants[variant]
 	if !ok || rel == "" {
 		http.NotFound(w, r)

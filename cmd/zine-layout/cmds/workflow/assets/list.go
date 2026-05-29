@@ -41,7 +41,7 @@ func (c *assetsListCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	assets, err := repos.Assets.ListByProject(settings.ProjectID)
 	if err != nil {

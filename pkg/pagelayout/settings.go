@@ -28,9 +28,9 @@ import (
 // happens in the caller.
 
 type PageLayoutSettings struct {
-	PageWidthIn   float64 `json:"pageWidthIn" yaml:"page_width_in"`
-	PageHeightIn  float64 `json:"pageHeightIn" yaml:"page_height_in"`
-	DPI           float64 `json:"dpi" yaml:"dpi"`
+	PageWidthIn  float64 `json:"pageWidthIn" yaml:"page_width_in"`
+	PageHeightIn float64 `json:"pageHeightIn" yaml:"page_height_in"`
+	DPI          float64 `json:"dpi" yaml:"dpi"`
 
 	MarginTopIn    float64 `json:"marginTopIn" yaml:"margin_top_in"`
 	MarginRightIn  float64 `json:"marginRightIn" yaml:"margin_right_in"`
@@ -41,14 +41,14 @@ type PageLayoutSettings struct {
 	GutterWidthIn   float64 `json:"gutterWidthIn" yaml:"gutter_width_in"`
 	GutterOverlapIn float64 `json:"gutterOverlapIn" yaml:"gutter_overlap_in"`
 
-	PositioningMode string  `json:"positioningMode" yaml:"positioning_mode"`
-	AnchorPreset    string  `json:"anchorPreset" yaml:"anchor_preset"`
+	PositioningMode string `json:"positioningMode" yaml:"positioning_mode"`
+	AnchorPreset    string `json:"anchorPreset" yaml:"anchor_preset"`
 
 	// Absolute placement (only when PositioningMode == "absolute")
-	ImageXIn       float64 `json:"imageXIn" yaml:"image_x_in"`
-	ImageYIn       float64 `json:"imageYIn" yaml:"image_y_in"`
-	ImageWidthIn   float64 `json:"imageWidthIn" yaml:"image_width_in"`
-	ImageHeightIn  float64 `json:"imageHeightIn" yaml:"image_height_in"`
+	ImageXIn      float64 `json:"imageXIn" yaml:"image_x_in"`
+	ImageYIn      float64 `json:"imageYIn" yaml:"image_y_in"`
+	ImageWidthIn  float64 `json:"imageWidthIn" yaml:"image_width_in"`
+	ImageHeightIn float64 `json:"imageHeightIn" yaml:"image_height_in"`
 
 	// Optional page border drawing
 	BorderEnabled bool   `json:"borderEnabled" yaml:"border_enabled"`
@@ -105,7 +105,9 @@ func (s PageLayoutSettings) pixelsPerInch() float64 { return s.DPI }
 func (s PageLayoutSettings) InchesToPixels(in float64) int {
 	pp := s.pixelsPerInch()
 	px := int(in*pp + 0.5)
-	if px < 0 { return 0 }
+	if px < 0 {
+		return 0
+	}
 	return px
 }
 
@@ -130,8 +132,12 @@ func (s PageLayoutSettings) ContentRectPx() image.Rectangle {
 	top := mt
 	right := w - mr
 	bottom := h - mb
-	if right < left { right = left }
-	if bottom < top { bottom = top }
+	if right < left {
+		right = left
+	}
+	if bottom < top {
+		bottom = top
+	}
 	return image.Rect(left, top, right, bottom)
 }
 
@@ -139,11 +145,13 @@ func (s PageLayoutSettings) ContentRectPx() image.Rectangle {
 // and right pages on the canvas. The split is centered, minus half the gutter width.
 // If not a spread, it returns -1.
 func (s PageLayoutSettings) SpreadSplitX() int {
-	if !s.IsSpread { return -1 }
+	if !s.IsSpread {
+		return -1
+	}
 	w := s.PixelWidth()
-    g := s.InchesToPixels(s.GutterWidthIn)
-    // We define split x as center; callers may compute left/right using gutter.
-    // Keep API stable but ensure gutter is accounted by helpers using this value.
-    _ = g
-    return w / 2
+	g := s.InchesToPixels(s.GutterWidthIn)
+	// We define split x as center; callers may compute left/right using gutter.
+	// Keep API stable but ensure gutter is accounted by helpers using this value.
+	_ = g
+	return w / 2
 }

@@ -95,7 +95,7 @@ func (r *pageTemplateRepo) ListGlobal() ([]*repo.PageTemplate, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list global page templates: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var templates []*repo.PageTemplate
 	for rows.Next() {
@@ -126,7 +126,7 @@ func (r *pageTemplateRepo) ListByProject(projectID string) ([]*repo.PageTemplate
 	if err != nil {
 		return nil, fmt.Errorf("list project page templates: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var templates []*repo.PageTemplate
 	for rows.Next() {

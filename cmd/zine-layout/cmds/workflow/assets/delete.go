@@ -43,7 +43,7 @@ func (c *assetsDeleteCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	asset, err := repos.Assets.Get(settings.AssetID)
 	if err != nil {

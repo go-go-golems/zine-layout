@@ -90,7 +90,7 @@ func (r *zineRepo) ListByProject(projectID string) ([]*repo.Zine, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list zines: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var zines []*repo.Zine
 	for rows.Next() {
@@ -163,7 +163,7 @@ func (r *zineRepo) GetPages(zineID string) ([]*repo.ZinePage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list zine pages: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var pages []*repo.ZinePage
 	for rows.Next() {

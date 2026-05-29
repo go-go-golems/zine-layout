@@ -2,4 +2,3 @@
 //
 //go:generate go run ../build-web
 package main
-

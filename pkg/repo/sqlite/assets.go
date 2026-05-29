@@ -95,7 +95,7 @@ func (r *assetRepo) ListByProject(projectID string) ([]*repo.Asset, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list assets: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var assets []*repo.Asset
 	for rows.Next() {

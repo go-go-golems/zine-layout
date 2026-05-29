@@ -50,7 +50,7 @@ func (c *templatesUpdateCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	template, err := repos.ImageLayoutTemplates.Get(settings.TemplateID)
 	if err != nil {

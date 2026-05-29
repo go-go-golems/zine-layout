@@ -95,7 +95,7 @@ func (r *imageLayoutTemplateRepo) ListGlobal() ([]*repo.ImageLayoutTemplate, err
 	if err != nil {
 		return nil, fmt.Errorf("list global templates: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var templates []*repo.ImageLayoutTemplate
 	for rows.Next() {
@@ -126,7 +126,7 @@ func (r *imageLayoutTemplateRepo) ListByProject(projectID string) ([]*repo.Image
 	if err != nil {
 		return nil, fmt.Errorf("list project templates: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var templates []*repo.ImageLayoutTemplate
 	for rows.Next() {

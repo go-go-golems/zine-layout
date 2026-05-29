@@ -54,7 +54,7 @@ func (c *laidOutImagesCreateCommand) RunIntoGlazeProcessor(
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var overrides *string
 	payload := strings.TrimSpace(settings.OverridesJSON)
